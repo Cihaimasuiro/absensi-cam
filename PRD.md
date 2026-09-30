@@ -1,24 +1,15 @@
-﻿# PRD Hardware — Sistem Absensi "Smart Absen"
-## Hardware Product Requirement Document (PRD)
+# PRD — Sistem Absensi "Smart Absensi"
+## Product Requirement Document (PRD) — Monorepo
 
-> **Versi**: 1.0.0
-> **Tanggal**: 2026-09-28
+> **Versi**: 2.0.0
+> **Tanggal**: 2026-09-29
 > **Status**: Draft — Disetujui untuk Implementasi
-> **Penulis**: Tim Smart Absen
+> **Penulis**: Tim Smart Absensi
 > **Repositori**: `d:\Github\absensi-cam`
 
 ---
 
 ## Daftar Isi
-
-1. [Executive Summary & Arsitektur Sistem](#1-executive-summary--arsitektur-sistem)
-2. [Bill of Materials (BOM) Detail](#2-bill-of-materials-bom-detail)
-3. [Pinout & Interconnection Detail](#3-pinout--interconnection-detail)
-4. [Power Consumption Budget & Battery Runtime](#4-power-consumption-budget--battery-runtime)
-5. [Thermal Management & Reliability](#5-thermal-management--reliability)
-6. [Constraint, Risiko & Mitigasi Hardware](#6-constraint-risiko--mitigasi-hardware)
-7. [Roadmap Hardware V2 — Fabrikasi PCB & Casing](#7-roadmap-hardware-v2--fabrikasi-pcb--casing)
-8. [Acceptance Criteria & Checklist Validasi Hardware](#8-acceptance-criteria--checklist-validasi-hardware)
 
 ---
 
@@ -26,82 +17,102 @@
 
 ### 1.1 Tujuan Dokumen
 
-Dokumen ini adalah **Hardware Product Requirement Document (PRD)** untuk perangkat keras sistem absensi pintar **"Smart Absen"**. Dokumen ini mendefinisikan:
+Dokumen ini adalah **Product Requirement Document (PRD)** untuk monorepo **"Smart Absensi"** — sistem absensi face recognition 
 
-- Daftar komponen hardware beserta spesifikasi teknis dan elektrik yang diperlukan.
-- Arsitektur interkoneksi antar komponen (wiring, pinout, protokol komunikasi).
-- Anggaran daya sistem dan estimasi kapasitas baterai cadangan.
-- Batasan desain, risiko hardware, dan strategi mitigasinya.
-- Roadmap pengembangan hardware generasi berikutnya (PCB custom + enclosure).
 
-### 1.2 Lingkup Proyek
+### 1.2 Lingkup Proyek & Keunggulan Kompetitif
 
-| Aspek | Keterangan |
-|-------|------------|
-| **Nama Produk** | Smart Absen — Face Recognition Attendance System |
-| **Target Pengguna** | Institusi pendidikan (sekolah, universitas), perkantoran, dan fasilitas industri |
-| **Skenario Deployment** | Indoor, dipasang di pintu masuk / area resepsionis |
-| **Sumber Daya Utama** | Daya AC 220V via adaptor, dengan backup baterai Li-Ion 18650 |
-| **Konektivitas Jaringan** | Ethernet (kabel UTP) + WiFi onboard (fallback) |
-| **Platform SBC** | Orange Pi Lite 2 (utama) / Raspberry Pi All Version (kompatibel) |
+| Aspek | Smart Absensi (Proyek Kita) | Facenox / Fingerspot DT-12MQ | Keunggulan Smart Absensi |
+|-------|--------------------------|------------------------------|------------------------|
+| **Anti-Spoofing (Anti-Kecurangan)** | **On-Device 600KB ONNX Liveness Model** | Facenox (600KB) / DT-12MQ (IR Sensor) | **Mencegah foto HP / print cetak tanpa sensor IR mahal** |
+| **Jarak Absensi** | **0.5m - 3.0m (Long-Distance / Walk-Through)** | DT-12MQ (0.3m - 0.8m / Berhenti diam) | **Siswa/Karyawan tidak perlu berhenti jalan** |
+| **Kapasitas Pemindaian** | **Multi-Face Parallel (3-5 wajah sekaligus)** | DT-12MQ (Single-Face Sequential) | **Bebas Antrean / High-Throughput** |
+| **Kecepatan Inference Engine** | **< 30 ms per frame (Native C++ Engine)** | Facenox (FastAPI/Electron) / DT-12MQ (~500ms) | **30x Hemat RAM (< 50MB vs > 1.5GB Facenox)** |
+| **Target Hardware** | **Orange Pi Lite 2 (Embedded ARM SBC)** | PC / Laptop (Facenox) | **Hemat daya & biaya hardware murah ($15 SBC)** |
+| **Server Pusat** | **Laravel 13 — REST API / JSON** | Tidak ada / Cloud third-party | **Admin PC sendiri, data tidak keluar** |
+| **Sinkronisasi Data** | **REST API JSON (edge -> server pusat)** | Proprietary cloud / tidak ada | **Standard, audit-friendly, terbuka** |
 
-### 1.3 Alur Kerja Sistem Hardware (End-to-End)
-
-```
-Power ON -> Boot SBC -> Init Camera -> Detect/Recognize Face -> Feedback (TFT + Buzzer + LED) -> Log Data -> Sync Network
-```
+### 1.3 Alur Kerja Sistem
 
 **Narasi Alur:**
 
 1. **Power ON**: Adaptor 5V/3A menyuplai daya ke modul UPS 18650 step-up. Modul UPS mendistribusikan 5V ke SBC dan Arduino.
-2. **Boot SBC**: Orange Pi Lite 2 / Raspberry Pi boot dari MicroSD dalam < 45 detik. Service systemd `smart-absen.service` start otomatis.
-3. **Init Camera**: Sistem menginisialisasi USB Camera (`/dev/video0`, UVC) atau Flex Camera via CSI.
-4. **Detect & Recognize Face**: Python service menjalankan pipeline face detection (dlib/OpenCV) -> face embedding -> comparison dengan database lokal. Keputusan: `RECOGNIZED` / `UNKNOWN` / `NO_FACE`.
-5. **Feedback Output**: Keputusan dikirim ke Arduino Uno via USB Serial. Arduino menampilkan hasil di TFT LCD, membunyikan Buzzer, dan menyalakan LED sesuai status.
-6. **Log & Sync**: Data absensi (ID, timestamp, foto thumbnail) disimpan ke SQLite lokal, kemudian disinkronkan ke server via Ethernet atau WiFi.
+2. **Boot SBC**: Orange Pi Lite 2 boot dari MicroSD dalam < 30 detik. Service systemd `smart-absensi.service` (C++ Engine) start otomatis.
+3. **Init Camera**: Sistem menginisialisasi UVC USB Web Camera (`/dev/video0`) pada resolusi 640x480 @ 30 FPS.
+4. **Long-Distance Multi-Face Recognition**: Native C++ YuNet Engine memindai area hingga jarak 3 meter secara real-time.
+5. **Liveness & Anti-Spoofing Check**: Setiap wajah yang terdeteksi secara otomatis diverifikasi oleh model Mini-FASNet ONNX (600KB). Foto cetak atau layar HP akan langsung ditolak (`FAIL`).
+6. **Feature Matching & Logging**: Wajah asli diverifikasi dengan embedding SFace dan dicocokkan ke database SQLite lokal (**kapasitas 2000+ wajah**).
+7. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial untuk ditampilkan pada 2.4" TFT LCD.
+8. **REST API Sync**: Data absensi lokal di-sync ke **Server Pusat Laravel 13** via REST API / JSON secara asynchronous. Server Pusat menerima, menyimpan, dan menyediakan akses laporan terpusat.
+
+### 1.4 Objektif
+
+| Fitur Utama | Deskripsi Spesifikasi Teknikal | Target Objektif |
+|-------------|--------------------------------|-----------------|
+| **Desktop App Features** | Electron + React 19 desktop app (Windows/macOS/Linux): enroll wajah, manajemen anggota, sesi absensi lokal, laporan, backup/restore. | Kontrol penuh secara offline tanpa browser |
+| **Custom 2000+ Face Capacity** | Pengindeksan vektor SFace 128-d teroptimasi di SQLite C++ untuk kapasitas **>= 2000 wajah** per perangkat SBC tanpa kenaikan latensi. | Kapasitas besar untuk sekolah / perkantoran skala besar |
+| **Connected Devices** | Monitoring & manajemen terpusat untuk multiple terminal SBC Orange Pi Lite 2 yang terhubung di jaringan LAN/WiFi via Server Pusat. | Telemetri & status heartbeat perangkat terhubung secara real-time |
+| **Custom Branches / Locations** | Pengelompokan ID perangkat berdasarkan cabang, gedung, atau pintu masuk (e.g. Gerbang Utama, Pintu Utara, Cabang Bandung). | Manajemen lokasi absensi multi-titik |
+| **Custom Organizations** | Struktur hirarki organisasi, divisi, departemen, dan kelas siswa. | Pengelompokan data pengguna yang fleksibel |
+| **Remote Face Template Sync** | Sinkronisasi otomatis templet wajah (vektor embedding) dari Server Pusat Laravel 13 ke seluruh terminal SBC edge via REST API. | Registrasi satu kali di server, otomatis berlaku di semua lokasi |
+| **Lifetime Cloud Attendance History** | Sinkronisasi riwayat absensi lokal (SQLite) ke Laravel 13 Server Pusat secara asynchronous via REST API / JSON. Data tersimpan selamanya. | Data absensi terpusat dan dapat diakses dari mana saja secara aman |
+| **Audit Logs** | Pencatatan log aktivitas sistem (pendaftaran wajah, perubahan hak akses, perubahan status koneksi perangkat, dan kesalahan sistem). | Keamanan & transparansi jejak audit operasional (Audit Trail) |
+| **Excel & PDF DTR Reports** | Pembuatan laporan kehadiran Daily Time Record (DTR) otomatis dalam format terformat **Excel (.xlsx)** dan **PDF**. | Siap cetak untuk rekapitulasi kehadiran harian/bulanan |
+| **Raw CSV Data Export** | Fitur ekspor data mentah absensi dalam format **CSV** untuk integrasi langsung ke sistem HRMS / Payroll eksternal. | Data interoperabilitas tinggi |
 
 ---
 
-## 2. Bill of Materials (BOM) Detail
+## 2. Package Structure
 
-### 2.1 Tabel BOM Lengkap
+
+
+
+
+### Alur Komunikasi Antar Package
+
+
+
+---
+
+### 3. Bill of Materials (BOM) Detail
+
+### 3.1 Tabel BOM Lengkap
 
 | No | Komponen | Part Number / Model | Qty | Fungsi Utama | Vcc (V) | I Max (mA) | Interface | Catatan |
 |----|----------|---------------------|-----|--------------|---------|------------|-----------|---------|
-| 1 | SBC Utama | Orange Pi Lite 2 | 1 | Main processing unit | 5.0 | 2000 | USB, GPIO, CSI, WiFi, HDMI | Allwinner H6 Quad-core Cortex-A53 @1.8GHz, 1GB LPDDR3 |
-| 2 | SBC Alternatif | Raspberry Pi 3B+ / 4B / Zero 2W | 1 | Drop-in pengganti kompatibel | 5.0 | 2500 (4B) | USB, GPIO, CSI, WiFi, ETH | Gunakan image Armbian / RPi OS yang sesuai varian |
-| 3 | Camera USB | 8MP UVC USB Camera | 1 | Capture wajah untuk face recognition | 5.0 (VBUS) | 500 | USB 2.0 (UVC) | UVC-compliant; resolusi 3264x2448; FOV >= 70 derajat; min illuminance <= 1 lux |
-| 4 | Camera Flex | Flex Camera Module (CSI) | 1 | Alternatif kamera via CSI ribbon | 3.3 | 300 | CSI-2 (15-pin / 22-pin ribbon) | Kompatibilitas ribbon: 15-pin (RPi) atau 24-pin (OPi); resolusi >= 5MP |
-| 5 | Display | TFT LCD Touch Shield 2.4" | 1 | Menampilkan status absensi, nama, dan waktu | 3.3 / 5.0 | 120 | SPI (MOSI/MISO/CLK/CS/DC/RST) | Driver IC: ILI9341 atau ST7789V; resolusi 240x320; touch controller XPT2046 |
-| 6 | Storage | MicroSD 8GB SDHC | 1 | Menyimpan OS, firmware service, database wajah lokal | 3.3 | 100 | SDIO / SPI | Class 10 minimum; A1 rating direkomendasikan; endurance >= 3000 write cycles per cell |
-| 7 | MCU | Arduino Uno (ATmega328P) | 1 | Offload IO: TFT shield, LED, Buzzer, Button; bridge serial ke SBC | 5.0 | 500 | USB-B Serial, SPI (TFT), I2C (Expander), GPIO | ATmega328P @16MHz; 14 digital GPIO; 6 PWM; 6 analog |
-| 8 | IO Expander | Modul I2C IO Expander (PCF8574 / MCP23017) | 1 | Menambah jumlah GPIO Arduino | 3.3 / 5.0 | 25 | I2C (SDA/SCL) | PCF8574: 8-channel, I2C address 0x20-0x27; MCP23017: 16-channel |
-| 9 | Adaptor | Adaptor DC 5V/3A | 1 | Sumber daya utama dari jala-jala 220V AC | Input: 220V AC; Output: 5.0 | 3000 | DC Barrel 5.5x2.1mm | Minimum output 15W; ripple < 50mV; efisiensi >= 80% |
-| 10 | Kabel Jaringan | Kabel UTP Cat5e/Cat6 3m + Konektor RJ45 | 1 set | Koneksi Ethernet ke router/switch LAN | - | - | RJ45 (10/100 Mbps) | Straight-through wiring (T568B); gunakan USB-to-Ethernet dongle jika SBC tidak punya LAN onboard |
-| 11 | Modul UPS | Modul UPS 18650 Step-up ke 5V | 1 | Manajemen daya: charging baterai + output 5V saat AC terputus | Input: 5V; Output: 5.0 | 2000 | Passthrough power | IC boost: XL6009 atau MT3608; proteksi over-charge (4.2V), over-discharge (3.0V); seamless switchover < 100ms |
-| 12 | Baterai | Li-Ion 18650 | 2 | Sumber daya cadangan (backup power) | 3.7 nominal | 2C discharge max | Slot pada modul UPS | Kapasitas minimum 2500mAh per sel; NCR18650B / Samsung 25R atau setara |
-| 13 | LED Indikator | LED 5mm (Merah, Hijau, Kuning, Biru) | 4 | Status visual: Power, Processing, Success, Fail | 3.3 / 5.0 | 20 per LED | GPIO via I2C Expander | Resistor seri: R = (Vcc - Vf) / If; 5V, Vf=2V, If=10mA -> R=300 Ohm (gunakan 330 Ohm) |
-| 14 | Buzzer | Piezo Buzzer Aktif 5V | 1 | Feedback audio untuk hasil absensi | 5.0 | 30 | GPIO via I2C Expander + transistor NPN driver | Aktif (built-in oscillator); frekuensi ~2.4kHz; SPL >= 85dB @10cm |
-| 15 | Tombol Tactile | Push Button Tactile 6x6mm | 2-3 | Input manual: trigger, reset, service mode | 3.3 / 5.0 | < 1 (signal) | GPIO via I2C Expander, pull-up internal | SPST Normally Open; debounce: RC 10kOhm + 100nF hardware, atau 50ms software delay |
+| 1 | SBC Utama | Orange Pi Lite 2 | 1 | Main processing unit | 5.0 | 2000 | USB, GPIO, WiFi, HDMI | Allwinner H6 Quad-core Cortex-A53 @1.8GHz, 1GB LPDDR3 |
+| 2 | Camera USB | UVC Mini USB Web Camera | 1 | Capture wajah untuk face recognition | 5.0 (VBUS) | 500 | USB 2.0 (UVC) | Standard UVC Plug & Play; kabel retractable USB Type-A; Plug and Play di Linux/Debian (`/dev/video0`) |
+| 3 | Display | TFT LCD Touch Shield 2.4" | 1 | Menampilkan status absensi, nama, dan waktu | 3.3 / 5.0 | 120 | SPI (MOSI/MISO/CLK/CS/DC/RST) | Driver IC: ILI9341 atau ST7789V; resolusi 240x320; touch controller XPT2046 |
+| 4 | Storage | MicroSD 8GB SDHC | 1 | Menyimpan OS, firmware service, database wajah lokal | 3.3 | 100 | SDIO / SPI | Class 10 minimum; A1 rating direkomendasikan; endurance >= 3000 write cycles per cell |
+| 5 | MCU | Arduino Uno (ATmega328P) | 1 | Offload IO: TFT shield, LED, Buzzer, Button; bridge serial ke SBC | 5.0 | 500 | USB-B Serial, SPI (TFT), I2C (Expander), GPIO | ATmega328P @16MHz; 14 digital GPIO; 6 PWM; 6 analog |
+| 6 | IO Expander | Modul I2C IO Expander (PCF8574 / MCP23017) | 1 | Menambah jumlah GPIO Arduino | 3.3 / 5.0 | 25 | I2C (SDA/SCL) | PCF8574: 8-channel, I2C address 0x20-0x27; MCP23017: 16-channel |
+| 7 | Adaptor | Adaptor DC 5V/3A | 1 | Sumber daya utama dari jala-jala 220V AC | Input: 220V AC; Output: 5.0 | 3000 | DC Barrel 5.5x2.1mm | Minimum output 15W; ripple < 50mV; efisiensi >= 80% |
+| 8 | Kabel Jaringan | Kabel UTP Cat5e/Cat6 3m + Konektor RJ45 | 1 set | Koneksi Ethernet ke router/switch LAN | - | - | RJ45 (10/100 Mbps) | Straight-through wiring (T568B); gunakan USB-to-Ethernet dongle |
+| 9 | Modul UPS | Modul UPS 18650 Step-up ke 5V | 1 | Manajemen daya: charging baterai + output 5V saat AC terputus | Input: 5V; Output: 5.0 | 2000 | Passthrough power | IC boost: XL6009 atau MT3608; proteksi over-charge (4.2V), over-discharge (3.0V); seamless switchover < 100ms |
+| 10 | Baterai | Li-Ion 18650 | 2 | Sumber daya cadangan (backup power) | 3.7 nominal | 2C discharge max | Slot pada modul UPS | Kapasitas minimum 2500mAh per sel; NCR18650B / Samsung 25R atau setara |
+| 11 | LED Indikator | LED 5mm (Merah, Hijau, Kuning, Biru) | 4 | Status visual: Power, Processing, Success, Fail | 3.3 / 5.0 | 20 per LED | GPIO via I2C Expander | Resistor seri: R = (Vcc - Vf) / If; 5V, Vf=2V, If=10mA -> R=300 Ohm (gunakan 330 Ohm) |
+| 12 | Buzzer | Piezo Buzzer Aktif 5V | 1 | Feedback audio untuk hasil absensi | 5.0 | 30 | GPIO via I2C Expander + transistor NPN driver | Aktif (built-in oscillator); frekuensi ~2.4kHz; SPL >= 85dB @10cm |
+| 13 | Tombol Tactile | Push Button Tactile 6x6mm | 2-3 | Input manual: trigger, reset, service mode | 3.3 / 5.0 | < 1 (signal) | GPIO via I2C Expander, pull-up internal | SPST Normally Open; debounce: RC 10kOhm + 100nF hardware, atau 50ms software delay |
 
-### 2.2 Catatan Kompatibilitas SBC
+### 3.2 Spesifikasi Hardware SBC & Kamera
 
-| Fitur | Orange Pi Lite 2 | Raspberry Pi 3B+ | Raspberry Pi 4B | Raspberry Pi Zero 2W |
-|-------|------------------|------------------|-----------------|----------------------|
-| SoC | Allwinner H6 | BCM2837B0 | BCM2711 | BCM2710A1 |
-| RAM | 1GB LPDDR3 | 1GB LPDDR2 | 2/4/8GB LPDDR4 | 512MB LPDDR2 |
-| USB Host | 3x USB 3.0 + 1x USB 2.0 | 4x USB 2.0 | 2x USB 3.0 + 2x USB 2.0 | 1x micro USB OTG |
-| Ethernet | Tidak ada (WiFi only) | 1x 300Mbps | 1x Gigabit | Tidak ada (WiFi only) |
-| CSI Camera | Ya (24-pin) | Ya (15-pin) | Ya (15-pin) | Ya (22-pin) |
-| GPIO Header | 40-pin | 40-pin | 40-pin | 40-pin |
-| Face Recognition | Memadai | Memadai | Optimal | Lambat (terbatas RAM) |
-| USB Ethernet | Perlu dongle | Tidak perlu | Tidak perlu | Perlu dongle |
+| Parameter | Spesifikasi |
+|-----------|-------------|
+| SBC Model | Orange Pi Lite 2 (Allwinner H6 Quad-Core Cortex-A53) |
+| RAM | 1GB LPDDR3 |
+| Port USB | 1x USB 3.0 Host, 1x USB 2.0 Host, 1x USB OTG |
+| Camera Input | Standard USB Web Camera (UVC driverless) via USB 2.0/3.0 |
+| Network | Onboard WiFi 802.11 b/g/n + USB-to-Ethernet Adapter (RTL8153) |
+| Operating System | Debian Buster | 
 
 ---
 
-## 3. Pinout & Interconnection Detail
+### 4. Pinout & Interconnection Detail
 
-### 3.1 Orange Pi Lite 2 <-> Arduino Uno (USB Serial Bridge)
+
+
+
+### 4.1 Orange Pi Lite 2 <-> Arduino Uno (USB Serial Bridge)
 
 | Parameter | Nilai |
 |-----------|-------|
@@ -115,14 +126,14 @@ Power ON -> Boot SBC -> Init Camera -> Detect/Recognize Face -> Feedback (TFT + 
 
 **Contoh paket JSON (SBC -> Arduino):**
 
-```json
+json
 {"cmd":"display","status":"RECOGNIZED","name":"Budi S.","dept":"Engineering","time":"2026-09-28 07:30:15"}
 {"cmd":"display","status":"UNKNOWN","name":"---","dept":"---","time":"2026-09-28 07:30:20"}
 {"cmd":"standby","msg":"Silakan hadapkan wajah Anda"}
 {"cmd":"reboot"}
-```
 
-### 3.2 Arduino Uno <-> TFT LCD Shield 2.4" (SPI)
+
+### 4.2 Arduino Uno <-> TFT LCD Shield 2.4" (SPI)
 
 TFT LCD dipasang sebagai shield di atas Arduino Uno (header langsung terhubung).
 
@@ -142,7 +153,7 @@ TFT LCD dipasang sebagai shield di atas Arduino Uno (header langsung terhubung).
 
 > **Library Arduino**: `Adafruit_ILI9341` + `Adafruit_GFX` + `XPT2046_Touchscreen`
 
-### 3.3 Arduino Uno <-> I2C Expander (PCF8574 / MCP23017)
+### 4.3 Arduino Uno <-> I2C Expander (PCF8574 / MCP23017)
 
 | I2C Pin | Arduino Uno Pin | Keterangan |
 |---------|-----------------|------------|
@@ -154,7 +165,7 @@ TFT LCD dipasang sebagai shield di atas Arduino Uno (header langsung terhubung).
 
 **Pull-up resistor**: 4.7kOhm dari SDA ke VCC dan SCL ke VCC.
 
-### 3.4 I2C Expander (PCF8574) <-> LED, Buzzer, Button
+### 4.4 I2C Expander (PCF8574) <-> LED, Buzzer, Button
 
 | PCF8574 Pin | Fungsi | Arah | Komponen | Keterangan |
 |-------------|--------|------|----------|------------|
@@ -167,95 +178,78 @@ TFT LCD dipasang sebagai shield di atas Arduino Uno (header langsung terhubung).
 | P6 | Button Reset | Input | Tactile Button | Pull-up internal; LOW saat ditekan |
 | P7 | Reserved | - | - | Ekspansi ke depan |
 
-### 3.5 Orange Pi Lite 2 <-> Flex Camera (CSI)
+### 4.5 Orange Pi Lite 2 <-> USB Camera
 
 | Parameter | Nilai |
 |-----------|-------|
-| Interface | CSI-2 (MIPI CSI) |
-| Konektor | 24-pin FPC (Orange Pi Lite 2) |
-| Power | 1.8V I/O logic + 3.3V AVDD dari board |
-| Lane | 2-lane MIPI CSI-2 |
-| Max Resolusi | 8MP (3264x2448) @ 15fps atau 1080p30 |
-| Driver | `sunxi-vin` (Allwinner V4L2 driver untuk Armbian) |
-
-### 3.6 Orange Pi Lite 2 <-> USB Camera
-
-| Parameter | Nilai |
-|-----------|-------|
-| Interface | USB 2.0 Type-A |
-| Protocol | USB Video Class (UVC) |
-| Power | 5V VBUS, maks 500mA |
+| Interface | USB 2.0 Type-A (Plug & Play) |
+| Protocol | USB Video Class (UVC standard) |
+| Power | 5V VBUS dari port USB SBC, maks 500mA |
 | Device Node | `/dev/video0` |
-| Format Capture | MJPEG direkomendasikan (bandwidth lebih efisien) |
+| Format Capture | MJPEG / YUYV (MJPEG direkomendasikan untuk efisiensi CPU) |
 
-### 3.7 Konektivitas Jaringan (Ethernet)
+### 4.6 Konektivitas Jaringan (Ethernet & WiFi)
 
 | Parameter | Nilai |
 |-----------|-------|
-| Orange Pi Lite 2 | Tidak punya LAN onboard -> gunakan USB-to-Ethernet Dongle (chipset RTL8153) |
-| Raspberry Pi 3B+/4B | Onboard Ethernet, langsung colok RJ45 |
+| Orange Pi Lite 2 Ethernet | Gunakan USB-to-Ethernet Dongle (chipset RTL8153 / AX88179) |
+| Orange Pi Lite 2 WiFi | Integrated WiFi 802.11 b/g/n (fallback) |
 | Kabel | UTP Cat5e/Cat6 Straight-through 3m, T568B |
 | Wiring T568B | Pin 1=Orange+, 2=Orange, 3=Hijau+, 4=Biru, 5=Biru+, 6=Hijau, 7=Coklat+, 8=Coklat |
 | IP Assignment | DHCP default atau Static IP untuk production |
 
-### 3.8 Power Tree (Distribusi Daya)
+### 4.7 Power Tree (Distribusi Daya)
 
-```
+
 220V AC
   |
 Adaptor 5V/3A (max 15W)
   |
 Modul UPS 18650 (Passthrough + Charging)
-  |-- Charging 4.2V --> Baterai 18650 x2 (backup)
-  |
+  ├── Charging 4.2V --> Baterai 18650 x4 (backup)
+  │
 Rail 5V Utama
-  |-- Orange Pi Lite 2 (5V, max 2A) via micro-USB/USB-C
-  |-- Arduino Uno (5V via USB dari SBC)
-      |-- TFT LCD Shield (5V dari Arduino header)
-      |-- I2C Expander (5V dari Arduino header)
-      |-- LED, Buzzer, Button (via Expander)
-```
+  ├── Orange Pi Lite 2 (5V, max 2A) via micro-USB/USB-C
+  │   └── LED, Buzzer, Button (via Expander)
+  └── Arduino Uno (5V via USB dari SBC)
+      ├── TFT LCD Shield (5V dari Arduino header)
+      └── I2C Expander (5V dari Arduino header)
 
 > **Catatan**: Arduino tidak perlu adaptor terpisah jika sudah terhubung via USB ke SBC. SBC menyuplai 5V VBUS ke Arduino melalui port USB.
 
 ---
 
-## 4. Power Consumption Budget & Battery Runtime
+## 5. Power Consumption Budget & Battery Runtime
 
-### 4.1 Tabel Power Budget
+### 5.1 Tabel Power Budget
 
 | Komponen | Mode Idle (mA) | Mode Peak/Active (mA) | Catatan |
 |----------|---------------|----------------------|---------|
 | Orange Pi Lite 2 | 400 | 1500 | Peak: saat inference face recognition (H6 full load) |
-| 8MP USB Camera | 100 | 400 | Resolusi tinggi, frame rate max |
-| Flex Camera Module | 100 | 250 | Aktif streaming via CSI |
+| UVC USB Camera | 100 | 400 | Video capture stream |
 | Arduino Uno | 50 | 100 | Idle serial listen / aktif update TFT |
 | TFT LCD 2.4" (backlight penuh) | 80 | 120 | Dapat dikurangi ke 50mA dengan PWM dimming |
 | I2C IO Expander | 5 | 10 | Standby / aktif output |
 | LED Indikator (semua nyala) | 40 | 80 | 4 x 10mA per LED maks |
 | Piezo Buzzer | 0 | 30 | Hanya saat berbunyi |
 | Modul UPS (konversi rugi) | 50 | 100 | Efisiensi boost converter ~85% |
-| **Total (USB Camera saja)** | **~725** | **~2000** | Konfigurasi normal |
-| **Total (USB + Flex Camera)** | **~825** | **~2200** | Kedua kamera aktif (jarang digunakan) |
+| **Total (Power Draw)** | **~725** | **~2000** | Konfigurasi operasional normal |
 
-### 4.2 Estimasi Runtime Baterai
+### 5.2 Estimasi Runtime Baterai
 
-```
+
 Formula: Runtime (jam) = (Kapasitas (mAh) x Jumlah Sel x Efisiensi Boost) / Konsumsi Rata-rata (mA)
 Efisiensi UPS Boost: 0.85
 Konsumsi rata-rata: 1100 mA (operasional normal)
-```
+
 
 | Konfigurasi Baterai | Kapasitas Total | Estimasi Runtime |
 |---------------------|----------------|-----------------|
-| 1x 18650 @ 2500mAh | 2500mAh | (2500 x 0.85) / 1100 = ~1.9 jam |
-| 1x 18650 @ 3000mAh | 3000mAh | (3000 x 0.85) / 1100 = ~2.3 jam |
-| 2x 18650 @ 2500mAh (parallel) | 5000mAh | (5000 x 0.85) / 1100 = ~3.9 jam |
-| 2x 18650 @ 3000mAh (parallel) | 6000mAh | (6000 x 0.85) / 1100 = ~4.6 jam |
+| 4x 18650 @ 6800mAh | 27200mAh | (27200 x 0.85) / 1100 = ~21.0 jam |
 
-> **Rekomendasi**: Gunakan **2x 18650 @ 3000mAh** untuk runtime >= 4 jam. Target minimum >= 2 jam (dicapai dengan 1x 3000mAh).
+> **Rekomendasi**: Gunakan **4x 18650 @ 2500mAh** untuk runtime >= 4 jam. Target minimum >= 2 jam (dicapai dengan 1x 3000mAh).
 
-### 4.3 Rekomendasi Kapasitas Adaptor
+### 5.3 Rekomendasi Kapasitas Adaptor
 
 | Kebutuhan | Arus |
 |-----------|------|
@@ -267,21 +261,19 @@ Konsumsi rata-rata: 1100 mA (operasional normal)
 
 ---
 
-## 5. Thermal Management & Reliability
+## 6. Thermal Management & Reliability
 
-### 5.1 Profil Panas Komponen Kritis
+### 6.1 Profil Panas Komponen Kritis
 
 | Komponen | Suhu Operasi Normal | Suhu Max Aman | Risiko |
 |----------|--------------------|--------------------|--------|
 | Orange Pi Lite 2 (H6 SoC) | 50-65 derajat C | 85 derajat C (throttle) | Tinggi |
-| Raspberry Pi 4B | 60-75 derajat C | 80 derajat C (throttle) | Sedang-Tinggi |
-| Raspberry Pi 3B+ | 50-60 derajat C | 80 derajat C | Sedang |
 | Modul UPS XL6009 | 40-55 derajat C | 85 derajat C | Rendah-Sedang |
 | Baterai Li-Ion 18650 | 20-40 derajat C (ideal) | 45 derajat C (charge), 60 derajat C (discharge max) | Sedang |
 | TFT LCD + Driver | 30-45 derajat C | 70 derajat C | Rendah |
 | Arduino Uno (ATmega328P) | 25-40 derajat C | 85 derajat C | Sangat Rendah |
 
-### 5.2 Strategi Pendinginan
+### 6.2 Strategi Pendinginan
 
 1. **Heat Sink Passive Wajib**:
    - Pasang heat sink aluminium (min 14x14mm) pada H6 SoC Orange Pi Lite 2 menggunakan thermal pad/compound.
@@ -298,11 +290,11 @@ Konsumsi rata-rata: 1100 mA (operasional normal)
    - Pantau via: `cat /sys/class/thermal/thermal_zone0/temp`
    - Alert buzzer jika suhu > 80 derajat C (implementasi di service systemd).
 
-### 5.3 Reliability & Estimasi Lifetime
+### 6.3 Reliability & Estimasi Lifetime
 
 | Komponen | Estimasi Lifetime | Mode Kegagalan Umum |
 |----------|------------------|---------------------|
-| SBC (OPi/RPi) | 5-10 tahun | Overheating, SD card korupsi |
+| SBC (Orange Pi Lite 2) | 5-10 tahun | Overheating, SD card korupsi |
 | MicroSD 8GB | 3-5 tahun (heavy write) | Write endurance habis |
 | Li-Ion 18650 | 300-500 siklus (2-3 tahun) | Kapasitas turun, swelling |
 | TFT LCD | 20.000 jam backlight | Backlight meredup |
@@ -313,9 +305,9 @@ Konsumsi rata-rata: 1100 mA (operasional normal)
 
 ---
 
-## 6. Constraint, Risiko & Mitigasi Hardware
+## 7. Constraint, Risiko & Mitigasi Hardware
 
-### 6.1 Tabel Risiko Hardware
+### 7.1 Tabel Risiko Hardware
 
 | No | Risiko | Dampak | Probabilitas | Strategi Mitigasi |
 |----|--------|--------|-------------|-------------------|
@@ -330,7 +322,7 @@ Konsumsi rata-rata: 1100 mA (operasional normal)
 | R09 | Baterai 18650 palsu / kapasitas tidak sesuai klaim | Runtime jauh di bawah estimasi | Tinggi | Beli dari supplier terpercaya (Panasonic NCR, Samsung INR, LG MH1); lakukan capacity test |
 | R10 | Face recognition gagal karena pencahayaan kurang | Sistem tidak dapat identifikasi wajah | Sedang | Pasang LED ring light 5V di sekitar kamera; pertimbangkan kamera dengan sensor Sony IMX |
 
-### 6.2 Constraint Teknis
+### 7.2 Constraint Teknis
 
 | Constraint | Nilai Batas | Alasan |
 |------------|-------------|--------|
@@ -342,9 +334,9 @@ Konsumsi rata-rata: 1100 mA (operasional normal)
 
 ---
 
-## 7. Roadmap Hardware V2 — Fabrikasi PCB & Casing
+## 8. Roadmap Hardware V2 — Fabrikasi PCB & Casing
 
-### 7.1 Motivasi Hardware V2
+### 8.1 Motivasi Hardware V2
 
 Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 - Koneksi longgar (female header / dupont wire)
@@ -353,7 +345,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 
 **Hardware V2** mengintegrasikan semua komponen pendukung ke dalam custom PCB carrier 2-layer dan enclosure yang didesain khusus.
 
-### 7.2 Spesifikasi PCB Custom Carrier 2-Layer
+### 8.2 Spesifikasi PCB Custom Carrier 2-Layer
 
 | Parameter PCB | Spesifikasi |
 |---------------|------------|
@@ -367,7 +359,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 | Komponen Terintegrasi | UPS circuit (XL6009), PCF8574, transistor buzzer, LED resistor array, RC debounce, konektor SBC header 40-pin, Arduino Uno header, USB Type-A, DC barrel jack |
 | Software EDA | KiCad 7.x |
 
-### 7.3 Konsolidasi Fitur V1 -> V2
+### 8.3 Konsolidasi Fitur V1 -> V2
 
 | Fitur V1 (Modul Terpisah) | Implementasi V2 (PCB Carrier) |
 |---------------------------|-------------------------------|
@@ -378,7 +370,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 | Button dengan kabel dupont | Tactile switch SMD langsung di PCB |
 | Kabel power terpisah | Jalur copper terintegrasi + fuse holder + TVS dioda |
 
-### 7.4 Desain Enclosure / Casing
+### 8.4 Desain Enclosure / Casing
 
 **Opsi A: 3D Print (PLA+ / PETG)**
 
@@ -400,7 +392,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 | Keunggulan | Biaya murah, estetika transparan, mudah dimodifikasi |
 | Kelemahan | Kurang rigid, tidak ada IP rating |
 
-### 7.5 Estimasi Biaya Fabrikasi V2 (Per Unit)
+### 8.5 Estimasi Biaya Fabrikasi V2 (Per Unit)
 
 | Item | Estimasi Biaya |
 |------|----------------|
@@ -414,7 +406,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 
 ---
 
-## 8. Acceptance Criteria & Checklist Validasi Hardware
+## 9. Acceptance Criteria & Checklist Validasi Hardware
 
 > Semua item di bawah **harus** dinyatakan [x] sebelum unit dinyatakan siap deployment.
 
@@ -429,10 +421,9 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 
 ### B. Camera
 
-- [ ] **AC-07**: USB Camera terdeteksi: `ls /dev/video*` menunjukkan device.
-- [ ] **AC-08**: `v4l2-ctl --device=/dev/video0 --list-formats-ext` menampilkan MJPEG resolusi >= 1920x1080.
-- [ ] **AC-09**: Live preview berjalan tanpa frame drop.
-- [ ] **AC-10**: (Jika Flex Camera digunakan) CSI camera terdeteksi dan dapat diakses.
+- [ ] **AC-07**: USB Camera terdeteksi: `ls /dev/video*` menunjukkan device node `/dev/video0`.
+- [ ] **AC-08**: `v4l2-ctl --device=/dev/video0 --list-formats-ext` menampilkan format video (MJPEG/YUYV).
+- [ ] **AC-09**: Live preview & capture frame dari UVC USB Camera berjalan lancar.
 
 ### C. Display & Arduino
 
@@ -478,6 +469,7 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 | Versi | Tanggal | Perubahan | Penulis |
 |-------|---------|-----------|---------|
 | 1.0.0 | 2026-09-28 | Initial release — draft untuk implementasi V1 | Tim Smart Absen |
+| 2.0.0 | 2026-09-30 | draft untuk implementasi V2 | Tim Smart Absen |
 
 ### B. Referensi
 
@@ -488,9 +480,9 @@ Perangkat V1 menggunakan modul-modul terpisah yang rentan terhadap:
 | XPT2046 Touch Controller Datasheet | https://datasheetspdf.com/pdf/731591/XPT/XPT2046/1 |
 | PCF8574 I2C Expander Datasheet | https://www.ti.com/lit/ds/symlink/pcf8574.pdf |
 | XL6009 Boost Converter Datasheet | https://www.xlsemi.com/datasheet/XL6009%20datasheet.pdf |
-| Armbian Documentation | https://docs.armbian.com |
-| face_recognition Python Library | https://github.com/ageitgey/face_recognition |
+| Debian Documentation | https://www.debian.org/doc/|
+| Facenox - open source face recognition | https://github.com/facenox/facenox |
 
 ---
 
-*Dokumen ini dihasilkan sebagai bagian dari proyek "Smart Absen" — Sistem Absensi Face Recognition berbasis Single Board Computer.*
+*Dokumen ini dihasilkan sebagai bagian dari proyek "Sekolahkita.net"*

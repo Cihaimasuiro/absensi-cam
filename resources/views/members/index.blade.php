@@ -126,7 +126,7 @@
                                 <button type="button" @click="$dispatch('open-enroll-modal', { member: {{ json_encode($member->only('id', 'name', 'code')) }}, group_name: '{{ $member->group?->name ?? '' }}', hasFaceTemplate: {{ $member->faceTemplate ? 'true' : 'false' }}, hasConsent: {{ $member->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Enroll Wajah">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
                                 </button>
-                                <button type="button" @click="$dispatch('open-modal', { member: {{ json_encode($member->only('id', 'name', 'code', 'role', 'email', 'phone', 'group_id', 'organization_id', 'is_active')) }} })" class="btn btn-xs btn-secondary" title="Edit">
+                                <button type="button" @click="$dispatch('open-modal', { member: {{ json_encode($member->only('id', 'name', 'code', 'role', 'email', 'phone', 'group_id', 'organization_id', 'is_active')) }}, has_consent: {{ $member->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Edit">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
                                 </button>
                                 <form method="POST" action="{{ route('members.destroy', $member) }}" onsubmit="return confirm('Hapus anggota {{ addslashes($member->name) }}?')" style="display:inline-block;">
@@ -158,10 +158,11 @@
             id: '{{ old('id') }}', code: '{{ old('code') }}', name: '{{ old('name') }}',
             role: '{{ old('role') }}', organization_id: '{{ old('organization_id') }}',
             group_id: '{{ old('group_id') }}', email: '{{ old('email') }}', 
-            phone: '{{ old('phone') }}', is_active: '{{ old('is_active', 1) }}'
+            phone: '{{ old('phone') }}', is_active: '{{ old('is_active', 1) }}',
+            has_consent: false
         }
      }" 
-     @open-modal.window="show = true; isEdit = !!$event.detail.member; member = $event.detail.member || {is_active: 1}"
+     @open-modal.window="show = true; isEdit = !!$event.detail.member; member = $event.detail.member || {is_active: 1, has_consent: false}; if($event.detail.member) { member.has_consent = $event.detail.member.has_consent }"
      x-show="show" 
      style="display: none;" 
      class="modal-overlay">
@@ -238,6 +239,14 @@
                         <option value="1">Aktif</option>
                         <option value="0">Nonaktif</option>
                     </select>
+                </div>
+
+                <div class="mt-2" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="hidden" name="has_consent" value="0">
+                    <input type="checkbox" name="has_consent" value="1" id="has_consent_checkbox" x-model="member.has_consent" style="accent-color: var(--accent); width: 1rem; height: 1rem;">
+                    <label for="has_consent_checkbox" style="font-size: 0.8125rem; font-weight: 500; cursor: pointer;">
+                        Saya mengonfirmasi bahwa anggota ini telah menyetujui data biometrik wajahnya diproses.
+                    </label>
                 </div>
 
                 <div class="flex gap-2 pt-2">

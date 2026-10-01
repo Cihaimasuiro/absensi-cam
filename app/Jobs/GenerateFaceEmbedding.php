@@ -34,47 +34,56 @@ class GenerateFaceEmbedding implements ShouldQueue
 
         try {
             $bin = env('FACE_EMBED_BIN', '/usr/local/bin/face-embed');
-            $keyBase64 = env('ENROLLMENT_EMBED_KEY');
             
-            if (!$keyBase64) {
-                throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
-            }
-            
-            $key = base64_decode($keyBase64);
-            if (strlen($key) !== 32) {
-                throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
-            }
+            // --- PONYTAIL LOCAL DEV BYPASS ---
+            // Jika di local development dan binary face-embed tidak ada, buat dummy embedding saja
+            // supaya UI bisa menampilkan status "Terdaftar" tanpa error.
+            if (app()->environment('local') && (!file_exists($bin) && PHP_OS_FAMILY === 'Windows')) {
+                $stdout = random_bytes(2048);
+                $key = random_bytes(32);
+            } else {
+                $keyBase64 = env('ENROLLMENT_EMBED_KEY');
+                
+                if (!$keyBase64) {
+                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
+                }
+                
+                $key = base64_decode($keyBase64);
+                if (strlen($key) !== 32) {
+                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
+                }
 
-            // Command: face-embed --model sface-2021dec --input {path} --output -
-            $cmd = escapeshellcmd($bin) . " --model sface-2021dec --input " . escapeshellarg($this->tmpPath) . " --output -";
-            
-            $descriptors = [
-                1 => ['pipe', 'w'], // stdout
-                2 => ['pipe', 'w'], // stderr
-            ];
-            
-            $process = proc_open($cmd, $descriptors, $pipes);
-            
-            if (!is_resource($process)) {
-                throw new \RuntimeException("Failed to start face-embed process");
-            }
-            
-            $stdout = stream_get_contents($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            
-            $exitCode = proc_close($process);
-            
-            if ($exitCode !== 0) {
-                throw new \RuntimeException("face-embed failed (Exit $exitCode): $stderr");
-            }
+                // Command: face-embed --model sface-2021dec --input {path} --output -
+                $cmd = escapeshellcmd($bin) . " --model sface-2021dec --input " . escapeshellarg($this->tmpPath) . " --output -";
+                
+                $descriptors = [
+                    1 => ['pipe', 'w'], // stdout
+                    2 => ['pipe', 'w'], // stderr
+                ];
+                
+                $process = proc_open($cmd, $descriptors, $pipes);
+                
+                if (!is_resource($process)) {
+                    throw new \RuntimeException("Failed to start face-embed process");
+                }
+                
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                
+                $exitCode = proc_close($process);
+                
+                if ($exitCode !== 0) {
+                    throw new \RuntimeException("face-embed failed (Exit $exitCode): $stderr");
+                }
 
-            if (strlen($stdout) !== 2048) {
-                throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes, got " . strlen($stdout));
+                if (strlen($stdout) !== 2048) {
+                    throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes, got " . strlen($stdout));
+                }
             }
-
+            
             // AES-256-GCM Encrypt
             $iv = random_bytes(12);
             $tag = '';
@@ -95,7 +104,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                 FaceTemplate::updateOrCreate(
                     ['member_id' => $this->memberId],
                     [
-                        'embedding_enc' => $encryptedBlob,
+                        'embedding_enc' => base64_encode($encryptedBlob),
                         'model_version' => 'sface-2021dec',
                         'version_cursor' => $nextCursor,
                         'embedding_hash' => $hash,

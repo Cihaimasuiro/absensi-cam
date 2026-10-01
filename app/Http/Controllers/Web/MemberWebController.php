@@ -28,17 +28,10 @@ class MemberWebController extends Controller
             ->paginate(50)
             ->withQueryString();
 
-        $groups = Group::active()->select(['id', 'name'])->orderBy('name')->get();
-
-        return view('members.index', compact('members', 'groups'));
-    }
-
-    public function create()
-    {
+        $groups = Group::active()->select(['id', 'name', 'organization_id'])->orderBy('name')->get();
         $organizations = Organization::active()->select(['id', 'name'])->orderBy('name')->get();
-        $groups        = Group::active()->select(['id', 'name', 'organization_id'])->orderBy('name')->get();
 
-        return view('members.create', compact('organizations', 'groups'));
+        return view('members.index', compact('members', 'groups', 'organizations'));
     }
 
     public function store(Request $request)
@@ -51,26 +44,23 @@ class MemberWebController extends Controller
             'email'           => ['nullable', 'email', 'max:191', 'unique:members,email'],
             'phone'           => ['nullable', 'string', 'max:30'],
             'role'            => ['nullable', 'string', 'max:50'],
+            'has_consent'     => ['nullable', 'boolean'],
         ]);
 
-        $member = Member::create(array_merge($validated, ['is_active' => true]));
+        $member = Member::create(array_merge(
+            \Illuminate\Support\Arr::except($validated, ['has_consent']),
+            ['is_active' => true]
+        ));
 
-        return redirect()->route('members.show', $member)->with('success', 'Anggota berhasil ditambahkan.');
-    }
+        if ($request->boolean('has_consent')) {
+            $member->consents()->create([
+                'given_at'     => now(),
+                'text_version' => 'v1.0',
+                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+            ]);
+        }
 
-    public function show(Member $member)
-    {
-        $member->load(['group', 'organization', 'faceTemplate', 'activeConsent', 'attendanceLogs' => fn ($q) => $q->latest('captured_at')->limit(10)]);
-
-        return view('members.show', compact('member'));
-    }
-
-    public function edit(Member $member)
-    {
-        $organizations = Organization::active()->select(['id', 'name'])->orderBy('name')->get();
-        $groups        = Group::active()->select(['id', 'name', 'organization_id'])->orderBy('name')->get();
-
-        return view('members.edit', compact('member', 'organizations', 'groups'));
+        return redirect()->route('members.index')->with('success', 'Anggota berhasil ditambahkan.');
     }
 
     public function update(Request $request, Member $member)
@@ -84,11 +74,26 @@ class MemberWebController extends Controller
             'phone'           => ['nullable', 'string', 'max:30'],
             'role'            => ['nullable', 'string', 'max:50'],
             'is_active'       => ['boolean'],
+            'has_consent'     => ['nullable', 'boolean'],
         ]);
 
-        $member->update($validated);
+        $member->update(\Illuminate\Support\Arr::except($validated, ['has_consent']));
 
-        return redirect()->route('members.show', $member)->with('success', 'Anggota berhasil diperbarui.');
+        if ($request->boolean('has_consent') && !$member->hasActiveConsent()) {
+            $member->consents()->create([
+                'given_at'     => now(),
+                'text_version' => 'v1.0',
+                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+            ]);
+        } elseif (!$request->boolean('has_consent') && $member->hasActiveConsent()) {
+            $member->activeConsent()->update(['withdrawn_at' => now()]);
+            // Also delete face template if consent is withdrawn
+            if ($member->faceTemplate) {
+                $member->faceTemplate->delete();
+            }
+        }
+
+        return redirect()->route('members.index')->with('success', 'Anggota berhasil diperbarui.');
     }
 
     public function destroy(Member $member)
@@ -97,11 +102,23 @@ class MemberWebController extends Controller
 
         return redirect()->route('members.index')->with('success', 'Anggota dihapus dan akan dikeluarkan dari perangkat.');
     }
-
-    public function enroll(Member $member)
+    public function import(Request $request)
     {
-        return view('members.enroll', compact('member'));
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,csv,xls', 'max:10240'],
+        ]);
+
+        try {
+            \Maatwebsite\Excel\Facades\Excel::import(
+                new \App\Domain\Member\Imports\MembersImport, 
+                $request->file('file')
+            );
+            return redirect()->route('members.index')->with('success', 'Data anggota berhasil diimpor.');
+        } catch (\Exception $e) {
+            return redirect()->route('members.index')->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
+        }
     }
+
 
     public function enrollStore(\App\Http\Requests\Web\EnrollFaceRequest $request, Member $member)
     {

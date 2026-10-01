@@ -17,7 +17,7 @@ final class EnrollFace
 
         $filename = "enroll_{$member->id}_" . Str::uuid() . ".{$photo->extension()}";
         $photo->storeAs('tmp', $filename, 'local');
-        $tmpPath = storage_path("app/tmp/{$filename}");
+        $tmpPath = \Illuminate\Support\Facades\Storage::disk('local')->path("tmp/{$filename}");
 
         GenerateFaceEmbedding::dispatch($member->id, $tmpPath)->onQueue('enrollments');
 

@@ -1,5 +1,5 @@
 /.antigravity/
-# /templates/
+/templates/
 *.log
 .DS_Store
 .env

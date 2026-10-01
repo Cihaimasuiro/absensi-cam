@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Domain\Device\Models;
+
+use App\Domain\Organization\Models\Branch;
+use App\Domain\Organization\Models\Group;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
+
+class Device extends Authenticatable
+{
+    use HasApiTokens;
+
+    protected $fillable = [
+        'branch_id',
+        'name',
+        'device_code',
+        'token_hash',
+        'ip_address',
+        'fw_version',
+        'model_version',
+        'last_heartbeat_at',
+        'last_cpu_temp',
+        'last_outbox_len',
+        'status',
+    ];
+
+    protected $casts = [
+        'last_heartbeat_at' => 'datetime',
+        'last_cpu_temp'     => 'float',
+        'last_outbox_len'   => 'integer',
+    ];
+
+    protected $hidden = ['token_hash'];
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /** Groups whose members this device is allowed to recognize (FR-E06) */
+    public function groups(): BelongsToMany
+    {
+        return $this->belongsToMany(Group::class, 'device_groups');
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(DeviceLog::class);
+    }
+
+    public function scopeOnline($query)
+    {
+        return $query->where('status', 'online');
+    }
+
+    /** Mark online/offline based on heartbeat age (> 3 min = offline) */
+    public function isOnline(): bool
+    {
+        return $this->last_heartbeat_at?->diffInMinutes(now()) <= 3;
+    }
+}

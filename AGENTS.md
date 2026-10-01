@@ -49,7 +49,7 @@
 6. **No AI Slop & Minimal Compact UI Design:**
    - **Zero Gratuitous Visual Clutter**: Never add unrequested badges, status pills, count indicators, decorative icons, gradient wrappers, or artificial ornamental elements to UIs.
    - **Plain & Standard Presentation**: Render text, numbers, IDs, and controls using plain, clean HTML without wrapping simple values in badges or pills unless functionally required (e.g., actual status indicators like Active/Inactive).
-   - **Compact & Minimal Sizing**: Use compact, dense, and clean font sizes and padding across tables, modals, cards, and forms. Avoid oversized fonts (keep table text 11px-12.5px, form labels 12px-12.5px, headings 14px-16px) and bloated margins/padding (modal padding 12px-16px, table cell padding 6px-8px). Keep UI high-density, minimal, and crisp.
+   - **Compact & Minimal Sizing**: Use compact, dense, and clean font sizes and padding across tables, modals, cards, and forms. Avoid oversized fonts and bloated margins/padding. Keep UI high-density, minimal, and crisp.
 
 7. **Explicit Server Sync Prohibition:**
    - **Never Execute Server Sync Automatically**: Never execute `sync_to_server.py` or run remote server sync commands automatically unless explicitly requested by the user.

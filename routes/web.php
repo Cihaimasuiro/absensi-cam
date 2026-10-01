@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 // Members — full CRUD + enrollment
+Route::post('members/import', [MemberWebController::class, 'import'])->name('members.import');
 Route::resource('members', MemberWebController::class);
-Route::get('members/{member}/enroll', [MemberWebController::class, 'enroll'])->name('members.enroll');
 Route::post('members/{member}/enroll', [MemberWebController::class, 'enrollStore'])->name('members.enroll.store');
 
 // Reports

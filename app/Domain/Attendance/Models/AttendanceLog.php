@@ -5,12 +5,14 @@ namespace App\Domain\Attendance\Models;
 use App\Domain\Device\Models\Device;
 use App\Domain\Student\Models\Student;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AttendanceLog extends Model
 {
+    use HasFactory;
     use HasUuids;
 
     protected $fillable = [
@@ -74,3 +76,4 @@ class AttendanceLog extends Model
         return $query->where('direction', 'out');
     }
 }
+

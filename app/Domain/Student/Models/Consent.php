@@ -3,11 +3,13 @@
 namespace App\Domain\Student\Models;
 
 use App\Domain\User\Models\User;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Consent extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'student_id',
         'given_at',
@@ -39,3 +41,4 @@ class Consent extends Model
         return $this->withdrawn_at === null;
     }
 }
+

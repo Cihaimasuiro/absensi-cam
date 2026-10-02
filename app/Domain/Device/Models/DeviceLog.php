@@ -2,11 +2,13 @@
 
 namespace App\Domain\Device\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DeviceLog extends Model
 {
+    use HasFactory;
     public $timestamps = false;
 
     protected $fillable = [
@@ -29,3 +31,4 @@ class DeviceLog extends Model
         return $this->belongsTo(Device::class);
     }
 }
+

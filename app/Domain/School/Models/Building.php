@@ -3,12 +3,14 @@
 namespace App\Domain\School\Models;
 
 use App\Domain\Device\Models\Device;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Building extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'school_id',
         'name',
@@ -35,3 +37,4 @@ class Building extends Model
         return $query->where('is_active', true);
     }
 }
+

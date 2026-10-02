@@ -1,144 +1,70 @@
 @extends('layouts.app')
-
-@section('title', 'Laporan Absensi')
-@section('page-title', 'Laporan')
-
-@section('header-actions')
-    <a href="{{ route('reports.export.csv', request()->query()) }}"
-       class="btn btn-secondary btn-sm" id="btn-export-csv">
-        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-        </svg>
-        Export CSV
-    </a>
-@endsection
+@section('title', 'Laporan Presensi')
 
 @section('content')
-{{-- ════════════════════════════════════════
-     Report toolbar — ported from Reports.tsx ReportToolbar
-     date-range + group filter
-     ════════════════════════════════════════ --}}
-<div class="card p-3 mb-3">
-    <form method="GET" action="{{ route('reports.index') }}" id="report-filter-form" class="flex flex-wrap gap-2 items-end">
+
+{{-- Filter bar --}}
+<div class="card" style="padding:var(--space-md); margin-bottom:var(--space-md);">
+    <form method="GET" action="{{ route('reports.index') }}" style="display:flex; gap:var(--space-md); align-items:flex-end; flex-wrap:wrap;">
         <div>
-            <label class="form-label" for="report-start">Dari</label>
-            <input id="report-start" type="date" name="start" value="{{ $start }}" class="form-input" style="width: auto;">
+            <label class="form-label">Tanggal Mulai</label>
+            <input type="date" name="start_date" value="{{ request('start_date', now()->format('Y-m-d')) }}" class="form-input" style="width:160px;">
         </div>
         <div>
-            <label class="form-label" for="report-end">Sampai</label>
-            <input id="report-end" type="date" name="end" value="{{ $end }}" class="form-input" style="width: auto;">
+            <label class="form-label">Tanggal Akhir</label>
+            <input type="date" name="end_date" value="{{ request('end_date', now()->format('Y-m-d')) }}" class="form-input" style="width:160px;">
+        </div>
+        <div style="flex:1; min-width:160px;">
+            <label class="form-label">Cari NIS / Nama</label>
+            <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input">
         </div>
         <div>
-            <label class="form-label" for="report-group">Kelas</label>
-            <select id="report-group" name="classroom_id" class="form-input" style="width: auto; min-width: 140px;">
-                <option value="">Semua Kelas</option>
-                @foreach($classrooms as $classroom)
-                    <option value="{{ $classroom->id }}" {{ $groupId == $classroom->id ? 'selected' : '' }}>{{ $classroom->name }}</option>
-                @endforeach
-            </select>
+            <button type="submit" class="btn btn-utility">Filter</button>
         </div>
-        <button type="submit" class="btn btn-primary" id="btn-apply-report">Terapkan</button>
     </form>
 </div>
 
-{{-- Summary row --}}
-<div class="flex gap-3 mb-3">
-    <div class="stat-card flex-1">
-        <span class="stat-card__value">{{ $logs->total() }}</span>
-        <span class="stat-card__label">Total Catatan</span>
-    </div>
-    <div class="stat-card flex-1">
-        <span class="stat-card__value" style="color: var(--success);">
-            {{ $logs->getCollection()->where('direction', 'in')->count() }}
-        </span>
-        <span class="stat-card__label">Masuk</span>
-    </div>
-    <div class="stat-card flex-1">
-        <span class="stat-card__value" style="color: var(--text-muted);">
-            {{ $logs->getCollection()->where('direction', 'out')->count() }}
-        </span>
-        <span class="stat-card__label">Keluar</span>
-    </div>
-    <div class="stat-card flex-1">
-        <span class="stat-card__value" style="color: var(--warning);">
-            {{ $logs->getCollection()->where('is_corrected', true)->count() }}
-        </span>
-        <span class="stat-card__label">Dikoreksi</span>
-    </div>
-</div>
-
-{{-- ════════════════════════════════════════
-     Report table — ported from Reports.tsx ReportTable
-     columns: name, code, date, time, direction, score, corrected
-     ════════════════════════════════════════ --}}
-<div class="card">
-    @if($logs->isEmpty())
-        <div style="text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.8125rem;">
-            Tidak ada data absensi untuk rentang tanggal ini.
-        </div>
-    @else
-        <table class="data-table">
-            <thead>
+{{-- Table --}}
+<div class="card" style="padding:0; overflow:hidden;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Nama Anggota</th>
+                <th>NIS</th>
+                <th>Sekolah</th>
+                <th>Waktu</th>
+                <th>Status</th>
+                <th>Keyakinan</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($logs ?? [] as $log)
                 <tr>
-                    <th>Nama</th>
-                    <th>Kode</th>
-                    <th>Kelas</th>
-                    <th>Tanggal</th>
-                    <th>Waktu</th>
-                    <th>Arah</th>
-                    <th>Skor</th>
-                    <th>Sumber Waktu</th>
-                    <th>Perangkat</th>
-                    <th></th>
+                    <td style="font-weight:500; color:var(--color-ink);">{{ $log->student->full_name ?? '-' }}</td>
+                    <td style="font-family:monospace; font-size:12px;">{{ $log->student->nis ?? '-' }}</td>
+                    <td>{{ $log->student->school->name ?? '-' }}</td>
+                    <td>{{ $log->scanned_at->format('Y-m-d H:i:s') }}</td>
+                    <td>
+                        <span class="badge {{ $log->direction === 'in' ? 'badge-success' : 'badge-muted' }}">
+                            {{ $log->direction === 'in' ? 'Masuk' : 'Keluar' }}
+                        </span>
+                    </td>
+                    <td>{{ number_format($log->confidence_score, 3) }}</td>
                 </tr>
-            </thead>
-            <tbody>
-                @foreach($logs as $log)
-                    <tr id="report-row-{{ $log->id }}">
-                        <td style="font-weight: 500; color: var(--text-primary);">{{ $log->student?->name ?? '—' }}</td>
-                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-tertiary);">{{ $log->student?->code ?? '—' }}</td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $log->student?->group?->name ?? '—' }}</td>
-                        <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--text-tertiary);">
-                            {{ $log->captured_at->format('d M Y') }}
-                        </td>
-                        <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--text-secondary);">
-                            {{ $log->captured_at->format('H:i:s') }}
-                        </td>
-                        <td>
-                            @if($log->direction === 'in')
-                                <span class="badge badge-success">Masuk</span>
-                            @else
-                                <span class="badge badge-muted">Keluar</span>
-                            @endif
-                        </td>
-                        <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--text-tertiary);">
-                            {{ number_format($log->score, 3) }}
-                        </td>
-                        <td>
-                            @if($log->time_source === 'ntp')
-                                <span class="badge badge-accent">NTP</span>
-                            @elseif($log->time_source === 'rtc')
-                                <span class="badge badge-warning">RTC</span>
-                            @else
-                                <span class="badge badge-danger">Unsynced</span>
-                            @endif
-                        </td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $log->device?->name ?? '—' }}</td>
-                        <td>
-                            @if($log->is_corrected)
-                                <span class="badge badge-warning">Koreksi</span>
-                            @endif
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+            @empty
+                <tr>
+                    <td colspan="6" style="text-align:center; color:var(--color-ink-faint); padding:var(--space-xxl);">
+                        Tidak ada data absensi.
+                    </td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
 
-        @if($logs->hasPages())
-            <div class="px-4 py-3" style="border-top: 1px solid var(--border-primary);">
-                {{ $logs->links() }}
-            </div>
-        @endif
+    @if(isset($logs) && $logs->hasPages())
+        <div style="padding:var(--space-sm) var(--space-md); border-top:1px solid var(--color-hairline); background:var(--color-canvas-soft);">
+            {{ $logs->links('pagination::tailwind') }}
+        </div>
     @endif
 </div>
 @endsection

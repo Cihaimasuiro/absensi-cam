@@ -3,11 +3,13 @@
 namespace App\Domain\School\Models;
 
 use App\Domain\Student\Models\Student;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class School extends Model
 {
+    use HasFactory;
     protected $fillable = ['name', 'code', 'description', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
@@ -32,3 +34,4 @@ class School extends Model
         return $query->where('is_active', true);
     }
 }
+

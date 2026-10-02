@@ -1,135 +1,191 @@
 @extends('layouts.app')
-
-@section('title', 'Perangkat')
-@section('page-title', 'Perangkat Edge')
-
-@section('header-actions')
-    {{-- Generate pairing code --}}
-    <button class="btn btn-primary btn-sm" id="btn-new-pairing"
-            @click="document.getElementById('pairing-modal').style.display='flex'">
-        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/>
-        </svg>
-        Kode Pairing
-    </button>
-@endsection
+@section('title', 'Manajemen Perangkat')
 
 @section('content')
 
-{{-- Pairing code success flash --}}
+{{-- Pairing Code Result --}}
 @if(session('pairing_code'))
-    <div class="alert alert-success mb-3" x-data="{ show: true, copied: false }" x-show="show"
-         style="display: flex; align-items: center; justify-content: space-between;">
-        <span>
-            Kode pairing: <strong style="font-family: monospace; font-size: 1rem; letter-spacing: 0.1em; color: var(--accent);">
-                {{ session('pairing_code') }}
-            </strong>
-            &nbsp;— berlaku 15 menit.
-        </span>
-        <button class="btn btn-xs btn-secondary" id="btn-copy-code"
-                @click="navigator.clipboard.writeText('{{ session('pairing_code') }}'); copied = true"
-                x-text="copied ? 'Disalin!' : 'Salin'">
-        </button>
+    <div class="card" style="background:#eff6ff; border-color:#bfdbfe; margin-bottom:var(--space-md); padding:var(--space-md);">
+        <p class="text-eyebrow" style="color:var(--color-primary); margin-bottom:var(--space-xs);">Kode Pairing Berhasil Dibuat — berlaku 15 menit</p>
+        <p style="font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.2em; color:var(--color-secondary); margin-bottom:var(--space-xs);">
+            {{ session('pairing_code') }}
+        </p>
+        <p class="text-caption" style="color:var(--color-primary);">
+            Jalankan <code style="background:#dbeafe; padding:1px 4px; border-radius:3px;">python pairing.py</code> di Orange Pi, lalu masukkan kode ini.
+        </p>
     </div>
 @endif
 
-{{-- ════════════════════════════════════════
-     Device table — ported from Facenox Sync.tsx device panel
-     status, heartbeat, cpu_temp, outbox_len, fw_version
-     ════════════════════════════════════════ --}}
-<div class="card mb-4">
-    @if($devices->isEmpty())
-        <div style="text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.8125rem;">
-            Belum ada perangkat terpasang. Buat kode pairing untuk menghubungkan Orange Pi Lite 2 pertama Anda.
-        </div>
-    @else
+<div style="display:grid; grid-template-columns:1fr 280px; gap:var(--space-lg);">
+
+    {{-- Device Table --}}
+    <div class="card" style="padding:0; overflow:hidden;">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th></th>
-                    <th>Nama</th>
+                    <th>Nama Perangkat</th>
                     <th>Kode</th>
                     <th>Gedung</th>
-                    <th>Firmware</th>
-                    <th>Model</th>
-                    <th>CPU °C</th>
-                    <th>Outbox</th>
-                    <th>IP</th>
+                    <th>Status</th>
                     <th>Heartbeat</th>
-                    <th></th>
+                    <th style="text-align:right;">Aksi</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach($devices as $device)
-                    @php $isOnline = $device->status === 'online' && $device->last_heartbeat_at?->diffInMinutes(now()) <= 3; @endphp
-                    <tr id="device-row-{{ $device->id }}">
+                @forelse($devices as $device)
+                    <tr>
+                        <td style="font-weight:500; color:var(--color-ink);">{{ $device->name }}</td>
+                        <td style="font-family:monospace; font-size:12px;">{{ $device->device_code }}</td>
+                        <td>{{ $device->building->name ?? '-' }}</td>
                         <td>
-                            <span class="{{ $isOnline ? 'dot-online' : 'dot-offline' }}"></span>
+                            @if($device->isOnline())
+                                <span class="badge badge-success">Online</span>
+                            @else
+                                <span class="badge badge-muted">Offline</span>
+                            @endif
                         </td>
-                        <td style="font-weight: 500; color: var(--text-primary);">{{ $device->name }}</td>
-                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--accent);">{{ $device->device_code }}</td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $device->building?->name ?? '—' }}</td>
-                        <td style="font-family: monospace; font-size: 0.6875rem; color: var(--text-tertiary);">{{ $device->fw_version ?? '—' }}</td>
-                        <td style="font-family: monospace; font-size: 0.6875rem; color: var(--text-tertiary);">{{ $device->model_version ?? '—' }}</td>
-                        <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem;
-                                   color: {{ ($device->last_cpu_temp ?? 0) > 80 ? 'var(--error)' : (($device->last_cpu_temp ?? 0) > 70 ? 'var(--warning)' : 'var(--text-muted)') }}">
-                            {{ $device->last_cpu_temp !== null ? number_format($device->last_cpu_temp, 1).'°' : '—' }}
-                        </td>
-                        <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem;
-                                   color: {{ ($device->last_outbox_len ?? 0) > 50 ? 'var(--warning)' : 'var(--text-muted)' }}">
-                            {{ $device->last_outbox_len ?? '—' }}
-                        </td>
-                        <td style="font-family: monospace; font-size: 0.6875rem; color: var(--text-muted);">{{ $device->ip_address ?? '—' }}</td>
-                        <td style="font-size: 0.6875rem; color: var(--text-muted); font-variant-numeric: tabular-nums;">
+                        <td class="text-caption" style="color:var(--color-ink-muted);">
                             {{ $device->last_heartbeat_at ? $device->last_heartbeat_at->diffForHumans() : 'Belum pernah' }}
                         </td>
-                        <td>
-                            <form method="POST" action="{{ route('devices.revoke', $device) }}"
-                                  onsubmit="return confirm('Cabut token perangkat {{ $device->name }}?')">
+                        <td style="text-align:right;">
+                            <form method="POST" action="{{ route('devices.revoke', $device) }}" class="inline"
+                                  onsubmit="return confirm('Cabut token perangkat ini?')">
                                 @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-xs btn-danger" id="btn-revoke-{{ $device->id }}"
-                                        title="Cabut token">
-                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                                    </svg>
-                                </button>
+                                <button type="submit" class="btn-danger" style="font-size:12px;">Cabut Token</button>
                             </form>
                         </td>
                     </tr>
-                @endforeach
+                @empty
+                    <tr>
+                        <td colspan="6" style="text-align:center; color:var(--color-ink-faint); padding:var(--space-xxl);">
+                            Belum ada perangkat. Generate kode pairing untuk mendaftarkan perangkat baru.
+                        </td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
-    @endif
+    </div>
+
+    {{-- Add Device Sidebar --}}
+    <div>
+        {{-- Auto Discovery --}}
+        <div class="card" style="padding:var(--space-md); margin-bottom:var(--space-md);">
+            <p style="font-size:14px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Auto-Discovery (LAN)</p>
+            <p class="text-caption" style="color:var(--color-ink-muted); margin-bottom:var(--space-md);">
+                Cari perangkat Edge Engine yang terhubung di jaringan WiFi yang sama.
+            </p>
+            
+            <button onclick="scanNetwork()" id="btn-scan" class="btn btn-primary" style="width:100%; font-size:13px; padding:8px 0; border-radius:var(--rounded-md); display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                Scan Jaringan Sekarang
+            </button>
+            
+            <div id="scan-results" style="margin-top:var(--space-md); display:none;">
+                <p class="text-eyebrow" style="color:var(--color-ink-muted); margin-bottom:var(--space-xs);">Hasil Scan</p>
+                <div id="devices-list" style="display:flex; flex-direction:column; gap:8px;">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+        </div>
+
+        {{-- Manual Pairing Code --}}
+        <div class="card" style="padding:var(--space-md);">
+            <p style="font-size:14px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Pairing Manual</p>
+            <p class="text-caption" style="color:var(--color-ink-muted); margin-bottom:var(--space-md);">
+                Generate kode 8 karakter untuk di-input manual ke Orange Pi.
+            </p>
+
+            <form method="POST" action="{{ route('devices.pair.code') }}">
+                @csrf
+                <div style="margin-bottom:var(--space-md);">
+                    <label class="form-label">Gedung / Lokasi</label>
+                    <select name="building_id" required class="form-select">
+                        <option value="">— Pilih Gedung —</option>
+                        @foreach($buildings as $building)
+                            <option value="{{ $building->id }}">{{ $building->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('building_id')
+                        <p class="form-error">{{ $message }}</p>
+                    @enderror
+                </div>
+                <button type="submit" class="btn" style="width:100%; font-size:13px; padding:8px 0; border-radius:var(--rounded-md); border:1px solid var(--color-hairline); background:#fff;">
+                    Generate Pairing Code
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
 
-{{-- ════════════════════════════════════════
-     Pairing code modal — ported from Sync.tsx pair section
-     ════════════════════════════════════════ --}}
-<div id="pairing-modal" style="display: none;" class="modal-overlay"
-     x-data @click.self="$el.style.display='none'">
-    <div class="modal-panel">
-        <h2 style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem;">
-            Buat Kode Pairing
-        </h2>
-        <p style="font-size: 0.8125rem; color: var(--text-tertiary); margin-bottom: 1rem; line-height: 1.6;">
-            Pilih gedung dan buat kode pairing sekali pakai. Kode berlaku selama <strong>15 menit</strong>.
-            Masukkan kode ini pada terminal Orange Pi Lite 2 yang belum terpasang.
-        </p>
-        <form method="POST" action="{{ route('devices.pair.code') }}" id="pairing-form">
-            @csrf
-            <label class="form-label" for="pairing-building">Gedung</label>
-            <select id="pairing-building" name="building_id" class="form-input mb-3" required>
-                <option value="">— Pilih Gedung —</option>
-                @foreach($buildings as $building)
-                    <option value="{{ $building->id }}">{{ $building->name }}</option>
-                @endforeach
-            </select>
-            <div class="flex gap-2">
-                <button type="submit" class="btn btn-primary flex-1" id="btn-generate-code">Buat Kode</button>
-                <button type="button" class="btn btn-secondary" @click="document.getElementById('pairing-modal').style.display='none'">Batal</button>
-            </div>
-        </form>
-    </div>
+<script>
+async function scanNetwork() {
+    const btn = document.getElementById('btn-scan');
+    const resultsDiv = document.getElementById('scan-results');
+    const list = document.getElementById('devices-list');
+    
+    btn.disabled = true;
+    btn.innerHTML = 'Mencari perangkat...';
+    list.innerHTML = '<p class="text-caption" style="color:var(--color-ink-muted); text-align:center;">Scanning UDP Port 55555...</p>';
+    resultsDiv.style.display = 'block';
+
+    try {
+        const res = await fetch('{{ route("devices.discover") }}');
+        const data = await res.json();
+        
+        list.innerHTML = '';
+        if (data.devices.length === 0) {
+            list.innerHTML = '<p class="text-caption" style="color:var(--color-ink-muted); text-align:center;">Tidak ada perangkat ditemukan.</p>';
+        } else {
+            data.devices.forEach(dev => {
+                const isPaired = dev.status === 'paired';
+                const actionHtml = isPaired 
+                    ? `<span class="badge badge-muted">Sudah Paired</span>`
+                    : `<button onclick="autoPair('${dev.ip_address}', ${dev.port}, '${dev.device_id}')" class="btn btn-primary" style="font-size:11px; padding:4px 8px; border-radius:4px;">Pair</button>`;
+                    
+                list.innerHTML += `
+                    <div style="padding:12px; border:1px solid var(--color-hairline); border-radius:var(--rounded-md); display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:12px; font-weight:600; color:var(--color-ink);">${dev.device_id}</div>
+                            <div style="font-size:11px; color:var(--color-ink-muted); font-family:monospace;">${dev.ip_address}:${dev.port}</div>
+                        </div>
+                        ${actionHtml}
+                    </div>
+                `;
+            });
+        }
+    } catch (e) {
+        list.innerHTML = '<p class="text-caption" style="color:var(--color-danger); text-align:center;">Gagal melakukan scan jaringan.</p>';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg> Scan Jaringan Ulang`;
+    }
+}
+
+async function autoPair(ip, port, name) {
+    if(!confirm('Pair otomatis dengan perangkat ini?')) return;
+    
+    try {
+        const res = await fetch('{{ route("devices.auto-pair") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ ip_address: ip, port: port, name: name })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert('Gagal: ' + data.message);
+        }
+    } catch (e) {
+        alert('Terjadi kesalahan jaringan.');
+    }
+}
+</script>
 </div>
 
 @endsection

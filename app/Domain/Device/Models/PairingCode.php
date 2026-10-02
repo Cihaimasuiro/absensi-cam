@@ -3,12 +3,14 @@
 namespace App\Domain\Device\Models;
 
 use App\Domain\School\Models\Building;
-use App\Models\User;
+use App\Domain\User\Models\User;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PairingCode extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'building_id',
         'code_hash',
@@ -44,3 +46,5 @@ class PairingCode extends Model
         return $this->used_at !== null;
     }
 }
+
+

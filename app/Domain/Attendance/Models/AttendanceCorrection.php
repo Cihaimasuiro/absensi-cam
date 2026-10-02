@@ -2,12 +2,14 @@
 
 namespace App\Domain\Attendance\Models;
 
-use App\Models\User;
+use App\Domain\User\Models\User;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceCorrection extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'attendance_log_id',
         'corrected_by',
@@ -33,3 +35,5 @@ class AttendanceCorrection extends Model
         return $this->belongsTo(User::class, 'corrected_by');
     }
 }
+
+

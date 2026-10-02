@@ -7,11 +7,13 @@ use App\Domain\School\Models\Classroom;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
 class Device extends Authenticatable
 {
+    use HasFactory;
     use HasApiTokens;
 
     protected $fillable = [
@@ -60,6 +62,8 @@ class Device extends Authenticatable
     /** Mark online/offline based on heartbeat age (> 3 min = offline) */
     public function isOnline(): bool
     {
-        return $this->last_heartbeat_at?->diffInMinutes(now()) <= 3;
+        if ($this->last_heartbeat_at === null) { return false; } return $this->last_heartbeat_at->diffInMinutes(now()) <= 3;
     }
 }
+
+

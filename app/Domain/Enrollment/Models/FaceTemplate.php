@@ -3,12 +3,14 @@
 namespace App\Domain\Enrollment\Models;
 
 use App\Domain\Student\Models\Student;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class FaceTemplate extends Model
 {
+    use HasFactory;
     use SoftDeletes; // soft-delete = tombstone; op=delete sent to edge via delta sync
 
     protected $fillable = [
@@ -34,3 +36,4 @@ class FaceTemplate extends Model
         return $this->model_version === $deviceModelVersion;
     }
 }
+

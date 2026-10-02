@@ -148,6 +148,7 @@ def auto_update():
         
     url = data["download_url"]
     checksum = data.get("checksum", "")
+    update_type = data.get("update_type", "binary") # "binary" or "model"
     updater_script = os.path.join(ROOT_DIR, "updater.sh")
     
     if not os.path.exists(updater_script):
@@ -155,8 +156,8 @@ def auto_update():
         
     try:
         # Jalankan updater di background agar response API tidak nge-hang saat service direstart
-        subprocess.Popen(["sudo", "bash", updater_script, url, checksum], start_new_session=True)
-        return jsonify({"success": True, "message": "OTA Update dimulai. Perangkat akan merestart otomatis."})
+        subprocess.Popen(["sudo", "bash", updater_script, url, checksum, update_type], start_new_session=True)
+        return jsonify({"success": True, "message": f"OTA Update ({update_type}) dimulai. Perangkat akan merestart otomatis."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

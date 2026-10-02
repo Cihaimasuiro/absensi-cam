@@ -24,7 +24,6 @@
 1. **Automatic Skill & Ponytail Execution:**
    - **Mandatory Active Mode**: Automatically apply the `ponytail` skill (default mode: `ponytail: full`) on every request without requiring explicit user prompts, slash commands, or keywords like "be lazy", "minimal mode", or "simplest solution".
    - **YAGNI & Zero Over-Engineering**: Always question whether a code change or architectural abstraction needs to exist at all. Never introduce speculative interfaces, unnecessary wrapper classes, redundant DTOs, or unneeded configuration options for theoretical future requirements.
-   - **Minimal & Least-Invasive Code Changes**: Default to the absolute shortest, least-invasive modification required to achieve full correctness. Edit 1 line instead of 50; patch an existing function instead of creating new files unless strictly necessary.
    - **Native Platform & Framework Standard First**: Always reach for native PHP standard library features, built-in Laravel helpers, Eloquent features, and standard Blade components before writing custom implementations or adding new package dependencies.
    - **Direct & Pragmatic Implementation**: Solve the exact problem requested using the most direct, clean, and maintainable path while strictly adhering to enterprise security, performance, and testing standards.
 

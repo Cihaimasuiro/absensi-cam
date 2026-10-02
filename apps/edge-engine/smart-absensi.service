@@ -1,0 +1,25 @@
+[Unit]
+Description=Smart Absensi Edge Engine Daemon
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=orangepi
+WorkingDirectory=/opt/absensi-cam/apps/edge-engine
+
+# Use absolute path to the Python environment
+ExecStart=/opt/absensi-cam/apps/edge-engine/venv/bin/python engine.py
+
+# Environment variables
+Environment="PYTHONUNBUFFERED=1"
+Environment="FACENOX_INFERENCE_TIMEOUT=10.0"
+
+# Set limits to prevent crashing the SBC
+MemoryMax=500M
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target

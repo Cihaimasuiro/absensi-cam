@@ -8,7 +8,7 @@
 # Usage (from project root, Git Bash or WSL):
 #   bash scripts/setup-orangepi-m0.sh
 #
-# Target:  Orange Pi Lite 2 · Allwinner H6 · aarch64 · Armbian/Debian 12
+# Target:  Orange Pi Lite 2 · Allwinner H6 · aarch64 · Debian 12
 # Facenox: AGPL-3.0 (templates/facenox_repo/) — benchmark use only.
 #          Do NOT ship any Facenox-derived code without complying with AGPL.
 #

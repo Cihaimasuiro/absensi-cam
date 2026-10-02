@@ -50,7 +50,7 @@ Dokumen ini mendefinisikan:
 **Dalam lingkup (In Scope)**
 
 - Terminal absensi edge: kamera UVC, engine C++ (deteksi, tracking, liveness, pengenalan), display TFT, LED/buzzer/tombol, baterai cadangan.
-- Server Pusat Laravel 13: manajemen organisasi/cabang/perangkat/anggota, enrollment wajah, sinkronisasi templet, penyimpanan riwayat absensi, laporan (Excel/PDF/CSV), audit log.
+- Server Pusat Laravel 13: manajemen sekolah/gedung/perangkat/anggota, enrollment wajah, sinkronisasi templet, penyimpanan riwayat absensi, laporan (Excel/PDF/CSV), audit log.
 - Sinkronisasi dua arah edge <-> server via REST API / JSON.
 
 **Di luar lingkup (Out of Scope) untuk rilis ini**
@@ -103,11 +103,11 @@ flowchart LR
 
 | Fitur Utama | Deskripsi Spesifikasi Teknikal | Target Objektif |
 |-------------|--------------------------------|-----------------|
-| **Web Admin Panel (Laravel 13)** | Manajemen anggota, enrollment wajah, organisasi, perangkat, laporan, dan backup melalui browser (menggantikan aplikasi desktop Electron). | Kontrol penuh dari PC admin tanpa instal aplikasi |
+| **Web Admin Panel (Laravel 13)** | Manajemen anggota, enrollment wajah, sekolah, perangkat, laporan, dan backup melalui browser (menggantikan aplikasi desktop Electron). | Kontrol penuh dari PC admin tanpa instal aplikasi |
 | **Kapasitas ≥ 2000 Wajah** | Templet SFace 128-d (float32 = 512 byte/wajah; 2000 wajah ≈ 1 MB) dimuat ke RAM; pencarian *brute-force cosine*. Penyimpanan persisten di SQLite. | Lookup < 50 ms untuk 2000 wajah (AC-32) |
 | **Connected Devices** | Heartbeat tiap 60 detik (suhu SoC, RAM, disk, FPS, versi firmware, panjang antrean outbox). Perangkat dianggap *offline* bila tidak ada heartbeat > 3 menit. | Monitoring status perangkat hampir real-time |
-| **Custom Branches / Locations** | Perangkat dikelompokkan berdasarkan cabang/gedung/pintu (mis. Gerbang Utama, Pintu Utara, Cabang Bandung). | Manajemen lokasi absensi multi-titik |
-| **Custom Organizations** | Hirarki organisasi -> divisi/departemen/kelas -> anggota. | Pengelompokan data pengguna fleksibel |
+| **Custom Branches / Locations** | Perangkat dikelompokkan berdasarkan gedung/gedung/pintu (mis. Gerbang Utama, Pintu Utara, Gedung Bandung). | Manajemen lokasi absensi multi-titik |
+| **Custom Organizations** | Hirarki sekolah -> divisi/departemen/kelas -> anggota. | Pengelompokan data pengguna fleksibel |
 | **Remote Face Template Sync** | Enrollment satu kali di server; templet (vektor embedding, bukan foto) didistribusikan ke perangkat yang berhak melalui delta sync REST API, termasuk *tombstone* untuk penghapusan. | Registrasi sekali, berlaku di semua lokasi |
 | **Riwayat Absensi Terpusat** | Riwayat dari SQLite lokal disinkronkan asynchronous ke Laravel 13; retensi mengikuti kebijakan (Bagian 12.3). | Data terpusat, dapat diakses aman dari mana saja |
 | **Audit Logs** | Pencatatan pendaftaran/penghapusan wajah, perubahan hak akses, status perangkat, dan kesalahan sistem; *append-only*. | Jejak audit operasional |
@@ -206,7 +206,7 @@ flowchart TB
 | Header | 26-pin (tidak dipakai di V1; komunikasi ke Arduino lewat USB) |
 | Camera Input | USB Web Camera UVC driverless via USB 2.0/3.0 |
 | Network | WiFi onboard AP6255 (802.11 a/b/g/n/ac) + Bluetooth 4.1; Ethernet hanya lewat dongle USB |
-| Operating System | Image resmi Orange Pi (Debian/Ubuntu) atau **Armbian (Debian 12/13 minimal)**. **Debian Buster (10) tidak digunakan** karena sudah *end-of-life*. Ketersediaan image dan dukungan kernel wajib diverifikasi saat komisioning |
+| Operating System | Image resmi Orange Pi Debian Buster |
 
 ---
 
@@ -661,7 +661,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-E03 | Melacak wajah (ID track stabil) untuk 3–5 wajah bersamaan. | Must |
 | FR-E04 | Menjalankan liveness pada tiap track; keputusan berdasarkan voting multi-frame (default ≥ 3 dari 5). | Must |
 | FR-E05 | Mengekstrak embedding SFace hanya pada frame terpilih (lolos cek kualitas; maks. 5 per track) sampai identitas terkonfirmasi, yaitu skor ≥ threshold pada ≥ 3 ekstraksi berturut-turut dengan identitas sama; setelah itu berhenti untuk track tersebut. Bila belum terkonfirmasi pada batas maksimum, track berstatus `UNKNOWN`. | Must |
-| FR-E06 | Mencocokkan terhadap templet di RAM (≥ 2000) dengan cosine similarity; pencarian dibatasi pada grup/perangkat yang berhak bila dikonfigurasi. | Must |
+| FR-E06 | Mencocokkan terhadap templet di RAM (≥ 2000) dengan cosine similarity; pencarian dibatasi pada kelas/perangkat yang berhak bila dikonfigurasi. | Must |
 | FR-E07 | Mencegah duplikasi scan: cooldown per anggota per perangkat (default 60 detik, dapat dikonfigurasi). | Must |
 | FR-E08 | Mode absensi Masuk/Keluar dan ambang keterlambatan dapat dikonfigurasi dari server. | Should |
 | FR-E09 | Menulis record ke `attendance` dan `outbox` dalam satu transaksi SQLite (WAL); tidak ada foto yang disimpan. | Must |
@@ -688,13 +688,13 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 
 | ID | Requirement | Prioritas |
 |----|-------------|-----------|
-| FR-S01 | Autentikasi admin (Laravel), peran: Super Admin, Admin Organisasi, Operator, Viewer; opsi 2FA. | Must |
-| FR-S02 | CRUD organisasi, divisi/departemen/kelas, cabang/lokasi, perangkat, anggota. | Must |
+| FR-S01 | Autentikasi admin (Laravel), peran: Super Admin, Admin Sekolah, Operator, Viewer; opsi 2FA. | Must |
+| FR-S02 | CRUD sekolah, divisi/departemen/kelas, gedung/lokasi, perangkat, anggota. | Must |
 | FR-S03 | Enrollment wajah via browser (kamera/unggah 3–5 foto): pemeriksaan kualitas (blur, pose, satu wajah), ekstraksi embedding via `face-core` (queue job), rata-rata/pilih embedding terbaik, **hapus foto segera**. Kamera browser hanya tersedia pada konteks aman (HTTPS atau `localhost`). | Must |
 | FR-S04 | Pencatatan persetujuan (consent) per anggota (tanggal, versi teks, pencatat; untuk anak di bawah 18 tahun: wali) dan penarikan persetujuan. | Must |
 | FR-S05 | Pairing perangkat dengan kode sekali pakai -> token perangkat; cabut/rotasi token. | Must |
 | FR-S06 | REST API untuk edge (Bagian 11.2) dengan validasi, idempotensi, rate limit. | Must |
-| FR-S07 | Distribusi templet ke perangkat berdasarkan grup/cabang yang berhak (delta + tombstone). | Must |
+| FR-S07 | Distribusi templet ke perangkat berdasarkan kelas/gedung yang berhak (delta + tombstone). | Must |
 | FR-S08 | Dashboard perangkat (status, suhu, versi, antrean) dan absensi hari ini. | Must |
 | FR-S09 | Laporan DTR harian/bulanan (jam masuk pertama, jam keluar terakhir, terlambat, durasi kerja) — ekspor **.xlsx**, **PDF**, dan **CSV** mentah. | Must |
 | FR-S10 | Koreksi absensi manual (dengan alasan, tercatat di audit log; data asli tidak ditimpa). | Should |
@@ -708,7 +708,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 
 | Modul (`app/Domain/*`) | Cakupan | Requirement |
 |------------------------|---------|-------------|
-| `Organization` | organisasi, grup, cabang | FR-S02 |
+| `Organization` | sekolah, kelas, gedung | FR-S02 |
 | `Member` | anggota, `Consent` | FR-S02, S04 |
 | `Enrollment` | unggah foto, job `face-embed`, `face_templates` | FR-S03, S07 |
 | `Device` | pairing, token, heartbeat, konfigurasi | FR-S05, S06, S08 |
@@ -767,13 +767,13 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `consents` | `member_id`, `given_at`, `withdrawn_at`, `text_version`, `recorded_by`, `guardian_name` |
 | `attendance_logs` | `id` (UUID dari edge, unik), `member_id`, `device_id`, `captured_at`, `direction`, `score`, `liveness_score`, `time_source`, `received_at` |
 | `audit_logs` | `id`, `actor`, `action`, `subject`, `meta` (JSON), `created_at` (append-only; diimplementasikan dengan tabel `activity_log` Spatie) |
-| `device_groups` | `device_id`, `group_id` — grup yang berhak dikenali per perangkat (FR-E06, FR-S07) |
+| `device_groups` | `device_id`, `group_id` — kelas yang berhak dikenali per perangkat (FR-E06, FR-S07) |
 | `pairing_codes` | `code_hash`, `branch_id`, `expires_at` (15 menit), `used_at` |
 | `attendance_corrections` | `attendance_log_id`, `corrected_by`, `reason`, nilai baru; data asli tidak ditimpa (FR-S10) |
 | `device_logs` | `device_id`, `level`, `message`, `created_at` (retensi 7 hari, 12.3) |
 | `users`, `roles` | Akun admin dan peran |
 
-**Skema CSV mentah**: `attendance_id, captured_at_utc, captured_at_local, member_code, member_name, group, branch, device, direction, score, time_source`.
+**Skema CSV mentah**: `attendance_id, captured_at_utc, captured_at_local, member_code, member_name, kelas, gedung, device, direction, score, time_source`.
 
 ### 11.2 REST API (`/api/v1`, JSON, HTTPS, header `Authorization: Bearer <device_token>`, kecuali `POST /devices/pair` yang memakai kode pairing)
 
@@ -872,7 +872,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | Data | Kebijakan Default (dapat dikonfigurasi) |
 |------|------------------------------------------|
 | Templet wajah | Dihapus saat anggota nonaktif/berhenti atau persetujuan ditarik (server dan edge) |
-| Riwayat absensi | Disimpan di server sesuai kebijakan organisasi (default: tanpa batas waktu, dengan opsi anonimisasi/penghapusan periodik) |
+| Riwayat absensi | Disimpan di server sesuai kebijakan sekolah (default: tanpa batas waktu, dengan opsi anonimisasi/penghapusan periodik) |
 | Audit log | Minimal 1 tahun; append-only |
 | Log perangkat | 7 hari di server |
 
@@ -885,7 +885,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | ID | Asumsi |
 |----|--------|
 | A1 | ≤ 50 perangkat per Server Pusat; satu terminal melayani satu pintu. |
-| A2 | Server Pusat single-tenant, di-host pada PC admin/VPS milik organisasi. |
+| A2 | Server Pusat single-tenant, di-host pada PC admin/VPS milik sekolah. |
 | A3 | Enrollment dilakukan di Web Admin (bukan di terminal), 3–5 foto per anggota. |
 | A4 | Jaringan WiFi 802.11 tersedia di lokasi; Ethernet opsional. |
 | A5 | Kondisi pencahayaan terkendali (≥ 300 lux) dan wajah relatif frontal. |

@@ -8,10 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Branches = physical locations / buildings / doors (FR-S02)
-        Schema::create('branches', function (Blueprint $table) {
+        // Buildings = physical locations / buildings / doors (FR-S02)
+        Schema::create('buildings', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('organization_id')->nullable()->constrained('organizations')->nullOnDelete();
+            $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
             $table->string('name', 150);
             $table->string('code', 50)->unique()->comment('Kode cabang misal: JKT-01');
             $table->string('address')->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
         // Edge devices (Orange Pi Lite 2 terminals) — FR-S05, FR-S08
         Schema::create('devices', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
+            $table->foreignId('building_id')->nullable()->constrained('buildings')->nullOnDelete();
             $table->string('name', 100);
             $table->string('device_code', 50)->unique()->comment('Kode unik dari edge, mis. dev-0007');
             $table->string('token_hash', 64)->nullable()->comment('SHA-256 hash Sanctum token; null = belum dipasangkan');
@@ -38,17 +38,17 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // M:N — devices can recognize members from multiple groups (FR-E06, FR-S07)
+        // M:N — devices can recognize students from multiple classrooms (FR-E06, FR-S07)
         Schema::create('device_groups', function (Blueprint $table) {
             $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
-            $table->foreignId('group_id')->constrained('groups')->cascadeOnDelete();
-            $table->primary(['device_id', 'group_id']);
+            $table->foreignId('classroom_id')->constrained('classrooms')->cascadeOnDelete();
+            $table->primary(['device_id', 'classroom_id']);
         });
 
         // One-time pairing codes — FR-S05
         Schema::create('pairing_codes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
+            $table->foreignId('building_id')->constrained('buildings')->cascadeOnDelete();
             $table->string('code_hash', 64)->unique()->comment('SHA-256 hash kode pairing 8-karakter');
             $table->timestamp('expires_at');
             $table->timestamp('used_at')->nullable();
@@ -64,6 +64,6 @@ return new class extends Migration
         Schema::dropIfExists('pairing_codes');
         Schema::dropIfExists('device_groups');
         Schema::dropIfExists('devices');
-        Schema::dropIfExists('branches');
+        Schema::dropIfExists('buildings');
     }
 };

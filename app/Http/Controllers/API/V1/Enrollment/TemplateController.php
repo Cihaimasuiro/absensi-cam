@@ -25,19 +25,19 @@ class TemplateController extends Controller
         $cursor = (int) $request->query('cursor', 0);
         $limit  = min((int) $request->query('limit', 200), 200);
 
-        // Only serve templates for groups this device is authorized to see (FR-E06)
-        $authorizedGroupIds = $device->groups()->pluck('groups.id');
+        // Only serve templates for classrooms this device is authorized to see (FR-E06)
+        $authorizedGroupIds = $device->groups()->pluck('classrooms.id');
 
-        // Fetch active templates + soft-deleted tombstones, filtered by device's groups
+        // Fetch active templates + soft-deleted tombstones, filtered by device's classrooms
         $templates = FaceTemplate::withTrashed()
-            ->whereHas('member', fn ($q) => $q->whereIn('group_id', $authorizedGroupIds))
+            ->whereHas('student', fn ($q) => $q->whereIn('classroom_id', $authorizedGroupIds))
             ->where('version_cursor', '>', $cursor)
             ->orderBy('version_cursor')
             ->limit($limit)
-            ->get(['id', 'member_id', 'embedding_enc', 'model_version', 'version_cursor', 'deleted_at', 'updated_at']);
+            ->get(['id', 'student_id', 'embedding_enc', 'model_version', 'version_cursor', 'deleted_at', 'updated_at']);
 
         $items = $templates->map(fn (FaceTemplate $t) => [
-            'member_id'      => $t->member_id,
+            'student_id'      => $t->student_id,
             'embedding_b64'  => $t->deleted_at ? null : $t->embedding_enc,
             'model_version'  => $t->model_version,
             'op'             => $t->deleted_at ? 'delete' : 'upsert',

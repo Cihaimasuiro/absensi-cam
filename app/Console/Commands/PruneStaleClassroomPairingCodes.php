@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
  * Pruned from: Facenox maintenance.py /cleanup concept
  * Removes expired, unused pairing codes — they are single-use and time-limited.
  */
-class PruneStaleGroupPairingCodes extends Command
+class PruneStaleClassroomPairingCodes extends Command
 {
     protected $signature = 'app:prune-stale-pairing-codes';
 

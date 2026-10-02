@@ -20,11 +20,11 @@ class DeviceConfigController extends Controller
         /** @var Device $device */
         $device = $request->user();
 
-        // Config is sourced from the device's branch/group settings
+        // Config is sourced from the device's building/group settings
         // ponytail: flat config array for now; per-device config table if needed later
         $config = [
             'cooldown_seconds'          => 60,
-            'late_threshold_minutes'    => $device->branch?->devices?->first()?->id
+            'late_threshold_minutes'    => $device->building?->devices?->first()?->id
                 ? ($device->groups()->first()?->late_threshold_minutes ?? 15)
                 : 15,
             'late_threshold_enabled'    => $device->groups()->first()?->late_threshold_enabled ?? false,

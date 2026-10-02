@@ -86,10 +86,30 @@ class SyncWorker:
             logging.warning(f"Server tidak dapat dihubungi, absensi tetap aman di Outbox: {e}")
 
     def pull_templates(self):
-        # logging.info("Mengecek pembaruan data wajah dari server...")
-        # TODO: Implement GET /api/v1/templates?cursor={last_cursor}
-        # 1. Ambil versi/waktu sinkronisasi terakhir dari DB lokal
-        # 2. Request ke Laravel
-        # 3. Simpan embedding BLOB dan update member_id ke tabel `templates`
-        pass
-
+        last_sync = self.db.get_last_template_sync_time()
+        
+        url = f"{self.api_url}/api/v1/templates"
+        if last_sync:
+            url += f"?last_sync={last_sync}"
+            
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                data = response.json()
+                templates = data.get('data', [])
+                if templates:
+                    logging.info(f"Mengunduh {len(templates)} pembaruan wajah dari server...")
+                    self.db.save_templates(templates)
+                    logging.info("Pembaruan data wajah berhasil disimpan.")
+            elif response.status_code == 304:
+                # No changes
+                pass
+            else:
+                logging.error(f"Gagal pull templates. HTTP {response.status_code}: {response.text}")
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Gagal menghubungi server untuk pull templates: {e}")

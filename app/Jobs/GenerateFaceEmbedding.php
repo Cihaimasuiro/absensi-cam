@@ -19,7 +19,7 @@ class GenerateFaceEmbedding implements ShouldQueue
     public $timeout = 60;
     
     public function __construct(
-        public string $memberId,
+        public string $studentId,
         public string $tmpPath
     ) {
         $this->onQueue('enrollments');
@@ -102,7 +102,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                 $nextCursor = $result->next;
 
                 FaceTemplate::updateOrCreate(
-                    ['member_id' => $this->memberId],
+                    ['student_id' => $this->studentId],
                     [
                         'embedding_enc' => base64_encode($encryptedBlob),
                         'model_version' => 'sface-2021dec',
@@ -113,7 +113,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                 );
             });
 
-            Log::info('Face enrollment generated successfully', ['member_id' => $this->memberId]);
+            Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);
 
         } finally {
             @unlink($this->tmpPath);
@@ -124,7 +124,7 @@ class GenerateFaceEmbedding implements ShouldQueue
     {
         @unlink($this->tmpPath);
         Log::error('Face enrollment job failed: ' . $exception->getMessage(), [
-            'member_id' => $this->memberId,
+            'student_id' => $this->studentId,
             'exception' => $exception
         ]);
     }

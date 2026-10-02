@@ -21,11 +21,11 @@ class AttendanceExport implements FromQuery, WithHeadings, WithMapping, WithStyl
     public function query()
     {
         return Attendance::query()
-            ->with('member:id,employee_number')
+            ->with('student:id,employee_number')
             ->when($this->dateFrom, fn ($q) => $q->whereDate('attended_at', '>=', $this->dateFrom))
             ->when($this->dateTo,   fn ($q) => $q->whereDate('attended_at', '<=', $this->dateTo))
             ->when($this->department, fn ($q) => $q->where('department', $this->department))
-            ->select(['id', 'member_id', 'name', 'department', 'device_id', 'attended_at', 'confidence', 'status'])
+            ->select(['id', 'student_id', 'name', 'department', 'device_id', 'attended_at', 'confidence', 'status'])
             ->orderBy('attended_at', 'desc');
     }
 
@@ -41,7 +41,7 @@ class AttendanceExport implements FromQuery, WithHeadings, WithMapping, WithStyl
 
         return [
             $no,
-            $row->member?->employee_number ?? '-',
+            $row->student?->employee_number ?? '-',
             $row->name,
             $row->department ?? '-',
             $row->device_id,

@@ -1,27 +1,27 @@
 @extends('layouts.app')
 
-@section('title', 'Organisasi')
-@section('page-title', 'Organisasi, Grup & Cabang')
+@section('title', 'Sekolah')
+@section('page-title', 'Sekolah, Kelas & Gedung')
 
 @section('header-actions')
     <button class="btn btn-primary btn-sm" id="btn-add-org"
             @click="document.getElementById('org-modal').style.display='flex'">
-        + Organisasi
+        + Sekolah
     </button>
 @endsection
 
 @section('content')
 
 {{-- ════════════════════════════════════════
-     Organizations table
+     Schools table
      ════════════════════════════════════════ --}}
 <div class="card mb-4">
     <div class="px-4 py-3" style="border-bottom: 1px solid var(--border-primary);">
-        <span style="font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary);">Organisasi</span>
+        <span style="font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary);">Sekolah</span>
     </div>
-    @if($organizations->isEmpty())
+    @if($schools->isEmpty())
         <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.8125rem;">
-            Belum ada organisasi. Tambahkan satu untuk memulai.
+            Belum ada sekolah. Tambahkan satu untuk memulai.
         </div>
     @else
         <table class="data-table">
@@ -30,20 +30,20 @@
                     <th>Nama</th>
                     <th>Kode</th>
                     <th>Anggota</th>
-                    <th>Grup</th>
-                    <th>Cabang</th>
+                    <th>Kelas</th>
+                    <th>Gedung</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach($organizations as $org)
+                @foreach($schools as $org)
                     <tr id="org-row-{{ $org->id }}">
                         <td style="font-weight: 500; color: var(--text-primary);">{{ $org->name }}</td>
                         <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-tertiary);">{{ $org->code ?? '—' }}</td>
-                        <td>{{ $org->members_count }}</td>
+                        <td>{{ $org->students_count }}</td>
                         <td>{{ $org->groups_count }}</td>
-                        <td>{{ $org->branches_count }}</td>
+                        <td>{{ $org->buildings_count }}</td>
                         <td>
                             @if($org->is_active)
                                 <span class="badge badge-success">Aktif</span>
@@ -54,11 +54,11 @@
                         <td>
                             <button class="btn btn-xs btn-secondary" id="btn-add-group-{{ $org->id }}"
                                     @click="document.getElementById('group-modal-org').value='{{ $org->id }}'; document.getElementById('group-modal').style.display='flex'">
-                                + Grup
+                                + Kelas
                             </button>
-                            <button class="btn btn-xs btn-secondary" id="btn-add-branch-{{ $org->id }}"
-                                    @click="document.getElementById('branch-modal-org').value='{{ $org->id }}'; document.getElementById('branch-modal').style.display='flex'">
-                                + Cabang
+                            <button class="btn btn-xs btn-secondary" id="btn-add-building-{{ $org->id }}"
+                                    @click="document.getElementById('building-modal-org').value='{{ $org->id }}'; document.getElementById('building-modal').style.display='flex'">
+                                + Gedung
                             </button>
                         </td>
                     </tr>
@@ -72,11 +72,11 @@
      Modals
      ════════════════════════════════════════ --}}
 
-{{-- Add Organization --}}
+{{-- Add School --}}
 <div id="org-modal" style="display: none;" class="modal-overlay" @click.self="$el.style.display='none'">
     <div class="modal-panel">
-        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Organisasi</h2>
-        <form method="POST" action="{{ route('organizations.store') }}" id="org-form">
+        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Sekolah</h2>
+        <form method="POST" action="{{ route('schools.store') }}" id="org-form">
             @csrf
             <div class="flex flex-col gap-3">
                 <div>
@@ -96,13 +96,13 @@
     </div>
 </div>
 
-{{-- Add Group --}}
+{{-- Add Classroom --}}
 <div id="group-modal" style="display: none;" class="modal-overlay" @click.self="$el.style.display='none'">
     <div class="modal-panel">
-        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Grup / Kelas</h2>
-        <form method="POST" action="{{ route('organizations.groups.store') }}" id="group-form">
+        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Kelas / Kelas</h2>
+        <form method="POST" action="{{ route('schools.classrooms.store') }}" id="group-form">
             @csrf
-            <input type="hidden" name="organization_id" id="group-modal-org">
+            <input type="hidden" name="school_id" id="group-modal-org">
             <div class="flex flex-col gap-3">
                 <div>
                     <label class="form-label" for="group-name">Nama *</label>
@@ -135,33 +135,33 @@
     </div>
 </div>
 
-{{-- Add Branch --}}
-<div id="branch-modal" style="display: none;" class="modal-overlay" @click.self="$el.style.display='none'">
+{{-- Add Building --}}
+<div id="building-modal" style="display: none;" class="modal-overlay" @click.self="$el.style.display='none'">
     <div class="modal-panel">
-        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Cabang / Lokasi</h2>
-        <form method="POST" action="{{ route('organizations.branches.store') }}" id="branch-form">
+        <h2 style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem;">Tambah Gedung / Lokasi</h2>
+        <form method="POST" action="{{ route('schools.buildings.store') }}" id="building-form">
             @csrf
-            <input type="hidden" name="organization_id" id="branch-modal-org">
+            <input type="hidden" name="school_id" id="building-modal-org">
             <div class="flex flex-col gap-3">
                 <div>
-                    <label class="form-label" for="branch-name">Nama *</label>
-                    <input id="branch-name" name="name" type="text" class="form-input" required placeholder="mis. Gedung Utama">
+                    <label class="form-label" for="building-name">Nama *</label>
+                    <input id="building-name" name="name" type="text" class="form-input" required placeholder="mis. Gedung Utama">
                 </div>
                 <div>
-                    <label class="form-label" for="branch-code">Kode * <span style="color: var(--text-muted); font-weight: 400;">(unik)</span></label>
-                    <input id="branch-code" name="code" type="text" class="form-input" required placeholder="mis. JKT-01">
+                    <label class="form-label" for="building-code">Kode * <span style="color: var(--text-muted); font-weight: 400;">(unik)</span></label>
+                    <input id="building-code" name="code" type="text" class="form-input" required placeholder="mis. JKT-01">
                 </div>
                 <div>
-                    <label class="form-label" for="branch-timezone">Zona Waktu</label>
-                    <select id="branch-timezone" name="timezone" class="form-input">
+                    <label class="form-label" for="building-timezone">Zona Waktu</label>
+                    <select id="building-timezone" name="timezone" class="form-input">
                         <option value="Asia/Jakarta">WIB (Asia/Jakarta)</option>
                         <option value="Asia/Makassar">WITA (Asia/Makassar)</option>
                         <option value="Asia/Jayapura">WIT (Asia/Jayapura)</option>
                     </select>
                 </div>
                 <div class="flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-1" id="btn-save-branch">Simpan</button>
-                    <button type="button" class="btn btn-secondary" @click="document.getElementById('branch-modal').style.display='none'">Batal</button>
+                    <button type="submit" class="btn btn-primary flex-1" id="btn-save-building">Simpan</button>
+                    <button type="button" class="btn btn-secondary" @click="document.getElementById('building-modal').style.display='none'">Batal</button>
                 </div>
             </div>
         </form>

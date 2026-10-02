@@ -49,7 +49,7 @@
                     <th></th>
                     <th>Nama</th>
                     <th>Kode</th>
-                    <th>Cabang</th>
+                    <th>Gedung</th>
                     <th>Firmware</th>
                     <th>Model</th>
                     <th>CPU °C</th>
@@ -68,7 +68,7 @@
                         </td>
                         <td style="font-weight: 500; color: var(--text-primary);">{{ $device->name }}</td>
                         <td style="font-family: monospace; font-size: 0.75rem; color: var(--accent);">{{ $device->device_code }}</td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $device->branch?->name ?? '—' }}</td>
+                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $device->building?->name ?? '—' }}</td>
                         <td style="font-family: monospace; font-size: 0.6875rem; color: var(--text-tertiary);">{{ $device->fw_version ?? '—' }}</td>
                         <td style="font-family: monospace; font-size: 0.6875rem; color: var(--text-tertiary);">{{ $device->model_version ?? '—' }}</td>
                         <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem;
@@ -112,16 +112,16 @@
             Buat Kode Pairing
         </h2>
         <p style="font-size: 0.8125rem; color: var(--text-tertiary); margin-bottom: 1rem; line-height: 1.6;">
-            Pilih cabang dan buat kode pairing sekali pakai. Kode berlaku selama <strong>15 menit</strong>.
+            Pilih gedung dan buat kode pairing sekali pakai. Kode berlaku selama <strong>15 menit</strong>.
             Masukkan kode ini pada terminal Orange Pi Lite 2 yang belum terpasang.
         </p>
         <form method="POST" action="{{ route('devices.pair.code') }}" id="pairing-form">
             @csrf
-            <label class="form-label" for="pairing-branch">Cabang</label>
-            <select id="pairing-branch" name="branch_id" class="form-input mb-3" required>
-                <option value="">— Pilih Cabang —</option>
-                @foreach($branches as $branch)
-                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+            <label class="form-label" for="pairing-building">Gedung</label>
+            <select id="pairing-building" name="building_id" class="form-input mb-3" required>
+                <option value="">— Pilih Gedung —</option>
+                @foreach($buildings as $building)
+                    <option value="{{ $building->id }}">{{ $building->name }}</option>
                 @endforeach
             </select>
             <div class="flex gap-2">

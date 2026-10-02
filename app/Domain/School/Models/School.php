@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Domain\Organization\Models;
+namespace App\Domain\School\Models;
 
-use App\Domain\Member\Models\Member;
+use App\Domain\Student\Models\Student;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Organization extends Model
+class School extends Model
 {
     protected $fillable = ['name', 'code', 'description', 'is_active'];
 
@@ -14,17 +14,17 @@ class Organization extends Model
 
     public function groups(): HasMany
     {
-        return $this->hasMany(Group::class);
+        return $this->hasMany(Classroom::class);
     }
 
-    public function members(): HasMany
+    public function students(): HasMany
     {
-        return $this->hasMany(Member::class);
+        return $this->hasMany(Student::class);
     }
 
-    public function branches(): HasMany
+    public function buildings(): HasMany
     {
-        return $this->hasMany(Branch::class);
+        return $this->hasMany(Building::class);
     }
 
     public function scopeActive($query)

@@ -14,7 +14,7 @@ class SyncAttendanceBatch
      *
      * Returns per-record results: created | duplicate | rejected.
      *
-     * @param  array<array{id: string, member_id: string, captured_at: string,
+     * @param  array<array{id: string, student_id: string, captured_at: string,
      *                     direction: string, score: float, liveness_score: ?float,
      *                     time_source: string}>  $records
      * @return array<array{id: string, status: string, reason?: string}>
@@ -32,7 +32,7 @@ class SyncAttendanceBatch
                     // UUID from edge is the PK — insertOrIgnore handles the duplicate case
                     $affected = AttendanceLog::insertOrIgnore([[
                         'id'             => $record['id'],
-                        'member_id'      => $record['member_id'],
+                        'student_id'      => $record['student_id'],
                         'device_id'      => $device->id,
                         'captured_at'    => $record['captured_at'],
                         'direction'      => $record['direction'],

@@ -2,18 +2,18 @@
 
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DeviceController;
-use App\Http\Controllers\Web\MemberWebController;
-use App\Http\Controllers\Web\OrganizationController;
+use App\Http\Controllers\Web\StudentWebController;
+use App\Http\Controllers\Web\SchoolController;
 use App\Http\Controllers\Web\ReportController;
 use Illuminate\Support\Facades\Route;
 
 // Dashboard
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
-// Members — full CRUD + enrollment
-Route::post('members/import', [MemberWebController::class, 'import'])->name('members.import');
-Route::resource('members', MemberWebController::class);
-Route::post('members/{member}/enroll', [MemberWebController::class, 'enrollStore'])->name('members.enroll.store');
+// Students — full CRUD + enrollment
+Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
+Route::resource('students', StudentWebController::class);
+Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
 
 // Reports
 Route::prefix('reports')->name('reports.')->group(function () {
@@ -28,10 +28,10 @@ Route::prefix('devices')->name('devices.')->group(function () {
     Route::delete('/{device}/revoke', [DeviceController::class, 'revoke'])->name('revoke');
 });
 
-// Organizations, Groups, Branches
-Route::prefix('organizations')->name('organizations.')->group(function () {
-    Route::get('/',                    [OrganizationController::class, 'index'])->name('index');
-    Route::post('/',                   [OrganizationController::class, 'store'])->name('store');
-    Route::post('/groups',             [OrganizationController::class, 'storeGroup'])->name('groups.store');
-    Route::post('/branches',           [OrganizationController::class, 'storeBranch'])->name('branches.store');
+// Schools, Classrooms, Buildings
+Route::prefix('schools')->name('schools.')->group(function () {
+    Route::get('/',                    [SchoolController::class, 'index'])->name('index');
+    Route::post('/',                   [SchoolController::class, 'store'])->name('store');
+    Route::post('/classrooms',             [SchoolController::class, 'storeGroup'])->name('classrooms.store');
+    Route::post('/buildings',           [SchoolController::class, 'storeBuilding'])->name('buildings.store');
 });

@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Domain\Member\Imports;
+namespace App\Domain\Student\Imports;
 
-use App\Domain\Member\Models\Member;
+use App\Domain\Student\Models\Student;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -10,11 +10,11 @@ use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 
-class MembersImport implements ToModel, WithHeadingRow, WithValidation, WithBatchInserts, WithChunkReading
+class StudentsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchInserts, WithChunkReading
 {
     public function model(array $row)
     {
-        return new Member([
+        return new Student([
             'code'  => $row['code'] ?? $row['nis'] ?? $row['nip'],
             'name'  => $row['name'] ?? $row['nama'],
             'email' => $row['email'] ?? null,
@@ -27,9 +27,9 @@ class MembersImport implements ToModel, WithHeadingRow, WithValidation, WithBatc
     public function rules(): array
     {
         return [
-            '*.code'  => ['required', 'string', 'max:50', Rule::unique('members', 'code')],
+            '*.code'  => ['required', 'string', 'max:50', Rule::unique('students', 'code')],
             '*.name'  => ['required', 'string', 'max:150'],
-            '*.email' => ['nullable', 'email', 'max:191', Rule::unique('members', 'email')],
+            '*.email' => ['nullable', 'email', 'max:191', Rule::unique('students', 'email')],
             '*.phone' => ['nullable', 'string', 'max:30'],
             '*.role'  => ['nullable', 'string', 'max:50'],
         ];

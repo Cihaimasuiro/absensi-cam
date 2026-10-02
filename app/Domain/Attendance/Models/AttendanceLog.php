@@ -3,7 +3,7 @@
 namespace App\Domain\Attendance\Models;
 
 use App\Domain\Device\Models\Device;
-use App\Domain\Member\Models\Member;
+use App\Domain\Student\Models\Student;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +15,7 @@ class AttendanceLog extends Model
 
     protected $fillable = [
         'id', // UUID from edge — must be explicitly allowed for idempotent insert
-        'member_id',
+        'student_id',
         'device_id',
         'captured_at',
         'direction',
@@ -34,9 +34,9 @@ class AttendanceLog extends Model
         'is_corrected' => 'boolean',
     ];
 
-    public function member(): BelongsTo
+    public function student(): BelongsTo
     {
-        return $this->belongsTo(Member::class);
+        return $this->belongsTo(Student::class);
     }
 
     public function device(): BelongsTo
@@ -59,9 +59,9 @@ class AttendanceLog extends Model
         return $query->where('device_id', $deviceId);
     }
 
-    public function scopeByMember($query, string $memberId)
+    public function scopeByStudent($query, string $studentId)
     {
-        return $query->where('member_id', $memberId);
+        return $query->where('student_id', $studentId);
     }
 
     public function scopeInDirection($query)

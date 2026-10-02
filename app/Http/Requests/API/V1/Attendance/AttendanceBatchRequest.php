@@ -16,7 +16,7 @@ class AttendanceBatchRequest extends FormRequest
         return [
             'records'                     => ['required', 'array', 'min:1', 'max:200'],
             'records.*.id'                => ['required', 'uuid'],
-            'records.*.member_id'         => ['required', 'uuid'],
+            'records.*.student_id'         => ['required', 'uuid'],
             'records.*.captured_at'       => ['required', 'date_format:Y-m-d\TH:i:s\Z'],
             'records.*.direction'         => ['required', 'in:in,out'],
             'records.*.score'             => ['required', 'numeric', 'min:0', 'max:1'],

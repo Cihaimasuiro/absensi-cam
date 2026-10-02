@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Domain\Member\Models;
+namespace App\Domain\Student\Models;
 
 use App\Domain\User\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Consent extends Model
 {
     protected $fillable = [
-        'member_id',
+        'student_id',
         'given_at',
         'withdrawn_at',
         'text_version',
@@ -24,9 +24,9 @@ class Consent extends Model
         'withdrawn_at' => 'datetime',
     ];
 
-    public function member(): BelongsTo
+    public function student(): BelongsTo
     {
-        return $this->belongsTo(Member::class);
+        return $this->belongsTo(Student::class);
     }
 
     public function recorder(): BelongsTo

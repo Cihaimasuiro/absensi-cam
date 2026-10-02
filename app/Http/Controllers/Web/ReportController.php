@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Attendance\Models\AttendanceLog;
-use App\Domain\Member\Models\Member;
-use App\Domain\Organization\Models\Group;
+use App\Domain\Student\Models\Student;
+use App\Domain\School\Models\Classroom;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
@@ -14,38 +14,38 @@ class ReportController extends Controller
     {
         $start   = $request->input('start', today()->toDateString());
         $end     = $request->input('end',   today()->toDateString());
-        $groupId = $request->input('group_id');
+        $groupId = $request->input('classroom_id');
 
-        $logs = AttendanceLog::with(['member:id,name,code,group_id', 'member.group:id,name', 'device:id,name'])
+        $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name', 'device:id,name'])
             ->whereDate('captured_at', '>=', $start)
             ->whereDate('captured_at', '<=', $end)
             ->when($groupId, fn ($q) =>
-                $q->whereHas('member', fn ($q) => $q->where('group_id', $groupId))
+                $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
-            ->select(['id', 'member_id', 'device_id', 'captured_at', 'direction', 'score', 'liveness_score', 'is_corrected', 'time_source'])
+            ->select(['id', 'student_id', 'device_id', 'captured_at', 'direction', 'score', 'liveness_score', 'is_corrected', 'time_source'])
             ->orderBy('captured_at')
             ->paginate(100)
             ->withQueryString();
 
-        $groups = Group::active()->select(['id', 'name'])->orderBy('name')->get();
+        $classrooms = Classroom::active()->select(['id', 'name'])->orderBy('name')->get();
 
-        return view('reports.index', compact('logs', 'groups', 'start', 'end', 'groupId'));
+        return view('reports.index', compact('logs', 'classrooms', 'start', 'end', 'groupId'));
     }
 
     public function exportCsv(Request $request)
     {
         $start   = $request->input('start', today()->toDateString());
         $end     = $request->input('end',   today()->toDateString());
-        $groupId = $request->input('group_id');
+        $groupId = $request->input('classroom_id');
 
-        $logs = AttendanceLog::with(['member:id,name,code', 'device:id,name'])
+        $logs = AttendanceLog::with(['student:id,name,code', 'device:id,name'])
             ->whereDate('captured_at', '>=', $start)
             ->whereDate('captured_at', '<=', $end)
             ->when($groupId, fn ($q) =>
-                $q->whereHas('member', fn ($q) => $q->where('group_id', $groupId))
+                $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
             ->orderBy('captured_at')
-            ->get(['id', 'member_id', 'device_id', 'captured_at', 'direction', 'score', 'is_corrected']);
+            ->get(['id', 'student_id', 'device_id', 'captured_at', 'direction', 'score', 'is_corrected']);
 
         $filename = "absensi_{$start}_{$end}.csv";
         $headers  = ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename={$filename}"];
@@ -56,8 +56,8 @@ class ReportController extends Controller
             foreach ($logs as $log) {
                 fputcsv($out, [
                     $log->id,
-                    $log->member?->name ?? '-',
-                    $log->member?->code ?? '-',
+                    $log->student?->name ?? '-',
+                    $log->student?->code ?? '-',
                     $log->device?->name ?? '-',
                     $log->captured_at->toDateTimeString(),
                     $log->direction,

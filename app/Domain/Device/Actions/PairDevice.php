@@ -37,9 +37,9 @@ class PairDevice
             // Mark code as used immediately (one-time)
             $pairingCode->update(['used_at' => now()]);
 
-            // Create device record attached to the branch the code was created for
+            // Create device record attached to the building the code was created for
             $device = Device::create([
-                'branch_id'     => $pairingCode->branch_id,
+                'building_id'     => $pairingCode->building_id,
                 'name'          => $data['device_name'],
                 'device_code'   => 'dev-' . str_pad(Device::count() + 1, 4, '0', STR_PAD_LEFT),
                 'fw_version'    => $data['fw_version'],
@@ -58,7 +58,7 @@ class PairDevice
             return [
                 'device_id' => $device->device_code,
                 'token'     => $token->plainTextToken, // shown once
-                'branch_id' => $device->branch_id,
+                'building_id' => $device->building_id,
             ];
         });
     }

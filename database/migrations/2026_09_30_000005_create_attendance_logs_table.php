@@ -12,8 +12,8 @@ return new class extends Migration
         // Primary key = UUID from edge (UUIDv7); idempotent insert per PRD §11.2
         Schema::create('attendance_logs', function (Blueprint $table) {
             $table->uuid('id')->primary()->comment('UUID dari edge (UUIDv7); idempotensi kunci');
-            $table->uuid('member_id')->nullable()->comment('Null jika anggota dihapus');
-            $table->foreign('member_id')->references('id')->on('members')->nullOnDelete();
+            $table->uuid('student_id')->nullable()->comment('Null jika anggota dihapus');
+            $table->foreign('student_id')->references('id')->on('students')->nullOnDelete();
             $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
             $table->timestamp('captured_at')->comment('Waktu absen dari edge (UTC)');
             $table->enum('direction', ['in', 'out'])->default('in');
@@ -26,9 +26,9 @@ return new class extends Migration
             $table->boolean('is_corrected')->default(false)->index();
             $table->timestamps();
 
-            // One record per member per direction per day per device — but edge uses UUID so
+            // One record per student per direction per day per device — but edge uses UUID so
             // we rely on UUID uniqueness from edge, not a composite unique.
-            $table->index(['member_id', 'captured_at']);
+            $table->index(['student_id', 'captured_at']);
             $table->index(['device_id', 'captured_at']);
             $table->index('captured_at');
         });

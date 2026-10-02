@@ -2,7 +2,7 @@
 
 namespace App\Domain\Device\Models;
 
-use App\Domain\Organization\Models\Branch;
+use App\Domain\School\Models\Building;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PairingCode extends Model
 {
     protected $fillable = [
-        'branch_id',
+        'building_id',
         'code_hash',
         'expires_at',
         'used_at',
@@ -24,9 +24,9 @@ class PairingCode extends Model
 
     protected $hidden = ['code_hash'];
 
-    public function branch(): BelongsTo
+    public function building(): BelongsTo
     {
-        return $this->belongsTo(Branch::class);
+        return $this->belongsTo(Building::class);
     }
 
     public function creator(): BelongsTo

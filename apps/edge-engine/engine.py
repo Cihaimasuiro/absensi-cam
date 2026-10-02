@@ -10,6 +10,7 @@ import numpy as np
 
 from database import DatabaseManager
 from sync_worker import SyncWorker
+import web_stream
 
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -54,6 +55,10 @@ class EdgeEngine:
         self.sync_worker = SyncWorker(self.db, "http://127.0.0.1:8081", "api-token-rahasia")
         self.load_models()
         
+        # Start the web stream server in background for HDMI/Browser viewing
+        self.stream_thread = threading.Thread(target=web_stream.start_server, kwargs={"port": 5000}, daemon=True)
+        self.stream_thread.start()
+        
     def load_models(self):
         model_dir = os.path.join(os.path.dirname(__file__), "models")
         logging.info("Loading AI Models...")
@@ -91,20 +96,29 @@ class EdgeEngine:
             
             process_t = (time.time() - start_t) * 1000
             
-            if faces and len(faces) > 0:
+            status_text = "Scanning..."
+            
+            if faces is not None and len(faces) > 0:
+                status_text = f"Detected {len(faces)} faces"
+                
+                # Draw boxes for web stream
+                for face in faces:
+                    box = face[0:4].astype(int)
+                    cv2.rectangle(frame, (box[0], box[1]), (box[0]+box[2], box[1]+box[3]), (0, 255, 0), 2)
+                    
                 # Mock finding a face
                 logging.info(f"Detected {len(faces)} faces. [Time: {process_t:.1f}ms]")
                 # We would normally match the embedding here
                 
-                # Simulasi member_id yang dikenali
-                dummy_member_id = "123e4567-e89b-12d3-a456-426614174000"
+                # Simulasi student_id yang dikenali
+                dummy_student_id = "123e4567-e89b-12d3-a456-426614174000"
                 # AttendanceBatchRequest expects: 'date_format:Y-m-d\TH:i:s\Z'
                 now_str = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
                 
                 # Masukkan ke Outbox lokal (akan disync ke Laravel di background)
                 self.db.insert_attendance(
                     id=str(uuid.uuid4()),
-                    member_id=dummy_member_id,
+                    student_id=dummy_student_id,
                     captured_at=now_str,
                     direction="in",  # Sementara hardcoded, bisa diganti sesuai konfigurasi mode absen
                     score=0.92,      # (match_score)
@@ -119,8 +133,13 @@ class EdgeEngine:
                 })
                 self.arduino.send_command({"cmd": "io", "led": "green", "buzzer": "2short"})
                 
+                status_text = "Member Recognized!"
+                web_stream.update_frame(frame, status_text)
+                
                 # Cooldown agar tidak bombardir absen berkali-kali untuk orang yang sama
                 time.sleep(2)
+            else:
+                web_stream.update_frame(frame, status_text)
                 
             # Sleep slightly to prevent 100% CPU lock on H6
             time.sleep(0.01)

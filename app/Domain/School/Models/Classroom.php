@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Domain\Organization\Models;
+namespace App\Domain\School\Models;
 
-use App\Domain\Member\Models\Member;
+use App\Domain\Student\Models\Student;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Group extends Model
+class Classroom extends Model
 {
     protected $fillable = [
-        'organization_id',
+        'school_id',
         'name',
         'code',
         'type',
@@ -30,14 +30,14 @@ class Group extends Model
         'late_threshold_minutes'       => 'integer',
     ];
 
-    public function organization(): BelongsTo
+    public function school(): BelongsTo
     {
-        return $this->belongsTo(Organization::class);
+        return $this->belongsTo(School::class);
     }
 
-    public function members(): HasMany
+    public function students(): HasMany
     {
-        return $this->hasMany(Member::class);
+        return $this->hasMany(Student::class);
     }
 
     public function scopeActive($query)

@@ -2,8 +2,8 @@
 
 namespace App\Domain\Device\Models;
 
-use App\Domain\Organization\Models\Branch;
-use App\Domain\Organization\Models\Group;
+use App\Domain\School\Models\Building;
+use App\Domain\School\Models\Classroom;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +15,7 @@ class Device extends Authenticatable
     use HasApiTokens;
 
     protected $fillable = [
-        'branch_id',
+        'building_id',
         'name',
         'device_code',
         'token_hash',
@@ -36,15 +36,15 @@ class Device extends Authenticatable
 
     protected $hidden = ['token_hash'];
 
-    public function branch(): BelongsTo
+    public function building(): BelongsTo
     {
-        return $this->belongsTo(Branch::class);
+        return $this->belongsTo(Building::class);
     }
 
-    /** Groups whose members this device is allowed to recognize (FR-E06) */
+    /** Classrooms whose students this device is allowed to recognize (FR-E06) */
     public function groups(): BelongsToMany
     {
-        return $this->belongsToMany(Group::class, 'device_groups');
+        return $this->belongsToMany(Classroom::class, 'device_groups');
     }
 
     public function logs(): HasMany

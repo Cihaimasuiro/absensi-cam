@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Domain\Member\Models;
+namespace App\Domain\Student\Models;
 
 use App\Domain\Attendance\Models\AttendanceLog;
 use App\Domain\Enrollment\Models\FaceTemplate;
-use App\Domain\Organization\Models\Group;
-use App\Domain\Organization\Models\Organization;
+use App\Domain\School\Models\Classroom;
+use App\Domain\School\Models\School;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,13 +13,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Member extends Model
+class Student extends Model
 {
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'organization_id',
-        'group_id',
+        'school_id',
+        'classroom_id',
         'code',
         'name',
         'email',
@@ -30,14 +30,14 @@ class Member extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
-    public function organization(): BelongsTo
+    public function school(): BelongsTo
     {
-        return $this->belongsTo(Organization::class);
+        return $this->belongsTo(School::class);
     }
 
     public function group(): BelongsTo
     {
-        return $this->belongsTo(Group::class);
+        return $this->belongsTo(Classroom::class);
     }
 
     public function consents(): HasMany

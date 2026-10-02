@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('organizations', function (Blueprint $table) {
+        Schema::create('schools', function (Blueprint $table) {
             $table->id();
             $table->string('name', 150);
             $table->string('code', 50)->unique()->nullable()->comment('Kode singkat org');
@@ -18,9 +18,9 @@ return new class extends Migration
         });
 
         // Division / department / class inside an org (FR-S02)
-        Schema::create('groups', function (Blueprint $table) {
+        Schema::create('classrooms', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('organization_id')->constrained('organizations')->cascadeOnDelete();
+            $table->foreignId('school_id')->constrained('schools')->cascadeOnDelete();
             $table->string('name', 150);
             $table->string('code', 50)->nullable()->comment('Kode divisi/kelas');
             $table->string('type', 30)->default('department')->comment('department|class|division');
@@ -34,13 +34,13 @@ return new class extends Migration
                 ->comment('Semua anggota sudah berikan consent');
             $table->timestamps();
 
-            $table->unique(['organization_id', 'code']);
+            $table->unique(['school_id', 'code']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('groups');
-        Schema::dropIfExists('organizations');
+        Schema::dropIfExists('classrooms');
+        Schema::dropIfExists('schools');
     }
 };

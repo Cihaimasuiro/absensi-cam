@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Requests\Web\Member;
+namespace App\Http\Requests\Web\Student;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateMemberRequest extends FormRequest
+class UpdateStudentRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -16,8 +16,8 @@ class UpdateMemberRequest extends FormRequest
         return [
             'name'         => ['sometimes', 'string', 'max:100'],
             'department'   => ['nullable', 'string', 'max:100'],
-            'branch'       => ['nullable', 'string', 'max:100'],
-            'organization' => ['nullable', 'string', 'max:100'],
+            'building'       => ['nullable', 'string', 'max:100'],
+            'school' => ['nullable', 'string', 'max:100'],
             'is_active'    => ['sometimes', 'boolean'],
         ];
     }

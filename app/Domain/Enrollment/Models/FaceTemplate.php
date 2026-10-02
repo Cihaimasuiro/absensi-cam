@@ -2,7 +2,7 @@
 
 namespace App\Domain\Enrollment\Models;
 
-use App\Domain\Member\Models\Member;
+use App\Domain\Student\Models\Student;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,7 +12,7 @@ class FaceTemplate extends Model
     use SoftDeletes; // soft-delete = tombstone; op=delete sent to edge via delta sync
 
     protected $fillable = [
-        'member_id',
+        'student_id',
         'embedding_enc',
         'model_version',
         'version_cursor',
@@ -23,9 +23,9 @@ class FaceTemplate extends Model
 
     protected $casts = ['version_cursor' => 'integer'];
 
-    public function member(): BelongsTo
+    public function student(): BelongsTo
     {
-        return $this->belongsTo(Member::class);
+        return $this->belongsTo(Student::class);
     }
 
     /** Whether this template's model version matches the given device model version */

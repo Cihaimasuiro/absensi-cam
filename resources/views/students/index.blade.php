@@ -4,13 +4,13 @@
 @section('page-title', 'Anggota')
 
 @section('header-actions')
-    <button @click="$dispatch('open-import-modal')" class="btn btn-secondary btn-sm" id="btn-import-member">
+    <button @click="$dispatch('open-import-modal')" class="btn btn-secondary btn-sm" id="btn-import-student">
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
         </svg>
         Import Data
     </button>
-    <button @click="$dispatch('open-modal', { member: null })" class="btn btn-primary btn-sm" id="btn-add-member">
+    <button @click="$dispatch('open-modal', { student: null })" class="btn btn-primary btn-sm" id="btn-add-student">
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
         </svg>
@@ -23,8 +23,8 @@
      Search + filter bar
      ════════════════════════════════════════ --}}
 <div class="card p-3 mb-3">
-    <form id="member-filter-form" method="GET" action="{{ route('members.index') }}"
-          x-data="{ search: '{{ request('search') }}', filter: '{{ request('filter', 'all') }}', groupId: '{{ request('group_id') }}' }">
+    <form id="student-filter-form" method="GET" action="{{ route('students.index') }}"
+          x-data="{ search: '{{ request('search') }}', filter: '{{ request('filter', 'all') }}', groupId: '{{ request('classroom_id') }}' }">
 
         <div class="flex flex-wrap gap-2 items-center">
             <div class="relative flex-1 min-w-[180px]">
@@ -32,17 +32,17 @@
                      fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z"/>
                 </svg>
-                <input id="member-search" type="text" name="search" x-model="search"
+                <input id="student-search" type="text" name="search" x-model="search"
                        placeholder="Cari nama atau kode…" class="search-input"
                        @keydown.enter="$el.form.submit()">
             </div>
 
-            <select name="group_id" x-model="groupId" @change="$el.form.submit()"
-                    class="form-input" style="width: auto; min-width: 140px;" id="member-group-filter">
-                <option value="">Semua Grup</option>
-                @foreach($groups as $group)
-                    <option value="{{ $group->id }}" {{ request('group_id') == $group->id ? 'selected' : '' }}>
-                        {{ $group->name }}
+            <select name="classroom_id" x-model="groupId" @change="$el.form.submit()"
+                    class="form-input" style="width: auto; min-width: 140px;" id="student-group-filter">
+                <option value="">Semua Kelas</option>
+                @foreach($classrooms as $classroom)
+                    <option value="{{ $classroom->id }}" {{ request('classroom_id') == $classroom->id ? 'selected' : '' }}>
+                        {{ $classroom->name }}
                     </option>
                 @endforeach
             </select>
@@ -59,10 +59,10 @@
 </div>
 
 {{-- ════════════════════════════════════════
-     Members table
+     Students table
      ════════════════════════════════════════ --}}
 <div class="card">
-    @if($members->isEmpty())
+    @if($students->isEmpty())
         <div style="text-align: center; padding: 3rem 0; color: var(--text-muted); font-size: 0.8125rem;">
             Tidak ada anggota yang sesuai filter.
         </div>
@@ -73,7 +73,7 @@
                     <th style="width: 36px;"></th>
                     <th>Nama</th>
                     <th>Kode</th>
-                    <th>Grup</th>
+                    <th>Kelas</th>
                     <th>Peran</th>
                     <th>Wajah</th>
                     <th>Status</th>
@@ -81,32 +81,32 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($members as $member)
-                    <tr id="member-row-{{ $member->id }}">
+                @foreach($students as $student)
+                    <tr id="student-row-{{ $student->id }}">
                         <td>
                             <div style="width: 28px; height: 28px; border-radius: 9999px;
                                         background: var(--bg-tertiary); border: 1px solid var(--border-primary);
                                         display: flex; align-items: center; justify-content: center;
                                         font-size: 0.625rem; font-weight: 700; color: var(--accent);">
-                                {{ strtoupper(substr($member->name, 0, 1)) }}
+                                {{ strtoupper(substr($student->name, 0, 1)) }}
                             </div>
                         </td>
-                        <td style="color: var(--text-primary); font-weight: 500;">{{ $member->name }}</td>
+                        <td style="color: var(--text-primary); font-weight: 500;">{{ $student->name }}</td>
                         <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-tertiary);">
-                            {{ $member->code }}
+                            {{ $student->code }}
                         </td>
                         <td style="color: var(--text-muted); font-size: 0.75rem;">
-                            {{ $member->group?->name ?? '—' }}
+                            {{ $student->group?->name ?? '—' }}
                         </td>
                         <td>
-                            @if($member->role)
-                                <span class="badge badge-muted">{{ $member->role }}</span>
+                            @if($student->role)
+                                <span class="badge badge-muted">{{ $student->role }}</span>
                             @else
                                 <span style="color: var(--text-muted);">—</span>
                             @endif
                         </td>
                         <td>
-                            @if($member->faceTemplate)
+                            @if($student->faceTemplate)
                                 <span class="badge badge-success">
                                     <span class="dot-online"></span> Terdaftar
                                 </span>
@@ -115,7 +115,7 @@
                             @endif
                         </td>
                         <td>
-                            @if($member->is_active)
+                            @if($student->is_active)
                                 <span class="badge badge-accent">Aktif</span>
                             @else
                                 <span class="badge badge-danger">Nonaktif</span>
@@ -123,13 +123,13 @@
                         </td>
                         <td>
                             <div class="flex gap-1">
-                                <button type="button" @click="$dispatch('open-enroll-modal', { member: {{ json_encode($member->only('id', 'name', 'code')) }}, group_name: '{{ $member->group?->name ?? '' }}', hasFaceTemplate: {{ $member->faceTemplate ? 'true' : 'false' }}, hasConsent: {{ $member->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Enroll Wajah">
+                                <button type="button" @click="$dispatch('open-enroll-modal', { student: {{ json_encode($student->only('id', 'name', 'code')) }}, group_name: '{{ $student->group?->name ?? '' }}', hasFaceTemplate: {{ $student->faceTemplate ? 'true' : 'false' }}, hasConsent: {{ $student->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Enroll Wajah">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
                                 </button>
-                                <button type="button" @click="$dispatch('open-modal', { member: {{ json_encode($member->only('id', 'name', 'code', 'role', 'email', 'phone', 'group_id', 'organization_id', 'is_active')) }}, has_consent: {{ $member->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Edit">
+                                <button type="button" @click="$dispatch('open-modal', { student: {{ json_encode($student->only('id', 'name', 'code', 'role', 'email', 'phone', 'classroom_id', 'school_id', 'is_active')) }}, has_consent: {{ $student->hasActiveConsent() ? 'true' : 'false' }} })" class="btn btn-xs btn-secondary" title="Edit">
                                     <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
                                 </button>
-                                <form method="POST" action="{{ route('members.destroy', $member) }}" onsubmit="return confirm('Hapus anggota {{ addslashes($member->name) }}?')" style="display:inline-block;">
+                                <form method="POST" action="{{ route('students.destroy', $student) }}" onsubmit="return confirm('Hapus anggota {{ addslashes($student->name) }}?')" style="display:inline-block;">
                                     @csrf
                                     @method('DELETE')
                                     <button class="btn btn-xs btn-danger" style="padding: 0 4px;" title="Hapus">×</button>
@@ -140,9 +140,9 @@
                 @endforeach
             </tbody>
         </table>
-        @if($members->hasPages())
+        @if($students->hasPages())
             <div class="px-4 py-3" style="border-top: 1px solid var(--border-primary);">
-                {{ $members->links() }}
+                {{ $students->links() }}
             </div>
         @endif
     @endif
@@ -154,15 +154,15 @@
 <div x-data="{ 
         show: {{ $errors->any() ? 'true' : 'false' }}, 
         isEdit: {{ old('id') ? 'true' : 'false' }}, 
-        member: {
+        student: {
             id: '{{ old('id') }}', code: '{{ old('code') }}', name: '{{ old('name') }}',
-            role: '{{ old('role') }}', organization_id: '{{ old('organization_id') }}',
-            group_id: '{{ old('group_id') }}', email: '{{ old('email') }}', 
+            role: '{{ old('role') }}', school_id: '{{ old('school_id') }}',
+            classroom_id: '{{ old('classroom_id') }}', email: '{{ old('email') }}', 
             phone: '{{ old('phone') }}', is_active: '{{ old('is_active', 1) }}',
             has_consent: false
         }
      }" 
-     @open-modal.window="show = true; isEdit = !!$event.detail.member; member = $event.detail.member || {is_active: 1, has_consent: false}; if($event.detail.member) { member.has_consent = $event.detail.member.has_consent }"
+     @open-modal.window="show = true; isEdit = !!$event.detail.student; student = $event.detail.student || {is_active: 1, has_consent: false}; if($event.detail.student) { student.has_consent = $event.detail.student.has_consent }"
      x-show="show" 
      style="display: none;" 
      class="modal-overlay">
@@ -170,23 +170,23 @@
     <div class="modal-panel" @click.outside="show = false">
         <h3 class="font-semibold mb-4" x-text="isEdit ? 'Edit Anggota' : 'Tambah Anggota'"></h3>
         
-        <form method="POST" :action="isEdit ? '{{ url('members') }}/' + member.id : '{{ route('members.store') }}'">
+        <form method="POST" :action="isEdit ? '{{ url('students') }}/' + student.id : '{{ route('students.store') }}'">
             @csrf
             <template x-if="isEdit"><input type="hidden" name="_method" value="PUT"></template>
-            <input type="hidden" name="id" x-model="member.id">
+            <input type="hidden" name="id" x-model="student.id">
 
             <div class="flex flex-col gap-3">
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="form-label">Kode / NIK / NIS *</label>
-                        <input name="code" type="text" class="form-input" x-model="member.code" required>
+                        <input name="code" type="text" class="form-input" x-model="student.code" required>
                         @error('code')<p class="form-error">{{ $message }}</p>@enderror
                     </div>
                     <div>
                         <label class="form-label">Peran</label>
-                        <select name="role" class="form-input" x-model="member.role">
+                        <select name="role" class="form-input" x-model="student.role">
                             <option value="">— Pilih —</option>
-                            <option value="employee">Karyawan</option>
+                            <option value="employee">Siswa</option>
                             <option value="student">Siswa</option>
                             <option value="teacher">Guru</option>
                             <option value="other">Lainnya</option>
@@ -196,26 +196,26 @@
 
                 <div>
                     <label class="form-label">Nama Lengkap *</label>
-                    <input name="name" type="text" class="form-input" x-model="member.name" required>
+                    <input name="name" type="text" class="form-input" x-model="student.name" required>
                     @error('name')<p class="form-error">{{ $message }}</p>@enderror
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="form-label">Organisasi</label>
-                        <select name="organization_id" class="form-input" x-model="member.organization_id">
+                        <label class="form-label">Sekolah</label>
+                        <select name="school_id" class="form-input" x-model="student.school_id">
                             <option value="">— Tidak ada —</option>
-                            @foreach($organizations as $org)
+                            @foreach($schools as $org)
                                 <option value="{{ $org->id }}">{{ $org->name }}</option>
                             @endforeach
                         </select>
                     </div>
                     <div>
-                        <label class="form-label">Grup / Kelas</label>
-                        <select name="group_id" class="form-input" x-model="member.group_id">
+                        <label class="form-label">Kelas / Kelas</label>
+                        <select name="classroom_id" class="form-input" x-model="student.classroom_id">
                             <option value="">— Tidak ada —</option>
-                            @foreach($groups as $group)
-                                <option value="{{ $group->id }}">{{ $group->name }}</option>
+                            @foreach($classrooms as $classroom)
+                                <option value="{{ $classroom->id }}">{{ $classroom->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -224,18 +224,18 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="form-label">Email</label>
-                        <input name="email" type="email" class="form-input" x-model="member.email">
+                        <input name="email" type="email" class="form-input" x-model="student.email">
                         @error('email')<p class="form-error">{{ $message }}</p>@enderror
                     </div>
                     <div>
                         <label class="form-label">No. Telepon</label>
-                        <input name="phone" type="tel" class="form-input" x-model="member.phone">
+                        <input name="phone" type="tel" class="form-input" x-model="student.phone">
                     </div>
                 </div>
 
                 <div x-show="isEdit">
                     <label class="form-label">Status Akun</label>
-                    <select name="is_active" class="form-input" x-model="member.is_active">
+                    <select name="is_active" class="form-input" x-model="student.is_active">
                         <option value="1">Aktif</option>
                         <option value="0">Nonaktif</option>
                     </select>
@@ -243,7 +243,7 @@
 
                 <div class="mt-2" style="display: flex; align-items: center; gap: 0.5rem;">
                     <input type="hidden" name="has_consent" value="0">
-                    <input type="checkbox" name="has_consent" value="1" id="has_consent_checkbox" x-model="member.has_consent" style="accent-color: var(--accent); width: 1rem; height: 1rem;">
+                    <input type="checkbox" name="has_consent" value="1" id="has_consent_checkbox" x-model="student.has_consent" style="accent-color: var(--accent); width: 1rem; height: 1rem;">
                     <label for="has_consent_checkbox" style="font-size: 0.8125rem; font-weight: 500; cursor: pointer;">
                         Saya mengonfirmasi bahwa anggota ini telah menyetujui data biometrik wajahnya diproses.
                     </label>
@@ -263,7 +263,7 @@
      ════════════════════════════════════════ --}}
 <div x-data="{
         show: false,
-        member: null,
+        student: null,
         group_name: '',
         hasFaceTemplate: false,
         hasConsent: false,
@@ -324,7 +324,7 @@
      }"
      @open-enroll-modal.window="
         show = true; 
-        member = $event.detail.member;
+        student = $event.detail.student;
         group_name = $event.detail.group_name;
         hasFaceTemplate = $event.detail.hasFaceTemplate;
         hasConsent = $event.detail.hasConsent;
@@ -341,8 +341,8 @@
             <button type="button" class="btn btn-xs btn-secondary" style="padding: 0 4px;" @click="closeModal">×</button>
         </div>
         
-        <div class="flex flex-col md:flex-row gap-4" x-show="member">
-            {{-- Member info card --}}
+        <div class="flex flex-col md:flex-row gap-4" x-show="student">
+            {{-- Student info card --}}
             <div style="width: 220px; flex-shrink: 0;">
                 <div class="p-4 flex flex-col gap-3" style="background: var(--bg-secondary); border-radius: 8px;">
                     {{-- Avatar --}}
@@ -350,12 +350,12 @@
                                 background: var(--bg-tertiary); border: 1px solid var(--border-primary);
                                 display: flex; align-items: center; justify-content: center;
                                 font-size: 1.5rem; font-weight: 700; color: var(--accent);">
-                        <span x-text="member ? member.name.substring(0,1).toUpperCase() : ''"></span>
+                        <span x-text="student ? student.name.substring(0,1).toUpperCase() : ''"></span>
                     </div>
 
                     <div>
-                        <p style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary);" x-text="member?.name"></p>
-                        <p style="font-size: 0.75rem; color: var(--text-muted);" x-text="member?.code"></p>
+                        <p style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary);" x-text="student?.name"></p>
+                        <p style="font-size: 0.75rem; color: var(--text-muted);" x-text="student?.code"></p>
                         <p style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.25rem;" x-text="group_name" x-show="group_name"></p>
                     </div>
 
@@ -390,7 +390,7 @@
                     <span style="font-size: 0.6875rem; color: var(--text-muted); display: block;">Format: JPG/PNG/WEBP · Maks 5MB</span>
                 </div>
 
-                <form id="enroll-form" :action="'{{ url('members') }}/' + (member?.id || '') + '/enroll'" method="POST" enctype="multipart/form-data">
+                <form id="enroll-form" :action="'{{ url('students') }}/' + (student?.id || '') + '/enroll'" method="POST" enctype="multipart/form-data">
                     @csrf
                     
                     {{-- Upload drop area --}}
@@ -455,7 +455,7 @@
             <button type="button" class="btn btn-xs btn-secondary" style="padding: 0 4px;" @click="if(!uploading) show = false">×</button>
         </div>
         
-        <form method="POST" action="{{ route('members.import') }}" enctype="multipart/form-data" @submit="uploading = true">
+        <form method="POST" action="{{ route('students.import') }}" enctype="multipart/form-data" @submit="uploading = true">
             @csrf
             <div class="flex flex-col gap-3">
                 <div>

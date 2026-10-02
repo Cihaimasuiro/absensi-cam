@@ -8,8 +8,8 @@ class EnrollFaceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $member = $this->route('member');
-        return $member && $member->hasActiveConsent();
+        $student = $this->route('student');
+        return $student && $student->hasActiveConsent();
     }
 
     public function rules(): array

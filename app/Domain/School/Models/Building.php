@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Domain\Organization\Models;
+namespace App\Domain\School\Models;
 
 use App\Domain\Device\Models\Device;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Branch extends Model
+class Building extends Model
 {
     protected $fillable = [
-        'organization_id',
+        'school_id',
         'name',
         'code',
         'address',
@@ -20,9 +20,9 @@ class Branch extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
-    public function organization(): BelongsTo
+    public function school(): BelongsTo
     {
-        return $this->belongsTo(Organization::class);
+        return $this->belongsTo(School::class);
     }
 
     public function devices(): HasMany

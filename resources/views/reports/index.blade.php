@@ -29,11 +29,11 @@
             <input id="report-end" type="date" name="end" value="{{ $end }}" class="form-input" style="width: auto;">
         </div>
         <div>
-            <label class="form-label" for="report-group">Grup</label>
-            <select id="report-group" name="group_id" class="form-input" style="width: auto; min-width: 140px;">
-                <option value="">Semua Grup</option>
-                @foreach($groups as $group)
-                    <option value="{{ $group->id }}" {{ $groupId == $group->id ? 'selected' : '' }}>{{ $group->name }}</option>
+            <label class="form-label" for="report-group">Kelas</label>
+            <select id="report-group" name="classroom_id" class="form-input" style="width: auto; min-width: 140px;">
+                <option value="">Semua Kelas</option>
+                @foreach($classrooms as $classroom)
+                    <option value="{{ $classroom->id }}" {{ $groupId == $classroom->id ? 'selected' : '' }}>{{ $classroom->name }}</option>
                 @endforeach
             </select>
         </div>
@@ -82,7 +82,7 @@
                 <tr>
                     <th>Nama</th>
                     <th>Kode</th>
-                    <th>Grup</th>
+                    <th>Kelas</th>
                     <th>Tanggal</th>
                     <th>Waktu</th>
                     <th>Arah</th>
@@ -95,9 +95,9 @@
             <tbody>
                 @foreach($logs as $log)
                     <tr id="report-row-{{ $log->id }}">
-                        <td style="font-weight: 500; color: var(--text-primary);">{{ $log->member?->name ?? '—' }}</td>
-                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-tertiary);">{{ $log->member?->code ?? '—' }}</td>
-                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $log->member?->group?->name ?? '—' }}</td>
+                        <td style="font-weight: 500; color: var(--text-primary);">{{ $log->student?->name ?? '—' }}</td>
+                        <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-tertiary);">{{ $log->student?->code ?? '—' }}</td>
+                        <td style="color: var(--text-muted); font-size: 0.75rem;">{{ $log->student?->group?->name ?? '—' }}</td>
                         <td style="font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--text-tertiary);">
                             {{ $log->captured_at->format('d M Y') }}
                         </td>

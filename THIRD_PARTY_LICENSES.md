@@ -1,77 +1,37 @@
-﻿# Third-Party Licenses
+# Third-Party Licenses
 
-Smart Absensi includes open-source frameworks and bundled model components.
-
-Some packaged model files in this repository use generic integration names such as `recognizer.onnx` and `detector.onnx`. Those filenames are Smart Absensi integration names only. They do not change the original authorship or license of the upstream work described below.
+Absensi-Cam combines several open-source frameworks, libraries, and AI models across its Backend (Laravel) and Edge Engine (Python).
 
 ## Core Frameworks and Runtimes
 
-These projects are used as application frameworks, runtimes, or supporting libraries.
-
 | Component | License | Upstream |
 | --- | --- | --- |
-| Electron | MIT | https://github.com/electron/electron |
-| React | MIT | https://github.com/facebook/react |
-| FastAPI | MIT | https://github.com/fastapi/fastapi |
+| Laravel | MIT | https://github.com/laravel/laravel |
+| PHP | PHP License | https://github.com/php/php-src |
+| Python | PSF | https://github.com/python/cpython |
+| Flask | BSD-3-Clause | https://github.com/pallets/flask |
 | ONNX Runtime | MIT | https://github.com/microsoft/onnxruntime |
 | OpenCV | Apache-2.0 | https://github.com/opencv/opencv |
 
 ## Bundled Model Components
 
-### Face Recognition
+The Edge Engine uses `.onnx` models for Face Detection and Face Recognition. These models are derived from upstream open-source research.
 
-- Smart Absensi ships a face recognition model at `server/assets/models/recognizer.onnx`.
-- This bundled recognizer is based on EdgeFace and redistributed in ONNX form for Smart Absensi desktop inference.
-- Smart Absensi may rename, package, and optimize the deployment artifact, but original authorship and license remain with the upstream project.
-- Upstream project: https://github.com/otroshi/edgeface
-- Upstream license: BSD-3-Clause
+### Face Detection (YuNet)
 
-### EdgeFace Notice
+- **Description:** Absensi-Cam uses YuNet as its primary face detector on the edge device due to its high efficiency on CPU-bound ARM devices.
+- **Upstream Project:** [OpenCV Zoo - YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
+- **License:** MIT License
+- **Copyright:** Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>
 
-Copyright (c) 2024, Anjith George, Christophe Ecabert, Hatef Otroshi Shahreza, Ketan Kotwal, Sebastien Marcel  
-Idiap Research Institute, Martigny 1920, Switzerland.
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software...
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+### Face Recognition (SFace / MobileFaceNet)
 
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+- **Description:** Absensi-Cam uses SFace (or MobileFaceNet variants) for generating 128-D or 512-D face embeddings.
+- **Upstream Project:** [OpenCV Zoo - SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
+- **License:** MIT / Apache-2.0 (Depending on exact weights used).
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+### Open-Source Compliance
 
-### Face Detection
-
-- Smart Absensi ships a face detection model at `server/assets/models/detector.onnx`.
-- This bundled detector is based on YuNet and integrated for local desktop inference.
-- Smart Absensi uses a generic deployment filename in this repository, but the underlying detector provenance remains YuNet.
-- Upstream project references:
-  - https://huggingface.co/opencv/face_detection_yunet
-  - https://github.com/opencv/opencv_zoo
-- Upstream license: MIT
-
-### YuNet Notice
-
-Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-### Object Tracking
-
-- The local face tracking pipeline itself is implemented around ByteTrack in `server/core/models/tracker`.
-- Upstream project: https://github.com/FoundationVision/ByteTrack
-- Upstream license: MIT
-
-### ByteTrack Notice
-
-Copyright (c) 2021 Yifu Zhang
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+Absensi-Cam acknowledges the incredible work of the open-source community. If you believe a license is missing or improperly attributed, please open an issue so we can rectify it immediately.

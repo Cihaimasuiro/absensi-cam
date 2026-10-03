@@ -1,0 +1,26 @@
+# Tested with Python 3.10.9
+
+# Web API and local server
+fastapi==0.135.2
+httpx==0.28.1
+uvicorn[standard]==0.42.0
+
+# Computer vision and numeric processing
+opencv-python==4.13.0.92
+numpy==2.4.3
+onnxruntime==1.24.4
+lap==0.5.13
+
+# Data validation and storage
+pydantic==2.12.5
+python-multipart==0.0.22
+sqlalchemy[asyncio]==2.0.48
+alembic==1.18.4
+aiosqlite==0.22.1
+ulid==1.1
+
+# Backup encryption
+cryptography==46.0.5
+
+# OS Keyring Access
+keyring==25.1.0

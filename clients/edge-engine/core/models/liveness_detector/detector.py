@@ -1,16 +1,17 @@
+from collections import defaultdict
+
 import cv2
 import numpy as np
-from collections import defaultdict
-from typing import List, Dict, Optional
-from .session_utils import init_onnx_session
-from .preprocess import extract_face_crops_from_detections
-from .postprocess import (
-    validate_detection,
-    run_batch_inference,
-    assemble_liveness_results,
-)
-from .track_memory import TrackLivenessMemory
+
 from .active_controller import ActiveLivenessController
+from .postprocess import (
+    assemble_liveness_results,
+    run_batch_inference,
+    validate_detection,
+)
+from .preprocess import extract_face_crops_from_detections
+from .session_utils import init_onnx_session
+from .track_memory import TrackLivenessMemory
 
 
 class LivenessDetector:
@@ -31,7 +32,7 @@ class LivenessDetector:
         self.track_memory = TrackLivenessMemory(
             required_real_frames=required_real_frames
         )
-        self.active_controllers: Dict[tuple, ActiveLivenessController] = defaultdict(
+        self.active_controllers: dict[tuple, ActiveLivenessController] = defaultdict(
             lambda: ActiveLivenessController(required_passive_frames=1)
         )
 
@@ -40,9 +41,9 @@ class LivenessDetector:
     def detect_faces(
         self,
         image: np.ndarray,
-        face_detections: List[Dict],
-        tracking_namespace: Optional[str] = None,
-    ) -> List[Dict]:
+        face_detections: list[dict],
+        tracking_namespace: str | None = None,
+    ) -> list[dict]:
         if not face_detections:
             return []
 
@@ -159,7 +160,7 @@ class LivenessDetector:
 
         return results
 
-    def clear_namespace(self, namespace: Optional[str]):
+    def clear_namespace(self, namespace: str | None):
         self.track_memory.clear_namespace(namespace)
         ns_key = namespace or "__global__"
         keys_to_remove = [k for k in self.active_controllers if k[0] == ns_key]
@@ -170,9 +171,9 @@ class LivenessDetector:
         self,
         track_id: int,
         person_id: str,
-        current_liveness: Dict,
-        namespace: Optional[str] = None,
-    ) -> Dict:
+        current_liveness: dict,
+        namespace: str | None = None,
+    ) -> dict:
         """Updates identity tracking state."""
         return self.track_memory.stabilize(
             track_id,

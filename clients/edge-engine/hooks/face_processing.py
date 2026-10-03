@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -15,7 +14,7 @@ INFERENCE_TIMEOUT_SECONDS = float(os.getenv("FACENOX_INFERENCE_TIMEOUT", "10.0")
 liveness_detector = None
 face_recognizer = None
 face_detector = None
-face_detector_lock: Optional[asyncio.Lock] = None
+face_detector_lock: asyncio.Lock | None = None
 
 
 def set_model_references(liveness, tracker, recognizer, detector=None):
@@ -29,11 +28,11 @@ def set_model_references(liveness, tracker, recognizer, detector=None):
 
 async def process_face_detection(
     image: np.ndarray,
-    confidence_threshold: Optional[float] = None,
-    nms_threshold: Optional[float] = None,
-    min_face_size: Optional[int] = None,
+    confidence_threshold: float | None = None,
+    nms_threshold: float | None = None,
+    min_face_size: int | None = None,
     enable_liveness: bool = False,
-) -> List[Dict]:
+) -> list[dict]:
     if not face_detector:
         logger.warning("Face detector not available")
         return []
@@ -77,14 +76,15 @@ async def process_face_detection(
     except asyncio.TimeoutError:
         logger.error("Face detection timed out after %.1fs", INFERENCE_TIMEOUT_SECONDS)
         return []
-    except Exception as e:
-        logger.error(f"Face detection failed: {e}", exc_info=True)
+    except Exception:
+
+        logger.exception("Face detection failed")
         return []
 
 
 async def process_liveness_detection(
-    faces: List[Dict], image: np.ndarray, enable: bool, tracking_namespace: str = None
-) -> List[Dict]:
+    faces: list[dict], image: np.ndarray, enable: bool, tracking_namespace: str | None = None
+) -> list[dict]:
     if not (enable and faces and liveness_detector):
         return faces
 
@@ -121,7 +121,8 @@ async def process_liveness_detection(
             INFERENCE_TIMEOUT_SECONDS,
         )
     except Exception as e:
-        logger.error(f"Liveness detection failed: {e}", exc_info=True)
+
+        logger.exception("Liveness detection failed")
         for face in faces:
             if "liveness" not in face:
                 face["liveness"] = {
@@ -131,21 +132,21 @@ async def process_liveness_detection(
                     "real_logit": 0.0,
                     "spoof_logit": 0.0,
                     "confidence": 0.0,
-                    "message": f"Liveness detection error: {str(e)}",
+                    "message": f"Liveness detection error: {e!s}",
                 }
             elif face["liveness"].get("status") not in ["real", "spoof"]:
                 face["liveness"]["status"] = "error"
-                face["liveness"]["message"] = f"Liveness detection error: {str(e)}"
+                face["liveness"]["message"] = f"Liveness detection error: {e!s}"
 
     return faces
 
 
 def process_face_tracking(
-    faces: List[Dict],
+    faces: list[dict],
     image: np.ndarray,
-    frame_rate: int = None,
-    client_id: str = None,
-) -> List[Dict]:
+    frame_rate: int | None = None,
+    client_id: str | None = None,
+) -> list[dict]:
     if not faces:
         return faces
 
@@ -173,7 +174,8 @@ def process_face_tracking(
         tracked_faces = tracker.update(faces, frame_rate)
         return tracked_faces
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+
         logger.warning(f"Face tracking failed: {e}")
         for face in faces:
             if "track_id" not in face:

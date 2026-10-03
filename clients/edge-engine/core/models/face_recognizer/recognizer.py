@@ -1,20 +1,20 @@
 import asyncio
 import logging
 import time
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Any
 
 import numpy as np
-
 from database.face import FaceDatabaseManager
-from .session_utils import init_face_recognizer_session
+
+from .postprocess import (
+    find_best_match,
+    normalize_embeddings_batch,
+)
 from .preprocess import (
     align_faces_batch,
     preprocess_batch,
 )
-from .postprocess import (
-    normalize_embeddings_batch,
-    find_best_match,
-)
+from .session_utils import init_face_recognizer_session
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,11 @@ class FaceRecognizer:
     def __init__(
         self,
         model_path: str,
-        input_size: Tuple[int, int],
+        input_size: tuple[int, int],
         similarity_threshold: float,
-        providers: Optional[List[str]],
-        database_path: Optional[str],
-        session_options: Optional[Dict[str, Any]],
+        providers: list[str] | None,
+        database_path: str | None,
+        session_options: dict[str, Any] | None,
     ):
         self.model_path = model_path
         self.input_size = input_size
@@ -54,13 +54,13 @@ class FaceRecognizer:
             self.db_manager = None
             logger.warning("No database path provided, running without persistence")
 
-        self._db_managers: Dict[str, FaceDatabaseManager] = {}
-        self._persons_cache: Dict[str, Dict[str, np.ndarray]] = {}
-        self._cache_timestamp: Dict[str, float] = {}
+        self._db_managers: dict[str, FaceDatabaseManager] = {}
+        self._persons_cache: dict[str, dict[str, np.ndarray]] = {}
+        self._cache_timestamp: dict[str, float] = {}
         self._cache_ttl = (
             60.0  # Increased from 1.0 to reduce DB load during recognition
         )
-        self._cache_locks: Dict[str, asyncio.Lock] = {}
+        self._cache_locks: dict[str, asyncio.Lock] = {}
 
     async def initialize(self):
         """Initialize the recognizer: migrate legacy data and load cache"""
@@ -71,12 +71,12 @@ class FaceRecognizer:
             await self._refresh_cache()
 
     @staticmethod
-    def _cache_key(organization_id: Optional[str]) -> str:
+    def _cache_key(organization_id: str | None) -> str:
         return organization_id or "__global__"
 
     def _get_db_manager(
-        self, organization_id: Optional[str] = None
-    ) -> Optional[FaceDatabaseManager]:
+        self, organization_id: str | None = None
+    ) -> FaceDatabaseManager | None:
         if self.sqlite_path is None:
             return None
 
@@ -93,8 +93,8 @@ class FaceRecognizer:
         return manager
 
     async def _extract_embeddings(
-        self, image: np.ndarray, face_data_list: List[Dict]
-    ) -> List[np.ndarray]:
+        self, image: np.ndarray, face_data_list: list[dict]
+    ) -> list[np.ndarray]:
         """
         Extract embeddings for faces using batch processing.
 
@@ -128,8 +128,8 @@ class FaceRecognizer:
         return normalize_embeddings_batch(embeddings)
 
     async def _get_database(
-        self, organization_id: Optional[str] = None
-    ) -> Dict[str, np.ndarray]:
+        self, organization_id: str | None = None
+    ) -> dict[str, np.ndarray]:
         """
         Get person database with caching.
 
@@ -159,11 +159,11 @@ class FaceRecognizer:
     async def _find_best_match(
         self,
         embedding: np.ndarray,
-        allowed_person_ids: Optional[List[str]] = None,
-        organization_id: Optional[str] = None,
-        prebuilt_matrix: Optional[np.ndarray] = None,
-        person_index_map: Optional[List[str]] = None,
-    ) -> Tuple[Optional[str], float]:
+        allowed_person_ids: list[str] | None = None,
+        organization_id: str | None = None,
+        prebuilt_matrix: np.ndarray | None = None,
+        person_index_map: list[str] | None = None,
+    ) -> tuple[str | None, float]:
         """
         Find best matching person using cached database.
 
@@ -186,7 +186,7 @@ class FaceRecognizer:
             person_index_map=person_index_map,
         )
 
-    async def _refresh_cache(self, organization_id: Optional[str] = None):
+    async def _refresh_cache(self, organization_id: str | None = None):
         """Refresh cache after database modifications"""
         cache_key = self._cache_key(organization_id)
         db_manager = self._get_db_manager(organization_id)
@@ -198,21 +198,21 @@ class FaceRecognizer:
             self._cache_timestamp.pop(cache_key, None)
 
     async def export_embeddings(
-        self, organization_id: Optional[str] = None
-    ) -> Dict[str, np.ndarray]:
+        self, organization_id: str | None = None
+    ) -> dict[str, np.ndarray]:
         """Return decrypted embeddings for the requested org scope."""
         return await self._get_database(organization_id)
 
-    async def refresh_cache(self, organization_id: Optional[str] = None):
+    async def refresh_cache(self, organization_id: str | None = None):
         await self._refresh_cache(organization_id)
 
     async def recognize_face(
         self,
         image: np.ndarray,
-        landmarks_5: List,
-        allowed_person_ids: Optional[List[str]] = None,
-        organization_id: Optional[str] = None,
-    ) -> Dict:
+        landmarks_5: list,
+        allowed_person_ids: list[str] | None = None,
+        organization_id: str | None = None,
+    ) -> dict:
         try:
             face_data = [{"landmarks_5": landmarks_5}]
             embeddings = await self._extract_embeddings(image, face_data)
@@ -238,7 +238,8 @@ class FaceRecognizer:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Face recognition error: {e}")
             return {
                 "person_id": None,
@@ -250,12 +251,12 @@ class FaceRecognizer:
     async def recognize_faces(
         self,
         image: np.ndarray,
-        faces: List[Dict],
-        allowed_person_ids: Optional[List[str]] = None,
-        organization_id: Optional[str] = None,
-        prebuilt_matrix: Optional[np.ndarray] = None,
-        person_index_map: Optional[List[str]] = None,
-    ) -> List[Dict]:
+        faces: list[dict],
+        allowed_person_ids: list[str] | None = None,
+        organization_id: str | None = None,
+        prebuilt_matrix: np.ndarray | None = None,
+        person_index_map: list[str] | None = None,
+    ) -> list[dict]:
         try:
             if not faces:
                 return []
@@ -264,7 +265,7 @@ class FaceRecognizer:
             if len(embeddings) != len(faces):
                 raise ValueError("Failed to extract embeddings for all faces")
 
-            results: List[Dict] = []
+            results: list[dict] = []
             for embedding in embeddings:
                 person_id, similarity = await self._find_best_match(
                     embedding,
@@ -281,7 +282,8 @@ class FaceRecognizer:
                     }
                 )
             return results
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Face batch recognition error: {e}")
             return [
                 {
@@ -297,9 +299,9 @@ class FaceRecognizer:
         self,
         person_id: str,
         image: np.ndarray,
-        landmarks_5: List,
-        organization_id: Optional[str] = None,
-    ) -> Dict:
+        landmarks_5: list,
+        organization_id: str | None = None,
+    ) -> dict:
         try:
             face_data = [{"landmarks_5": landmarks_5}]
             embeddings = await self._extract_embeddings(image, face_data)
@@ -336,13 +338,14 @@ class FaceRecognizer:
                 "total_persons": total_persons,
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Person enrollment failed: {e}")
             return {"success": False, "error": str(e), "person_id": person_id}
 
     async def remove_person(
-        self, person_id: str, organization_id: Optional[str] = None
-    ) -> Dict:
+        self, person_id: str, organization_id: str | None = None
+    ) -> dict:
         """Remove a person from the database"""
         try:
             db_manager = self._get_db_manager(organization_id)
@@ -373,11 +376,12 @@ class FaceRecognizer:
                     "person_id": person_id,
                 }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Person removal failed: {e}")
             return {"success": False, "error": str(e), "person_id": person_id}
 
-    async def get_all_persons(self, organization_id: Optional[str] = None) -> List[str]:
+    async def get_all_persons(self, organization_id: str | None = None) -> list[str]:
         """Get list of all enrolled person IDs using the high-performance cache."""
         database = await self._get_database(organization_id)
         return list(database.keys())
@@ -386,8 +390,8 @@ class FaceRecognizer:
         self,
         old_person_id: str,
         new_person_id: str,
-        organization_id: Optional[str] = None,
-    ) -> Dict:
+        organization_id: str | None = None,
+    ) -> dict:
         """Update a person's ID in the database"""
         try:
             db_manager = self._get_db_manager(organization_id)
@@ -415,11 +419,12 @@ class FaceRecognizer:
                     "updated_records": 0,
                 }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Person update failed: {e}")
             return {"success": False, "error": str(e), "updated_records": 0}
 
-    async def get_stats(self, organization_id: Optional[str] = None) -> Dict:
+    async def get_stats(self, organization_id: str | None = None) -> dict:
         """Get face recognition statistics"""
         total_persons = 0
         persons = []
@@ -436,7 +441,7 @@ class FaceRecognizer:
         """Update similarity threshold for recognition"""
         self.similarity_threshold = threshold
 
-    async def clear_database(self, organization_id: Optional[str] = None) -> Dict:
+    async def clear_database(self, organization_id: str | None = None) -> dict:
         """Clear all persons from the database"""
         try:
             db_manager = self._get_db_manager(organization_id)
@@ -451,11 +456,12 @@ class FaceRecognizer:
             else:
                 return {"success": False, "error": "No database manager available"}
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error(f"Database clearing failed: {e}")
             return {"success": False, "error": str(e)}
 
-    def _invalidate_cache(self, organization_id: Optional[str] = None):
+    def _invalidate_cache(self, organization_id: str | None = None):
         """Invalidate cache without refreshing"""
         if organization_id is None:
             self._persons_cache.clear()
@@ -466,5 +472,5 @@ class FaceRecognizer:
         self._persons_cache.pop(cache_key, None)
         self._cache_timestamp.pop(cache_key, None)
 
-    def invalidate_cache(self, organization_id: Optional[str] = None):
+    def invalidate_cache(self, organization_id: str | None = None):
         self._invalidate_cache(organization_id)

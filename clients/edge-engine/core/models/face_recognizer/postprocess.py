@@ -1,8 +1,8 @@
+
 import numpy as np
-from typing import List, Dict, Optional, Tuple
 
 
-def normalize_embeddings_batch(embeddings: np.ndarray) -> List[np.ndarray]:
+def normalize_embeddings_batch(embeddings: np.ndarray) -> list[np.ndarray]:
     """
     Normalize a batch of embeddings using vectorized operations.
 
@@ -20,12 +20,12 @@ def normalize_embeddings_batch(embeddings: np.ndarray) -> List[np.ndarray]:
 
 def find_best_match(
     query_embedding: np.ndarray,
-    database: Dict[str, np.ndarray],
+    database: dict[str, np.ndarray],
     similarity_threshold: float,
-    allowed_person_ids: Optional[List[str]] = None,
-    prebuilt_matrix: Optional[np.ndarray] = None,
-    person_index_map: Optional[List[str]] = None,
-) -> Tuple[Optional[str], float]:
+    allowed_person_ids: list[str] | None = None,
+    prebuilt_matrix: np.ndarray | None = None,
+    person_index_map: list[str] | None = None,
+) -> tuple[str | None, float]:
     """
     Find best matching person in database using vectorized operations.
 

@@ -5,9 +5,10 @@ Compiles the Python source code into a single proprietary binary using PyInstall
 """
 
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
+
 
 def main():
     print("========================================")
@@ -27,12 +28,7 @@ def main():
             shutil.rmtree(d)
 
     # Build command
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--noconfirm",
-        "--clean",
-        "engine.spec"
-    ]
+    cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "engine.spec"]
 
     print("[*] Running PyInstaller...")
     result = subprocess.run(cmd)
@@ -44,6 +40,7 @@ def main():
     else:
         print("\n[ERROR] Compilation failed.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

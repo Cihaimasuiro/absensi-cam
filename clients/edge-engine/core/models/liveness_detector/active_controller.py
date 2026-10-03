@@ -2,7 +2,8 @@ import os
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
+
 import cv2
 import numpy as np
 
@@ -47,7 +48,7 @@ class ActiveChallengeState(Enum):
     REJECTED = "rejected"
 
 
-def _normalize_landmarks(landmarks: Optional[Any]) -> Optional[np.ndarray]:
+def _normalize_landmarks(landmarks: Any | None) -> np.ndarray | None:
     if landmarks is None:
         return None
     arr = np.asarray(landmarks, dtype=np.float32)
@@ -94,8 +95,8 @@ class ActiveLivenessController:
     def start_challenge(
         self,
         current_yaw: float,
-        landmarks: Optional[np.ndarray] = None,
-        now_time: Optional[float] = None,
+        landmarks: np.ndarray | None = None,
+        now_time: float | None = None,
     ):
         self.state = ActiveChallengeState.CHALLENGING
         self.idle_start_time = now_time if now_time is not None else time.time()
@@ -107,10 +108,10 @@ class ActiveLivenessController:
 
     def evaluate(
         self,
-        landmarks: Optional[np.ndarray],
-        passive_liveness: Dict[str, Any],
-        now_time: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        landmarks: np.ndarray | None,
+        passive_liveness: dict[str, Any],
+        now_time: float | None = None,
+    ) -> dict[str, Any]:
         if now_time is None:
             now_time = time.time()
 

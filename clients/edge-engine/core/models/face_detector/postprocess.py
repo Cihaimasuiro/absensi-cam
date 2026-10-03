@@ -1,5 +1,5 @@
+
 import numpy as np
-from typing import Dict, Optional
 
 
 def process_detection(
@@ -9,7 +9,7 @@ def process_detection(
     img_width: int,
     img_height: int,
     edge_margin: int = 0,
-) -> Optional[Dict]:
+) -> dict | None:
     x, y, w, h = face[:4].astype(int)
     conf = float(face[14])
 

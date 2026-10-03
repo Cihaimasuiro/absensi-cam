@@ -3,9 +3,6 @@ import logging
 from contextlib import asynccontextmanager
 from itertools import count
 
-from fastapi import FastAPI
-from sqlalchemy import select
-
 from config.models import (
     FACE_DETECTOR_CONFIG,
     FACE_DETECTOR_MODEL_PATH,
@@ -13,13 +10,16 @@ from config.models import (
     FACE_RECOGNIZER_MODEL_PATH,
     LIVENESS_DETECTOR_CONFIG,
 )
+from fastapi import FastAPI
+from sqlalchemy import select
+from startup_progress import emit_startup_progress
+
 from core.models import (
-    LivenessDetector,
     FaceDetector,
     FaceRecognizer,
+    LivenessDetector,
 )
 from hooks import set_model_references
-from startup_progress import emit_startup_progress
 
 if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO)
@@ -98,9 +98,9 @@ async def lifespan(app: FastAPI):
 
         # Run data retention purge on startup (respects configured retention policy)
         try:
-            from database.session import AsyncSessionLocal
             from database.models import AttendanceSettings
             from database.repository import AttendanceRepository
+            from database.session import AsyncSessionLocal
             from services.time_authority_service import get_time_authority
 
             async with AsyncSessionLocal() as session:
@@ -142,6 +142,7 @@ async def lifespan(app: FastAPI):
         logger.info("Startup complete")
 
     except Exception as e:
+
         logger.error(f"Failed to initialize models: {e}")
         raise
 

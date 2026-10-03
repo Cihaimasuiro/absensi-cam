@@ -1,8 +1,8 @@
 import numpy as np
 
-from .kalman_filter import KalmanFilter
 from . import matching
 from .basetrack import BaseTrack, TrackState
+from .kalman_filter import KalmanFilter
 
 
 class STrack(BaseTrack):
@@ -128,10 +128,10 @@ class STrack(BaseTrack):
         return ret
 
     def __repr__(self):
-        return "OT_{}_({}-{})".format(self.track_id, self.start_frame, self.end_frame)
+        return f"OT_{self.track_id}_({self.start_frame}-{self.end_frame})"
 
 
-class BYTETracker(object):
+class BYTETracker:
     def __init__(self, args, frame_rate=30):
         self.tracked_stracks = []
         self.lost_stracks = []
@@ -228,7 +228,7 @@ class BYTETracker(object):
             if strack_pool[i].state == TrackState.Tracked
         ]
         dists = matching.iou_distance(r_tracked_stracks, detections_second)
-        matches, u_track, u_detection_second = matching.linear_assignment(
+        matches, u_track, _u_detection_second = matching.linear_assignment(
             dists, thresh=0.5
         )
         for itracked, idet in matches:
@@ -243,7 +243,7 @@ class BYTETracker(object):
 
         for it in u_track:
             track = r_tracked_stracks[it]
-            if not track.state == TrackState.Lost:
+            if track.state != TrackState.Lost:
                 track.mark_lost()
                 lost_stracks.append(track)
 
@@ -322,7 +322,7 @@ def sub_stracks(tlista, tlistb):
 def remove_duplicate_stracks(stracksa, stracksb):
     pdist = matching.iou_distance(stracksa, stracksb)
     pairs = np.where(pdist < 0.15)
-    dupa, dupb = list(), list()
+    dupa, dupb = [], []
     for p, q in zip(*pairs):
         timep = stracksa[p].frame_id - stracksa[p].start_frame
         timeq = stracksb[q].frame_id - stracksb[q].start_frame

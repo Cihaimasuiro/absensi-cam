@@ -5,13 +5,13 @@ WebSocket manager for handling real-time streaming connections
 import asyncio
 import json
 import logging
-from typing import Dict, Set, Optional
 
-from fastapi import WebSocket
-from core.models import FaceTracker
 from config.models import FACE_TRACKER_CONFIG
+from fastapi import WebSocket
 from services.time_authority_service import get_time_authority
 from time_utils import local_now
+
+from core.models import FaceTracker
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,11 @@ class ConnectionManager:
     """Manages WebSocket connections for real-time streaming"""
 
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-        self.connection_metadata: Dict[str, dict] = {}
-        self.streaming_tasks: Dict[str, asyncio.Task] = {}
-        self.fps_tracking: Dict[str, dict] = {}
-        self.face_trackers: Dict[str, FaceTracker] = {}
+        self.active_connections: dict[str, WebSocket] = {}
+        self.connection_metadata: dict[str, dict] = {}
+        self.streaming_tasks: dict[str, asyncio.Task] = {}
+        self.fps_tracking: dict[str, dict] = {}
+        self.face_trackers: dict[str, FaceTracker] = {}
 
     async def connect(
         self, websocket: WebSocket, client_id: str, *, enable_tracking: bool = True
@@ -76,7 +76,7 @@ class ConnectionManager:
 
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to connect client {client_id}: {e}")
             return False
 
@@ -98,7 +98,7 @@ class ConnectionManager:
                 # Check if the connection is still "open" before closing
                 if websocket.client_state.name == "CONNECTED":
                     await websocket.close(code=1000)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass  # Ignore errors during shutdown
 
             del self.active_connections[client_id]
@@ -113,7 +113,7 @@ class ConnectionManager:
 
                 if liveness_detector and hasattr(liveness_detector, "clear_namespace"):
                     liveness_detector.clear_namespace(client_id)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     async def disconnect_all(self):
@@ -122,7 +122,7 @@ class ConnectionManager:
         for cid in client_ids:
             try:
                 await self.disconnect(cid)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(f"Error disconnecting client {cid}: {e}")
 
     async def send_personal_message(self, message: dict, client_id: str) -> bool:
@@ -149,12 +149,12 @@ class ConnectionManager:
 
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to send message to {client_id}: {e}")
             await self.disconnect(client_id)
             return False
 
-    async def broadcast(self, message: dict, exclude: Optional[Set[str]] = None):
+    async def broadcast(self, message: dict, exclude: set[str] | None = None):
         """
         Broadcast message to all connected clients
 
@@ -177,7 +177,7 @@ class ConnectionManager:
                     self.connection_metadata[client_id]["last_activity"] = local_now()
                     self.connection_metadata[client_id]["message_count"] += 1
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(f"Failed to broadcast to {client_id}: {e}")
                 disconnected_clients.append(client_id)
 
@@ -185,7 +185,7 @@ class ConnectionManager:
             await self.disconnect(client_id)
 
     async def send_error(
-        self, client_id: str, error_message: str, error_code: str = None
+        self, client_id: str, error_message: str, error_code: str | None = None
     ) -> bool:
         """
         Send error message to client
@@ -251,7 +251,7 @@ class ConnectionManager:
                 client_id,
             )
 
-    def get_connection_info(self, client_id: str) -> Optional[dict]:
+    def get_connection_info(self, client_id: str) -> dict | None:
         """
         Get connection information for client
 
@@ -293,12 +293,12 @@ class ConnectionManager:
 
             if time_span > 0:
                 fps = frame_count / time_span
-                tracking["current_fps"] = max(1, min(120, int(round(fps))))
+                tracking["current_fps"] = max(1, min(120, round(fps)))
                 tracking["last_update"] = now
 
         return tracking["current_fps"]
 
-    def get_face_tracker(self, client_id: str) -> Optional[FaceTracker]:
+    def get_face_tracker(self, client_id: str) -> FaceTracker | None:
         """
         Get face tracker instance for a client.
 

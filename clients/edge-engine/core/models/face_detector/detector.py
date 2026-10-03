@@ -1,9 +1,10 @@
-import numpy as np
 import logging as log
+
 import cv2 as cv
-from typing import List
-from .session_utils import init_face_detector_session
+import numpy as np
+
 from .postprocess import process_detection
+from .session_utils import init_face_detector_session
 
 logger = log.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class FaceDetector:
 
     def detect_faces(
         self, image: np.ndarray, enable_liveness: bool = False
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Detect faces. Uses bilateral/gamma preprocessing solely for detector path."""
         if not self.detector or image is None or image.size == 0:
             logger.warning("Invalid image provided to face detector")

@@ -1,5 +1,4 @@
 from collections import defaultdict
-from typing import Dict, Optional
 
 
 class TrackLivenessMemory:
@@ -40,16 +39,15 @@ class TrackLivenessMemory:
     def stabilize(
         self,
         track_id: int,
-        liveness: Dict,
+        liveness: dict,
         frame_number: int,
         namespace: str | None = None,
         person_id: str | None = None,
-        current_time: Optional[float] = None,
-    ) -> Dict:
+        current_time: float | None = None,
+    ) -> dict:
         namespace_key = self._normalize_namespace(namespace)
         namespace_frame = self.namespace_frames[namespace_key]
-        if frame_number < namespace_frame:
-            frame_number = namespace_frame
+        frame_number = max(frame_number, namespace_frame)
         self.namespace_frames[namespace_key] = frame_number
 
         if track_id <= 0:
@@ -164,7 +162,7 @@ class TrackLivenessMemory:
 
         negative_tracks = [
             track_key
-            for track_key in self.track_states.keys()
+            for track_key in self.track_states
             if track_key[0] == namespace_key and track_key[1] < 0
         ]
         stale_tracks.extend(negative_tracks)
@@ -175,7 +173,7 @@ class TrackLivenessMemory:
         self.namespace_last_cleanup_frame[namespace_key] = current_frame
 
         has_active_tracks = any(
-            key[0] == namespace_key for key in self.track_states.keys()
+            key[0] == namespace_key for key in self.track_states
         )
         if not has_active_tracks and namespace_key != "__global__":
             self.namespace_frames.pop(namespace_key, None)
@@ -195,7 +193,7 @@ class TrackLivenessMemory:
             return pruned
 
         namespace_keys = set(self.namespace_frames.keys())
-        namespace_keys.update(key[0] for key in self.track_states.keys())
+        namespace_keys.update(key[0] for key in self.track_states)
         for namespace_key in namespace_keys:
             pruned.extend(
                 self._cleanup_namespace_stale_tracks(namespace_key, force=force)

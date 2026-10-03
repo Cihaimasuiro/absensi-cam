@@ -12,10 +12,13 @@ Komunikasi: USB Serial (JSON lines), 115200 baud.
 
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 import time
+
 import serial
 
-from config.settings import ARDUINO_PORT, ARDUINO_BAUD
+from config.settings import ARDUINO_BAUD, ARDUINO_PORT
 
 
 class ArduinoBridge:
@@ -28,24 +31,34 @@ class ArduinoBridge:
         try:
             self._serial = serial.Serial(self.port, self.baudrate, timeout=1)
             time.sleep(2)  # Tunggu auto-reset Arduino
-            logging.info(f"[Arduino] Terhubung di {self.port}")
+            logger.info(f"[Arduino] Terhubung di {self.port}")
             return True
-        except Exception as e:
-            logging.warning(f"[Arduino] Gagal terhubung ({self.port}): {e}")
+        except Exception as e:  # noqa: BLE001
+
+            logger.warning(f"[Arduino] Gagal terhubung ({self.port}): {e}")
             return False
 
     def send(self, payload: dict) -> None:
         if self._serial and self._serial.is_open:
             try:
                 self._serial.write((json.dumps(payload) + "\n").encode("utf-8"))
-            except Exception as e:
-                logging.error(f"[Arduino] Gagal kirim: {e}")
+            except Exception as e:  # noqa: BLE001
+
+                logger.error(f"[Arduino] Gagal kirim: {e}")
 
     def standby(self) -> None:
         self.send({"cmd": "standby", "msg": "Sistem Siap!"})
 
     def recognized(self, name: str, dept: str, timestamp: str) -> None:
-        self.send({"cmd": "display", "status": "RECOGNIZED", "name": name, "dept": dept, "time": timestamp})
+        self.send(
+            {
+                "cmd": "display",
+                "status": "RECOGNIZED",
+                "name": name,
+                "dept": dept,
+                "time": timestamp,
+            }
+        )
         self.send({"cmd": "io", "led": "green", "buzzer": "2short"})
 
     def unknown(self) -> None:

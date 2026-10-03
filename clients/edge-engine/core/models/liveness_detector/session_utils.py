@@ -1,13 +1,14 @@
-import onnxruntime as ort
 import os
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Any
+
+import onnxruntime as ort
 
 
 def init_onnx_session(
     model_path: str,
-    providers: Optional[List] = None,
-    session_options: Optional[Dict[str, Any]] = None,
-) -> Tuple[Optional[ort.InferenceSession], Optional[str]]:
+    providers: list | None = None,
+    session_options: dict[str, Any] | None = None,
+) -> tuple[ort.InferenceSession | None, str | None]:
     ort_session = None
     input_name = None
 

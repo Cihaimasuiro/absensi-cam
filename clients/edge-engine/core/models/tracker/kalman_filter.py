@@ -19,7 +19,7 @@ chi2inv95 = {
 }
 
 
-class KalmanFilter(object):
+class KalmanFilter:
     """
     A simple Kalman filter for tracking bounding boxes in image space.
 

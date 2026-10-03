@@ -1,10 +1,12 @@
-import time
 import logging
+import time
+from collections.abc import Callable
+from typing import Any
+
 import cv2
 import numpy as np
-from typing import Dict, Any, List, Tuple, Callable
-
 from config.models import FACE_DETECTOR_CONFIG
+
 from hooks import (
     process_face_detection,
     process_face_tracking,
@@ -18,7 +20,6 @@ logger = logging.getLogger(__name__)
 class FrameDecodeError(Exception):
     """Raised when frame bytes cannot be converted into an image by OpenCV."""
 
-    pass
 
 
 class DetectionPipeline:
@@ -44,7 +45,7 @@ class DetectionPipeline:
         client_id: str,
         live_session_config: Any,
         fps_provider: Callable[[str], float],
-    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """
         Execute frame decoding and AI pipeline evaluation.
 

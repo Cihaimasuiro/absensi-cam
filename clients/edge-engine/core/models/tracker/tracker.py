@@ -1,8 +1,9 @@
 import logging
-from typing import List, Dict, Optional
+
 import numpy as np
-from .byte_tracker import BYTETracker
+
 from . import matching
+from .byte_tracker import BYTETracker
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,9 @@ class FaceTracker:
 
     def update(
         self,
-        face_detections: List[Dict],
-        frame_rate: Optional[int] = None,
-    ) -> List[Dict]:
+        face_detections: list[dict],
+        frame_rate: int | None = None,
+    ) -> list[dict]:
         """
         Update tracker with face detections.
 
@@ -127,7 +128,7 @@ class FaceTracker:
 
         output_stracks = self.tracker.update(output_results, img_info, img_size)
 
-        result_by_index: dict[int, Dict] = {}
+        result_by_index: dict[int, dict] = {}
         if output_stracks and len(valid_faces) > 0:
             track_bboxes = np.asarray(
                 [track.tlbr for track in output_stracks], dtype=np.float32
@@ -148,7 +149,7 @@ class FaceTracker:
 
         # Preserve original ordering and assign negative IDs to any detection
         # the tracker did not confidently match back to a returned track.
-        result: List[Dict] = []
+        result: list[dict] = []
         for original_idx, face in enumerate(face_detections):
             if original_idx in result_by_index:
                 result.append(result_by_index[original_idx])

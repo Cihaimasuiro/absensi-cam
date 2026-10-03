@@ -4,6 +4,8 @@
 fastapi==0.135.2
 httpx==0.28.1
 uvicorn[standard]==0.42.0
+flask==3.0.3
+requests==2.32.3
 
 # Computer vision and numeric processing
 opencv-python==4.13.0.92

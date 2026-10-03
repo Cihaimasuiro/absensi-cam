@@ -1,5 +1,7 @@
+from typing import Any
+
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Any
+
 from .preprocess import preprocess_batch
 
 GUIDANCE_STATUSES = {
@@ -11,7 +13,7 @@ GUIDANCE_STATUSES = {
 }
 
 
-def validate_detection(detection: Dict) -> Tuple[bool, Optional[Dict]]:
+def validate_detection(detection: dict) -> tuple[bool, dict | None]:
     liveness = detection.get("liveness")
     if isinstance(liveness, dict):
         status = liveness.get("status")
@@ -36,10 +38,10 @@ def validate_detection(detection: Dict) -> Tuple[bool, Optional[Dict]]:
 
 
 def run_batch_inference(
-    face_crops: List[Any],
+    face_crops: list[Any],
     ort_session,
     model_img_size: int = 256,
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """Executes model inference."""
     if not face_crops:
         return []
@@ -60,12 +62,12 @@ def run_batch_inference(
 
 
 def assemble_liveness_results(
-    valid_detections: List[Dict],
-    raw_logits: List[np.ndarray],
+    valid_detections: list[dict],
+    raw_logits: list[np.ndarray],
     logit_threshold: float,
-    results: List[Dict],
+    results: list[dict],
     spoof_margin: float = 0.0,
-) -> List[Dict]:
+) -> list[dict]:
     if len(valid_detections) != len(raw_logits):
         raise ValueError("Length mismatch between valid detections and model logits")
 

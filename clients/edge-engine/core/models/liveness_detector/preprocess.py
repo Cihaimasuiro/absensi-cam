@@ -1,6 +1,7 @@
+from typing import Any
+
 import cv2
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Any
 
 TARGET_SIZE = 256
 FFT_SIZE = 16
@@ -92,7 +93,7 @@ def crop_context_face(
     )
 
 
-def check_glare_and_illumination(gray_tight: np.ndarray) -> Tuple[bool, str]:
+def check_glare_and_illumination(gray_tight: np.ndarray) -> tuple[bool, str]:
     """Validates face illumination."""
     if gray_tight.size == 0:
         return False, "zero_face_area"
@@ -111,8 +112,8 @@ def check_glare_and_illumination(gray_tight: np.ndarray) -> Tuple[bool, str]:
 
 
 def preprocess_batch(
-    face_crops: List[Any], model_img_size: int = TARGET_SIZE
-) -> Dict[str, np.ndarray]:
+    face_crops: list[Any], model_img_size: int = TARGET_SIZE
+) -> dict[str, np.ndarray]:
     """Preprocesses batch inputs."""
     if not face_crops:
         raise ValueError("face_crops list cannot be empty")
@@ -159,8 +160,8 @@ def preprocess_batch(
 
 
 def extract_bbox_coordinates(
-    detection: Dict,
-) -> Optional[Tuple[float, float, float, float]]:
+    detection: dict,
+) -> tuple[float, float, float, float] | None:
     bbox = detection.get("bbox", {})
     if not isinstance(bbox, dict):
         return None
@@ -178,8 +179,8 @@ def extract_bbox_coordinates(
 
 def extract_face_crops_from_detections(
     rgb_image: np.ndarray,
-    detections: List[Dict],
-) -> Tuple[List[Dict[str, Any]], List[Dict], List[Dict]]:
+    detections: list[dict],
+) -> tuple[list[dict[str, Any]], list[dict], list[dict]]:
     face_crops = []
     valid_detections = []
     skipped_results = []

@@ -9,10 +9,9 @@ Skrip akan menyimpan konfigurasi ke file .env di direktori yang sama.
 """
 
 import os
-import sys
-import json
 import platform
 import subprocess
+import sys
 
 try:
     import requests
@@ -23,7 +22,7 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
-FW_VERSION    = "1.0.0"
+FW_VERSION = "1.0.0"
 MODEL_VERSION = "yunet-2303"
 
 
@@ -36,9 +35,9 @@ def do_pair(server_url: str, code: str, device_name: str) -> dict:
     """POST /api/v1/devices/pair dan kembalikan JSON response."""
     url = f"{server_url.rstrip('/')}/api/v1/devices/pair"
     payload = {
-        "code":          code.strip().upper(),
-        "device_name":   device_name,
-        "fw_version":    FW_VERSION,
+        "code": code.strip().upper(),
+        "device_name": device_name,
+        "fw_version": FW_VERSION,
         "model_version": MODEL_VERSION,
     }
     resp = requests.post(url, json=payload, timeout=10)
@@ -92,7 +91,9 @@ def main():
         print("[!] URL tidak valid. Harus dimulai dengan http:// atau https://")
         sys.exit(1)
 
-    code = input("  Kode Pairing (dari Dashboard > Perangkat, contoh: A3B9-X8YZ): ").strip()
+    code = input(
+        "  Kode Pairing (dari Dashboard > Perangkat, contoh: A3B9-X8YZ): "
+    ).strip()
     if len(code) != 9 or code[4] != "-":
         print("[!] Format kode salah. Harus 9 karakter dengan format: XXXX-XXXX")
         sys.exit(1)
@@ -109,13 +110,15 @@ def main():
         print(f"[✗] Pairing gagal: {e}")
         sys.exit(1)
     except requests.exceptions.ConnectionError:
-        print(f"[✗] Tidak dapat terhubung ke {server_url}. Periksa URL dan koneksi jaringan.")
+        print(
+            f"[✗] Tidak dapat terhubung ke {server_url}. Periksa URL dan koneksi jaringan."
+        )
         sys.exit(1)
     except requests.exceptions.HTTPError as e:
         print(f"[✗] Server error: {e}")
         sys.exit(1)
 
-    token     = result["token"]
+    token = result["token"]
     device_id = result["device_id"]
 
     save_env(server_url, token, device_id)
@@ -127,7 +130,9 @@ def main():
     print(f"  Device ID  : {device_id}")
     print(f"  Server     : {server_url}")
     print(f"  Config     : {ENV_PATH}")
-    print("\n[✓] Jalankan 'python engine.py' atau 'systemctl start smart-absensi' untuk mulai.\n")
+    print(
+        "\n[✓] Jalankan 'python engine.py' atau 'systemctl start smart-absensi' untuk mulai.\n"
+    )
 
 
 if __name__ == "__main__":

@@ -10,15 +10,14 @@ Machine key storage (encrypt_local_data / decrypt_local_data):
   Linux   : File-based fallback with 0600 permissions.
 """
 
-import os
-import logging
-import platform
 import hashlib
 import hmac
-from typing import Optional
+import logging
+import os
+import platform
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from config.paths import DATA_DIR
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ def decrypt_backup(blob: bytes, password: str) -> bytes:
     return AESGCM(_derive_key(password, salt)).decrypt(iv, ciphertext, None)
 
 
-_CACHED_MACHINE_KEY: Optional[bytes] = None
+_CACHED_MACHINE_KEY: bytes | None = None
 
 
 def get_machine_key() -> bytes:
@@ -93,7 +92,8 @@ def get_machine_key() -> bytes:
             if len(decoded) == KEY_SIZE:
                 _CACHED_MACHINE_KEY = decoded
                 return decoded
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+
             logger.error("Failed to decode FACENOX_MACHINE_KEY from environment: %s", e)
 
     system = platform.system()
@@ -174,8 +174,9 @@ def _machine_key_macos() -> bytes:
     Safely falls back to file-based key storage on access failure.
     """
     try:
-        import keyring
         import base64
+
+        import keyring
 
         service = "facenox-biometric-key"
         account = "machine-key"
@@ -188,7 +189,8 @@ def _machine_key_macos() -> bytes:
         encoded = base64.b64encode(raw_key).decode()
         keyring.set_password(service, account, encoded)
         return raw_key
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+
         logger.warning(
             "macOS Keychain access failed via keyring (%s). "
             "Falling back to local file-based machine key to ensure service availability.",
@@ -210,8 +212,9 @@ def _machine_key_linux() -> bytes:
         return _machine_key_file()
 
     try:
-        import keyring
         import base64
+
+        import keyring
 
         service = "facenox-biometric-key"
         account = "machine-key"
@@ -231,7 +234,8 @@ def _machine_key_linux() -> bytes:
         encoded = base64.b64encode(raw_key).decode()
         keyring.set_password(service, account, encoded)
         return raw_key
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+
         logger.warning(
             "Linux Keyring access failed (%s). "
             "Falling back to local file-based machine key to ensure service availability.",
@@ -285,5 +289,6 @@ def decrypt_local_data(blob: bytes) -> bytes:
     try:
         return AESGCM(key).decrypt(iv, ciphertext, None)
     except Exception as e:
+
         logger.error(f"decrypt_local_data: decryption failed: {e}")
         raise DecryptionError("Failed to decrypt local data") from e

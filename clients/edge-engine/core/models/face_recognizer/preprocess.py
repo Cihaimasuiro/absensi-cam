@@ -1,6 +1,6 @@
+
 import cv2
 import numpy as np
-from typing import List, Tuple
 
 # Reference points for face alignment (112x112 standard)
 REFERENCE_POINTS = np.array(
@@ -16,7 +16,7 @@ REFERENCE_POINTS = np.array(
 
 
 def align_face(
-    image: np.ndarray, landmarks: np.ndarray, input_size: Tuple[int, int]
+    image: np.ndarray, landmarks: np.ndarray, input_size: tuple[int, int]
 ) -> np.ndarray:
     """
     Align face using similarity transformation based on 5 landmarks.
@@ -68,8 +68,8 @@ def preprocess_image(
 
 
 def align_faces_batch(
-    image: np.ndarray, face_data_list: List[dict], input_size: Tuple[int, int]
-) -> List[np.ndarray]:
+    image: np.ndarray, face_data_list: list[dict], input_size: tuple[int, int]
+) -> list[np.ndarray]:
     """
     Align multiple faces from a single image.
 
@@ -101,7 +101,7 @@ def align_faces_batch(
 
 
 def preprocess_batch(
-    aligned_faces: List[np.ndarray],
+    aligned_faces: list[np.ndarray],
     input_mean: float = 127.5,
     input_std: float = 127.5,
 ) -> np.ndarray:

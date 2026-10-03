@@ -20,7 +20,10 @@ class GenerateFaceEmbedding implements ShouldQueue
     
     public function __construct(
         public string $studentId,
-        public string $tmpPath
+        public string $tmpPath,
+        public ?string $photoPath = null,
+        public bool $deleteAfter = true,
+        public string $modelVersion = 'sface-2021dec'
     ) {
         $this->onQueue('enrollments');
     }
@@ -36,8 +39,6 @@ class GenerateFaceEmbedding implements ShouldQueue
             $bin = env('FACE_EMBED_BIN', '/usr/local/bin/face-embed');
             
             // --- PONYTAIL LOCAL DEV BYPASS ---
-            // Jika di local development dan binary face-embed tidak ada, buat dummy embedding saja
-            // supaya UI bisa menampilkan status "Terdaftar" tanpa error.
             if (app()->environment('local') && (!file_exists($bin) && PHP_OS_FAMILY === 'Windows')) {
                 $stdout = random_bytes(2048);
                 $key = random_bytes(32);
@@ -53,8 +54,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                     throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
                 }
 
-                // Command: face-embed --model sface-2021dec --input {path} --output -
-                $cmd = escapeshellcmd($bin) . " --model sface-2021dec --input " . escapeshellarg($this->tmpPath) . " --output -";
+                $cmd = escapeshellcmd($bin) . " --model " . escapeshellarg($this->modelVersion) . " --input " . escapeshellarg($this->tmpPath) . " --output -";
                 
                 $descriptors = [
                     1 => ['pipe', 'w'], // stdout
@@ -101,28 +101,38 @@ class GenerateFaceEmbedding implements ShouldQueue
                 $result = DB::selectOne('SELECT COALESCE(MAX(version_cursor), 0) + 1 AS next FROM face_templates');
                 $nextCursor = $result->next;
 
+                $data = [
+                    'embedding_enc' => base64_encode($encryptedBlob),
+                    'model_version' => $this->modelVersion,
+                    'version_cursor' => $nextCursor,
+                    'embedding_hash' => $hash,
+                    'deleted_at' => null
+                ];
+                
+                if ($this->photoPath) {
+                    $data['photo_path'] = $this->photoPath;
+                }
+
                 FaceTemplate::updateOrCreate(
                     ['student_id' => $this->studentId],
-                    [
-                        'embedding_enc' => base64_encode($encryptedBlob),
-                        'model_version' => 'sface-2021dec',
-                        'version_cursor' => $nextCursor,
-                        'embedding_hash' => $hash,
-                        'deleted_at' => null // In case it was soft-deleted
-                    ]
+                    $data
                 );
             });
 
             Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);
 
         } finally {
-            @unlink($this->tmpPath);
+            if ($this->deleteAfter) {
+                @unlink($this->tmpPath);
+            }
         }
     }
 
     public function failed(\Throwable $exception): void
     {
-        @unlink($this->tmpPath);
+        if ($this->deleteAfter) {
+            @unlink($this->tmpPath);
+        }
         Log::error('Face enrollment job failed: ' . $exception->getMessage(), [
             'student_id' => $this->studentId,
             'exception' => $exception

@@ -1,16 +1,17 @@
-import os
 import logging
+import os
+from typing import Any
+
 import onnxruntime as ort
-from typing import Tuple, Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 
 def init_face_recognizer_session(
     model_path: str,
-    providers: Optional[List[str]] = None,
-    session_options: Optional[Dict[str, Any]] = None,
-) -> Tuple[Optional[ort.InferenceSession], Optional[str]]:
+    providers: list[str] | None = None,
+    session_options: dict[str, Any] | None = None,
+) -> tuple[ort.InferenceSession | None, str | None]:
     """
     Initialize ONNX Runtime session for face recognition model.
 
@@ -48,5 +49,6 @@ def init_face_recognizer_session(
         return session, input_name
 
     except Exception as e:
+
         logger.error(f"Failed to initialize face recognizer model: {e}")
         raise

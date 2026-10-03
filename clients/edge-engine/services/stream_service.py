@@ -6,29 +6,33 @@ Berjalan di thread daemon terpisah; route /video_feed konsumsi oleh
 Dashboard Laravel (img src) maupun browser lokal via HDMI.
 """
 
-import threading
 import logging
-import cv2
+
+logger = logging.getLogger(__name__)
+import threading
 from collections import deque
+
+import cv2
 from flask import Flask, Response, jsonify, render_template_string
 
 from config.settings import STREAM_PORT
 
 app = Flask(__name__)
 
-_lock          = threading.Lock()
-_latest_frame  = None
+_lock = threading.Lock()
+_latest_frame = None
 _latest_status = ""
-_history: deque = deque(maxlen=10)   # log 10 absensi terakhir
+_history: deque = deque(maxlen=10)  # log 10 absensi terakhir
 
 
 # ─── Public API (dipanggil dari detection pipeline) ─────────────────────────
+
 
 def push_frame(frame, status: str = "") -> None:
     """Update frame + status teks yang akan di-stream."""
     global _latest_frame, _latest_status
     with _lock:
-        _latest_frame  = frame.copy() if frame is not None else None
+        _latest_frame = frame.copy() if frame is not None else None
         _latest_status = status
 
 
@@ -40,6 +44,7 @@ def push_attendance(record: dict) -> None:
 
 # ─── Flask Routes ────────────────────────────────────────────────────────────
 
+
 def _generate_mjpeg():
     while True:
         with _lock:
@@ -49,21 +54,24 @@ def _generate_mjpeg():
             status = _latest_status
 
         if status:
-            cv2.putText(frame, status, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(
+                frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+            )
 
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if not ok:
             continue
 
-        yield (b"--frame\r\n"
-               b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+        yield (
+            b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n"
+        )
 
 
 @app.route("/video_feed")
 def video_feed():
-    return Response(_generate_mjpeg(),
-                    mimetype="multipart/x-mixed-replace; boundary=frame")
+    return Response(
+        _generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame"
+    )
 
 
 @app.route("/status")
@@ -81,27 +89,29 @@ def history():
 @app.route("/auto-pair", methods=["POST"])
 def auto_pair():
     """Endpoint untuk menerima konfigurasi pairing dari Laravel backend."""
-    from flask import request
     import os
+
+    from flask import request
+
     from config.settings import ROOT_DIR
-    
+
     data = request.json
     if not data or not data.get("backend_url") or not data.get("token"):
         return jsonify({"success": False, "error": "Invalid payload"}), 400
-        
+
     env_path = os.path.join(ROOT_DIR, ".env")
-    
+
     try:
         # Baca existing env dan override baris yang sesuai
         lines = []
         if os.path.exists(env_path):
             with open(env_path, "r") as f:
                 lines = f.readlines()
-                
+
         new_lines = []
         url_updated = False
         token_updated = False
-        
+
         for line in lines:
             if line.startswith("SMART_ABSENSI_URL="):
                 new_lines.append(f"SMART_ABSENSI_URL={data['backend_url']}\n")
@@ -111,54 +121,100 @@ def auto_pair():
                 token_updated = True
             else:
                 new_lines.append(line)
-                
+
         if not url_updated:
             new_lines.append(f"SMART_ABSENSI_URL={data['backend_url']}\n")
         if not token_updated:
             new_lines.append(f"SMART_ABSENSI_TOKEN={data['token']}\n")
-            
+
         with open(env_path, "w") as f:
             f.writelines(new_lines)
-            
-        logging.info(f"[Auto-Pair] Konfigurasi berhasil disimpan. Backend: {data['backend_url']}")
-        
+
+        logger.info(
+            f"[Auto-Pair] Konfigurasi berhasil disimpan. Backend: {data['backend_url']}"
+        )
+
         # Opsi: Secara ideal kita perlu merestart service systemd agar env termuat ulang.
         # Untuk kepraktisan, kita bisa merestart worker atau menginstruksikan systemctl
         import subprocess
-        threading.Timer(1.0, lambda: subprocess.Popen(["sudo", "systemctl", "restart", "absensi-edge"])).start()
-        
-        return jsonify({"success": True, "message": "Paired successfully. Rebooting engine..."})
-        
-    except Exception as e:
-        logging.error(f"[Auto-Pair] Error: {e}")
+
+        threading.Timer(
+            1.0,
+            lambda: subprocess.Popen(["sudo", "systemctl", "restart", "absensi-edge"]),
+        ).start()
+
+        return jsonify(
+            {"success": True, "message": "Paired successfully. Rebooting engine..."}
+        )
+
+    except Exception as e:  # noqa: BLE001
+
+        logger.error(f"[Auto-Pair] Error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/auto-update", methods=["POST"])
 def auto_update():
     """Endpoint untuk trigger OTA update dari Laravel."""
-    from flask import request
-    import subprocess
     import os
-    from config.settings import ROOT_DIR
-    
+    import subprocess
+    import hashlib
+
+    from flask import request
+
+    from config.settings import ROOT_DIR, load_env
+
+    try:
+        cfg = load_env()
+    except Exception as e:
+        return jsonify({"success": False, "error": "Unpaired device"}), 403
+
+    # 1. Authorization Check
+    auth_header = request.headers.get("Authorization")
+    expected_token = f"Bearer {cfg.get('SMART_ABSENSI_TOKEN')}"
+    if auth_header != expected_token:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
     data = request.json
     if not data or not data.get("download_url"):
         return jsonify({"success": False, "error": "Invalid payload"}), 400
-        
+
     url = data["download_url"]
-    checksum = data.get("checksum", "")
-    update_type = data.get("update_type", "binary") # "binary" or "model"
-    updater_script = os.path.join(ROOT_DIR, "updater.sh")
     
+    # 2. Strict HTTPS Enforcement
+    if not url.startswith("https://"):
+        return jsonify({"success": False, "error": "Insecure download URL. HTTPS required."}), 400
+
+    # 3. Checksum Requirements
+    checksum = data.get("checksum", "")
+    if not checksum or len(checksum) != 64:
+        return jsonify({"success": False, "error": "Valid SHA-256 checksum is required."}), 400
+
+    update_type = data.get("update_type", "binary")  # "binary" or "model"
+    updater_script = os.path.join(ROOT_DIR, "updater.sh")
+
     if not os.path.exists(updater_script):
-        return jsonify({"success": False, "error": "updater.sh tidak ditemukan di perangkat"}), 404
-        
+        return (
+            jsonify(
+                {"success": False, "error": "updater.sh tidak ditemukan di perangkat"}
+            ),
+            404,
+        )
+
     try:
         # Jalankan updater di background agar response API tidak nge-hang saat service direstart
-        subprocess.Popen(["sudo", "bash", updater_script, url, checksum, update_type], start_new_session=True)
-        return jsonify({"success": True, "message": f"OTA Update ({update_type}) dimulai. Perangkat akan merestart otomatis."})
-    except Exception as e:
+        subprocess.Popen(
+            ["sudo", "bash", updater_script, url, checksum, update_type],
+            start_new_session=True,
+        )
+        return jsonify(
+            {
+                "success": True,
+                "message": f"OTA Update ({update_type}) dimulai. Perangkat akan merestart otomatis.",
+            }
+        )
+    except Exception as e:  # noqa: BLE001
+
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -206,6 +262,7 @@ def kiosk():
 
 # ─── Start ───────────────────────────────────────────────────────────────────
 
+
 def start(port: int = STREAM_PORT) -> None:
-    logging.info(f"[Stream] Memulai server MJPEG di port {port}")
+    logger.info(f"[Stream] Memulai server MJPEG di port {port}")
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)

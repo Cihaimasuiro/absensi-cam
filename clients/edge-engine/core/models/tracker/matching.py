@@ -1,5 +1,5 @@
-import numpy as np
 import lap
+import numpy as np
 
 
 def bbox_ious(atlbrs, btlbrs):

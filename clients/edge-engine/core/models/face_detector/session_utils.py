@@ -1,6 +1,7 @@
-import os
-import cv2 as cv
 import logging as log
+import os
+
+import cv2 as cv
 
 logger = log.getLogger(__name__)
 
@@ -33,5 +34,6 @@ def init_face_detector_session(
             raise RuntimeError("Failed to create FaceDetectorYN instance")
         return detector
     except Exception as e:
+
         logger.error(f"Error loading face detector model: {e}")
         raise

@@ -27,8 +27,23 @@ MODEL_VERSION = "yunet-2303"
 
 
 def get_device_name() -> str:
-    """Generate nama perangkat default dari hostname."""
-    return f"OrangePi-{platform.node()}"
+    """Generate nama perangkat default secara dinamis (mendukung OrangePi, RaspberryPi, Ubuntu, Windows, dll)."""
+    hostname = platform.node()
+    system = platform.system()
+    
+    if system == "Linux":
+        # Coba deteksi nama hardware (SBC) dari device tree Linux
+        try:
+            with open("/sys/firmware/devicetree/base/model", "r") as f:
+                model = f.read().replace("\x00", "").strip()
+                # Hapus spasi agar rapi, contoh "Orange Pi Lite2" -> "OrangePiLite2"
+                clean_model = model.replace(" ", "")
+                return f"{clean_model}-{hostname}"
+        except Exception:
+            pass
+    
+    # Fallback untuk OS lain (contoh: Windows-DESKTOP123, Linux-ubuntu)
+    return f"{system}-{hostname}"
 
 
 def do_pair(server_url: str, code: str, device_name: str) -> dict:

@@ -19,6 +19,7 @@ class FaceTemplate extends Model
         'model_version',
         'version_cursor',
         'embedding_hash',
+        'photo_path',
     ];
 
     protected $hidden = ['embedding_enc']; // Never expose ciphertext in API responses

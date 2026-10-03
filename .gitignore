@@ -1,0 +1,79 @@
+# ========================================
+# 1. Laravel & PHP Framework
+# ========================================
+/vendor/
+/storage/*.key
+/storage/pail/
+/public/storage
+/public/build
+/public/hot
+/public/fonts-manifest.dev.json
+.env
+.env.backup
+.env.production
+.phpunit.cache
+.phpunit.result.cache
+_ide_helper.php
+Homestead.json
+Homestead.yaml
+
+# ========================================
+# 2. Frontend & Node (Vue/Blade assets)
+# ========================================
+/node_modules/
+/auth.json
+
+# ========================================
+# 3. Edge Engine (Python & PyInstaller)
+# ========================================
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+env/
+/venv/
+.venv/
+
+# PyInstaller Build Output
+clients/edge-engine/build/
+clients/edge-engine/dist/
+clients/edge-engine/*.spec
+
+# Local Device Databases
+clients/edge-engine/*.db
+clients/edge-engine/*.sqlite3
+clients/edge-engine/data/
+
+# OTA Update Temp Files
+*.new
+/tmp/absensi-engine*
+
+# ========================================
+# 4. IDEs & Editors
+# ========================================
+/.idea/
+/.vscode/
+/.cursor/
+/.nova/
+/.zed/
+.phpactor.json
+
+# ========================================
+# 5. OS & System Files
+# ========================================
+.DS_Store
+Thumbs.db
+*.log
+
+# ========================================
+# 6. Antigravity Agent & Planning Files
+# ========================================
+.antigravity/
+/scratch/
+/templates/
+step3_web_admin_plan.md
+project_gap_analysis.md

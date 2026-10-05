@@ -1,21 +1,22 @@
 [Unit]
-Description=Smart Absensi Edge Engine Daemon
+Description=Absensi Cam Edge Engine
 After=network.target
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=5
-User=orangepi
-WorkingDirectory=/opt/absensi-cam/apps/edge-engine
-
-# Use absolute path to the Python environment
-ExecStart=/opt/absensi-cam/apps/edge-engine/venv/bin/python engine.py
-
-# Environment variables
+User=edge
+Group=edge
+WorkingDirectory=/opt/smart-absensi/edge-engine
+Environment="PATH=/opt/smart-absensi/edge-engine/miniforge3/envs/edge_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 Environment="FACENOX_INFERENCE_TIMEOUT=10.0"
+ExecStart=/opt/smart-absensi/edge-engine/miniforge3/envs/edge_env/bin/python engine.py
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=smart-absensi
 
 # Set limits to prevent crashing the SBC
 MemoryMax=500M

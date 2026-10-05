@@ -14,10 +14,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # --- Paths ---
-INSTALL_DIR="/opt/absensi-edge"
-SRC_DIR="$INSTALL_DIR/src"
+INSTALL_DIR="/opt/smart-absensi/edge-engine"
+SERVICE_NAME="smart-absensi.service"
 ENV_NAME="edge_env"
-PYTHON_VERSION="3.10"
+PYTHON_VERSION="3.11"
+USER_NAME="edge"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -43,19 +44,19 @@ apt-get install -y --no-install-recommends \
 
 # 2. Setup Working Directory
 log_info "Setting up working directory at $INSTALL_DIR..."
-mkdir -p "$SRC_DIR"
-mkdir -p "$SRC_DIR/models"
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/assets/models"
 
 # Copy current directory contents to INSTALL_DIR if we are not already there
 CURRENT_DIR=$(pwd)
-if [ "$CURRENT_DIR" != "$SRC_DIR" ]; then
-    log_info "Copying files from $CURRENT_DIR to $SRC_DIR..."
-    rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$SRC_DIR/"
+if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
+    log_info "Copying files from $CURRENT_DIR to $INSTALL_DIR..."
+    rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$INSTALL_DIR/"
 fi
 
 cd "$INSTALL_DIR"
 
-# 3. Install Miniforge for Modern Python (3.10+) on AARCH64
+# 3. Install Miniforge for Modern Python (3.11) on AARCH64
 if [ ! -d "miniforge3" ]; then
     log_info "Downloading Miniforge3 (AARCH64)..."
     wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh"
@@ -66,75 +67,61 @@ else
     log_info "Miniforge3 is already installed, skipping..."
 fi
 
-# 4. Create and Setup Conda Environment
-# We need to use `source` which is not available in strict sh, but we use bash
+# Set ownership early so conda env works correctly for the edge user
+log_info "Setting ownership of $INSTALL_DIR to $USER_NAME..."
+chown -R $USER_NAME:$USER_NAME "$INSTALL_DIR" || log_warn "Could not set ownership to $USER_NAME."
+
+# 4. Create and Setup Conda Environment as user
+sudo -u $USER_NAME bash <<EOF
 source "$INSTALL_DIR/miniforge3/etc/profile.d/conda.sh" || true
 source "$INSTALL_DIR/miniforge3/bin/activate" || true
 
 if ! conda env list | grep -q "$ENV_NAME"; then
-    log_info "Creating conda environment '$ENV_NAME' with Python $PYTHON_VERSION..."
+    echo "[INFO] Creating conda environment '$ENV_NAME' with Python $PYTHON_VERSION..."
     conda create -y -n "$ENV_NAME" python="$PYTHON_VERSION"
 else
-    log_info "Conda environment '$ENV_NAME' already exists, updating..."
+    echo "[INFO] Conda environment '$ENV_NAME' already exists, updating..."
 fi
 
 conda activate "$ENV_NAME"
 
-log_info "Installing Python dependencies (this might take a few minutes)..."
+echo "[INFO] Installing Python dependencies..."
 pip install --upgrade pip --quiet
-# Install standard requirements
-if [ -f "$SRC_DIR/requirements.txt" ]; then
-    pip install -r "$SRC_DIR/requirements.txt" --quiet
+
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    pip install -r "$INSTALL_DIR/requirements.txt" --quiet
 else
     pip install --quiet numpy opencv-python-headless flask requests pyserial python-dotenv
 fi
-
-# Install ONNX Runtime for AARCH64 (Orange Pi)
-log_info "Installing ONNX Runtime for AARCH64..."
-pip install --quiet onnxruntime==1.19.2 \
-    --extra-index-url https://pkgs.dev.azure.com/onnxruntime/onnxruntime/_packaging/onnxruntime-aarch64-aarch64/pypi/simple/
+EOF
 
 # 5. Setup Environment variables
-cd "$SRC_DIR"
+cd "$INSTALL_DIR"
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     log_info "Setting up default .env file..."
     cp .env.example .env
+    chown $USER_NAME:$USER_NAME .env || true
 fi
 
 # 6. Create Systemd Service for Auto-start
 log_info "Configuring systemd service..."
-cat > /etc/systemd/system/absensi-edge.service <<EOF
-[Unit]
-Description=Absensi Cam Edge Engine
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$SRC_DIR
-Environment="PATH=$INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=$INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python engine.py
-Restart=always
-RestartSec=5
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=absensi-edge
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable absensi-edge.service
+if [ -f "$SERVICE_NAME" ]; then
+    cp "$SERVICE_NAME" "/etc/systemd/system/$SERVICE_NAME"
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME"
+    log_info "Systemd service installed and enabled."
+else
+    log_warn "$SERVICE_NAME not found, skipping service installation."
+fi
 
 log_success "============================================================================"
 log_success "✅ Edge Engine Installation Complete!"
 log_success "============================================================================"
 echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Configure your API URL in $SRC_DIR/.env if needed."
+echo "1. Configure your API URL in $INSTALL_DIR/.env if needed."
 echo "2. Run the pairing script to connect to the Laravel backend:"
-echo "   cd $SRC_DIR && $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
-echo "3. Copy your AI models (e.g., face detector) to '$SRC_DIR/models'."
-echo "4. Start the service: 'systemctl start absensi-edge'"
-echo "5. View logs: 'journalctl -fu absensi-edge'"
+echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
+echo "3. Copy your AI models (e.g., detector.onnx) to '$INSTALL_DIR/assets/models'."
+echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
+echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"
 echo "============================================================================"

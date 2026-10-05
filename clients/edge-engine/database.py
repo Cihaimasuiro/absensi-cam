@@ -1,10 +1,17 @@
 import os
 import sqlite3
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    def __init__(self, db_path="local_edge.db"):
+    def __init__(self, key_b64: str = None, db_path="local_edge.db"):
         self.db_path = os.path.join(os.path.dirname(__file__), db_path)
+        import base64
+        self.key = base64.b64decode(key_b64) if key_b64 else None
+        self._template_cache = None
+        self._cache_version_cursor = -1
         self._init_db()
 
     def get_connection(self):
@@ -25,11 +32,16 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS templates (
                     id TEXT PRIMARY KEY,
                     student_id TEXT NOT NULL,
+                    name TEXT,
                     embedding BLOB NOT NULL,
                     version TEXT,
                     updated_at TIMESTAMP
                 )
             """)
+            try:
+                conn.execute("ALTER TABLE templates ADD COLUMN name TEXT")
+            except sqlite3.OperationalError:
+                pass
 
             # Tabel Outbox untuk menyimpan log absensi yang belum terkirim ke Laravel
             conn.execute("""
@@ -91,15 +103,13 @@ class DatabaseManager:
                 f"UPDATE outbox_attendance SET synced = 1 WHERE id IN ({placeholders})",
                 tuple(record_ids),
             )
-            # Secara opsional bisa langsung di-DELETE agar tabel tidak bengkak
-            # conn.execute(f"DELETE FROM outbox_attendance WHERE id IN ({placeholders})", tuple(record_ids))
             conn.commit()
 
     def get_last_template_sync_time(self):
         with self.get_connection() as conn:
-            cur = conn.execute("SELECT MAX(updated_at) as last_sync FROM templates")
+            cur = conn.execute("SELECT MAX(CAST(version AS INTEGER)) as last_sync FROM templates")
             row = cur.fetchone()
-            return row["last_sync"] if row and row["last_sync"] else None
+            return row["last_sync"] if row and row["last_sync"] else 0
 
     def save_templates(self, templates_data: list):
         if not templates_data:
@@ -107,41 +117,97 @@ class DatabaseManager:
 
         with self.get_connection() as conn:
             for t in templates_data:
-                # Assuming embedding is base64 encoded string from API, we should convert to bytes.
-                # For now just save the string/bytes as is
-                embedding_data = t.get("embedding", b"")
+                op = t.get("op", "upsert")
+                student_id = t["student_id"]
+                
+                if op == "delete":
+                    conn.execute("DELETE FROM templates WHERE student_id = ?", (student_id,))
+                    continue
+                    
+                import base64
+                embedding_data = t.get("embedding_enc", t.get("embedding_b64", ""))
+                if isinstance(embedding_data, str):
+                    try:
+                        embedding_data = base64.b64decode(embedding_data)
+                    except Exception:
+                        embedding_data = b""
 
-                # Check if exists
                 cur = conn.execute(
-                    "SELECT id FROM templates WHERE student_id = ?", (t["student_id"],)
+                    "SELECT id FROM templates WHERE student_id = ?", (student_id,)
                 )
                 if cur.fetchone():
                     conn.execute(
-                        "UPDATE templates SET embedding = ?, version = ?, updated_at = ? WHERE student_id = ?",
+                        "UPDATE templates SET embedding = ?, version = ?, updated_at = ?, name = ? WHERE student_id = ?",
                         (
                             embedding_data,
-                            t.get("version", "1"),
+                            str(t.get("version_cursor", "1")),
                             t.get("updated_at"),
-                            t["student_id"],
+                            t.get("name", "Anggota"),
+                            student_id,
                         ),
                     )
                 else:
                     conn.execute(
-                        "INSERT INTO templates (id, student_id, embedding, version, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        "INSERT INTO templates (id, student_id, name, embedding, version, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
                         (
-                            t.get("id", t["student_id"]),
-                            t["student_id"],
+                            student_id,
+                            student_id,
+                            t.get("name", "Anggota"),
                             embedding_data,
-                            t.get("version", "1"),
+                            str(t.get("version_cursor", "1")),
                             t.get("updated_at"),
                         ),
                     )
             conn.commit()
+            
+            # Invalidate cache so it decrypts again
+            self._cache_version_cursor = -1
+
+    def decrypt_embedding(self, encrypted_blob: bytes, student_id: str, model_version: str) -> bytes:
+        if not self.key or len(encrypted_blob) != 2076:
+            # Fallback for unencrypted dummy data (2048 bytes)
+            return encrypted_blob if len(encrypted_blob) == 2048 else None
+            
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        
+        nonce = encrypted_blob[:12]
+        ciphertext_and_tag = encrypted_blob[12:]
+        aad = f"{student_id}_{model_version}".encode('utf-8')
+        
+        try:
+            aesgcm = AESGCM(self.key)
+            return aesgcm.decrypt(nonce, ciphertext_and_tag, aad)
+        except Exception as e:
+            logger.error(f"Failed to decrypt template for {student_id}: {e}")
+            return None
 
     def get_all_templates(self) -> list:
-        """Ambil seluruh face embeddings dari DB lokal untuk proses pencocokan."""
+        """Ambil seluruh face embeddings dari DB lokal untuk proses pencocokan dengan cache in-memory."""
+        latest_version = self.get_last_template_sync_time()
+        
+        # Return cache if valid
+        if self._template_cache is not None and self._cache_version_cursor == latest_version:
+            return self._template_cache
+            
         with self.get_connection() as conn:
             cur = conn.execute(
-                "SELECT id, student_id, embedding, version FROM templates"
+                "SELECT id, student_id, name, embedding, version FROM templates"
             )
-            return [dict(row) for row in cur.fetchall()]
+            rows = cur.fetchall()
+            
+        decrypted_templates = []
+        for row in rows:
+            student_id = row["student_id"]
+            name = row["name"] if ("name" in row.keys() and row["name"]) else "Anggota"
+            model_version = "sface-2021dec" # Can be saved in DB if needed, hardcoded for now or we can extract it
+            dec_bytes = self.decrypt_embedding(row["embedding"], student_id, model_version)
+            if dec_bytes:
+                decrypted_templates.append({
+                    "student_id": student_id,
+                    "embedding": dec_bytes,
+                    "name": name
+                })
+                
+        self._template_cache = decrypted_templates
+        self._cache_version_cursor = latest_version
+        return decrypted_templates

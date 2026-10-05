@@ -54,8 +54,9 @@ def _generate_mjpeg():
             status = _latest_status
 
         if status:
+            # Blue text (255, 0, 0), font scale 0.5, thickness 1
             cv2.putText(
-                frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+                frame, status, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1
             )
 
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
@@ -88,69 +89,81 @@ def history():
 
 @app.route("/auto-pair", methods=["POST"])
 def auto_pair():
-    """Endpoint untuk menerima konfigurasi pairing dari Laravel backend."""
+    """
+    Dipanggil dari Laravel Dashboard.
+    Terima pairing_code + backend_url, lalu langsung exchange ke Laravel /api/v1/devices/pair
+    sehingga perangkat terdaftar penuh tanpa perlu input terminal sama sekali.
+    """
     import os
+    import platform
+    import requests as _requests
 
     from flask import request
-
     from config.settings import ROOT_DIR
 
     data = request.json
-    if not data or not data.get("backend_url") or not data.get("token"):
-        return jsonify({"success": False, "error": "Invalid payload"}), 400
+    if not data or not data.get("backend_url") or not data.get("pairing_code"):
+        return jsonify({"success": False, "error": "Invalid payload: butuh backend_url dan pairing_code"}), 400
 
-    env_path = os.path.join(ROOT_DIR, ".env")
+    backend_url  = data["backend_url"].rstrip("/")
+    pairing_code = data["pairing_code"].strip().upper()
 
+    # --- Tentukan nama perangkat secara otomatis ---
+    hostname = platform.node()
+    system   = platform.system()
     try:
-        # Baca existing env dan override baris yang sesuai
-        lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r") as f:
-                lines = f.readlines()
+        with open("/sys/firmware/devicetree/base/model", "r") as f:
+            model       = f.read().replace("\x00", "").strip().replace(" ", "")
+            device_name = f"{model}-{hostname}"
+    except Exception:
+        device_name = f"{system}-{hostname}"
 
-        new_lines = []
-        url_updated = False
-        token_updated = False
+    # --- Panggil balik Laravel untuk exchange code → token ---
+    try:
+        resp = _requests.post(
+            f"{backend_url}/api/v1/devices/pair",
+            json={
+                "code":          pairing_code,
+                "device_name":   device_name,
+                "fw_version":    "1.0.0",
+                "model_version": "yunet-2303",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+    except Exception as e:
+        logger.error(f"[Auto-Pair] Gagal exchange pairing code: {e}")
+        return jsonify({"success": False, "error": f"Gagal exchange pairing code: {e}"}), 500
 
-        for line in lines:
-            if line.startswith("SMART_ABSENSI_URL="):
-                new_lines.append(f"SMART_ABSENSI_URL={data['backend_url']}\n")
-                url_updated = True
-            elif line.startswith("SMART_ABSENSI_TOKEN="):
-                new_lines.append(f"SMART_ABSENSI_TOKEN={data['token']}\n")
-                token_updated = True
-            else:
-                new_lines.append(line)
+    token     = result.get("token")
+    device_id = result.get("device_id")
 
-        if not url_updated:
-            new_lines.append(f"SMART_ABSENSI_URL={data['backend_url']}\n")
-        if not token_updated:
-            new_lines.append(f"SMART_ABSENSI_TOKEN={data['token']}\n")
+    if not token or not device_id:
+        return jsonify({"success": False, "error": "Respons pairing tidak valid dari server"}), 500
 
+    # --- Simpan ke .env ---
+    env_path = os.path.join(ROOT_DIR, ".env")
+    content  = (
+        f"SMART_ABSENSI_URL={backend_url}\n"
+        f"SMART_ABSENSI_TOKEN={token}\n"
+        f"SMART_ABSENSI_DEVICE_ID={device_id}\n"
+    )
+    try:
         with open(env_path, "w") as f:
-            f.writelines(new_lines)
+            f.write(content)
+        os.chmod(env_path, 0o600)
+    except Exception as e:
+        logger.error(f"[Auto-Pair] Gagal simpan .env: {e}")
+        return jsonify({"success": False, "error": f"Gagal simpan .env: {e}"}), 500
 
-        logger.info(
-            f"[Auto-Pair] Konfigurasi berhasil disimpan. Backend: {data['backend_url']}"
-        )
+    logger.info(f"[Auto-Pair] Berhasil! Device ID={device_id} Server={backend_url}")
 
-        # Opsi: Secara ideal kita perlu merestart service systemd agar env termuat ulang.
-        # Untuk kepraktisan, kita bisa merestart worker atau menginstruksikan systemctl
-        import subprocess
-
-        threading.Timer(
-            1.0,
-            lambda: subprocess.Popen(["sudo", "systemctl", "restart", "absensi-edge"]),
-        ).start()
-
-        return jsonify(
-            {"success": True, "message": "Paired successfully. Rebooting engine..."}
-        )
-
-    except Exception as e:  # noqa: BLE001
-
-        logger.error(f"[Auto-Pair] Error: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({
+        "success":   True,
+        "device_id": device_id,
+        "message":   f"Perangkat {device_name} berhasil dipairing sebagai {device_id}.",
+    })
 
 
 @app.route("/auto-update", methods=["POST"])

@@ -52,17 +52,23 @@ class DetectionPipeline:
         """
         results: list[RecognitionResult] = []
 
-        raw_faces = self.detector.detect(frame)
+        raw_faces = self.detector.detect_faces(frame)
         if raw_faces is None or len(raw_faces) == 0:
             return results
 
         for face in raw_faces:
             # Confidence filter
-            conf = float(face[-1]) if len(face) > 4 else 1.0
+            conf = face.get("confidence", 1.0)
             if conf < FACE_CONF_THRESHOLD:
                 continue
 
-            bbox = tuple(face[:4].astype(int))
+            bbox_dict = face.get("bbox", {})
+            bbox = (
+                int(bbox_dict.get("x", 0)),
+                int(bbox_dict.get("y", 0)),
+                int(bbox_dict.get("width", 0)),
+                int(bbox_dict.get("height", 0)),
+            )
 
             # ── Liveness (stubbed) ────────────────────────────────────────
             liveness_score = 1.0
@@ -78,32 +84,39 @@ class DetectionPipeline:
             similarity = 0.0
 
             if self.recognizer and templates:
-                embedding = self.recognizer.embed(frame, bbox)
-                best_dist = float("inf")
-                for t in templates:
-                    stored = np.frombuffer(t["embedding"], dtype=np.float32)
-                    dist = float(np.linalg.norm(embedding - stored))
-                    if dist < best_dist:
-                        best_dist = dist
-                        student_id = t["student_id"]
-                        name = t.get("name", "Anggota")
+                embedding = self.recognizer.embed(frame, face)
+                if embedding is not None:
+                    best_dist = float("inf")
+                    for t in templates:
+                        stored = np.frombuffer(t["embedding"], dtype=np.float32)
+                        # L2 distance
+                        dist = float(np.linalg.norm(embedding - stored))
+                        if dist < best_dist:
+                            best_dist = dist
+                            student_id = t["student_id"]
+                            name = t.get("name", "Anggota")
 
-                similarity = max(0.0, 1.0 - best_dist)
+                    # Convert Euclidean distance to Cosine Similarity
+                    similarity = 1.0 - (best_dist ** 2) / 2.0
 
             recognized = student_id is not None and similarity >= RECOGNITION_THRESHOLD
 
             # ── Cooldown ────────────────────────────────────────────────
+            # We want to keep student_id and name for display purposes
+            # even if we are in cooldown (recognized = False for attendance)
+            is_valid_match = student_id is not None and similarity >= RECOGNITION_THRESHOLD
+            
             if recognized:
                 last = self._cooldowns.get(student_id, 0)
                 if time.time() - last < RECOGNITION_COOLDOWN_SEC:
-                    recognized = False  # Masih dalam cooldown, skip
+                    recognized = False  # Masih dalam cooldown, skip logging
                 else:
                     self._cooldowns[student_id] = time.time()
 
             results.append(
                 RecognitionResult(
-                    student_id=student_id if recognized else None,
-                    name=name if recognized else "Unknown",
+                    student_id=student_id if is_valid_match else None,
+                    name=name if is_valid_match else "Unknown",
                     confidence=similarity,
                     liveness_score=liveness_score,
                     bbox=bbox,

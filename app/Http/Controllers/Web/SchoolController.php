@@ -61,4 +61,24 @@ class SchoolController extends Controller
 
         return back()->with('success', 'Cabang berhasil ditambahkan.');
     }
+
+    public function update(Request $request, School $school)
+    {
+        $validated = $request->validate([
+            'name'        => ['required', 'string', 'max:150'],
+            'code'        => ['nullable', 'string', 'max:50', "unique:schools,code,{$school->id}"],
+            'description' => ['nullable', 'string'],
+            'is_active'   => ['boolean'],
+        ]);
+
+        $school->update($validated);
+
+        return back()->with('success', 'Organisasi berhasil diperbarui.');
+    }
+
+    public function destroy(School $school)
+    {
+        $school->delete();
+        return back()->with('success', 'Organisasi berhasil dihapus.');
+    }
 }

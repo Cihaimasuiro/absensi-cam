@@ -5,21 +5,21 @@
 
 {{-- Pairing Code Result --}}
 @if(session('pairing_code'))
-    <div class="card" style="background:#eff6ff; border-color:#bfdbfe; margin-bottom:var(--space-md); padding:var(--space-md);">
-        <p class="text-eyebrow" style="color:var(--color-primary); margin-bottom:var(--space-xs);">Kode Pairing Berhasil Dibuat — berlaku 15 menit</p>
-        <p style="font-family:monospace; font-size:28px; font-weight:700; letter-spacing:0.2em; color:var(--color-secondary); margin-bottom:var(--space-xs);">
+    <div class="card bg-blue-50 border-blue-200 mb-md p-md">
+        <p class="text-eyebrow text-primary mb-xs">Kode Pairing Berhasil Dibuat — berlaku 15 menit</p>
+        <p class="font-mono text-[28px] font-bold tracking-[0.2em] text-secondary mb-xs">
             {{ session('pairing_code') }}
         </p>
-        <p class="text-caption" style="color:var(--color-primary);">
-            Jalankan <code style="background:#dbeafe; padding:1px 4px; border-radius:3px;">python pairing.py</code> di Orange Pi, lalu masukkan kode ini.
+        <p class="text-caption text-primary">
+            Jalankan <code class="bg-blue-100 px-1 py-[2px] rounded-sm">python pairing.py</code> di Orange Pi, lalu masukkan kode ini.
         </p>
     </div>
 @endif
 
-<div style="display:grid; grid-template-columns:1fr 280px; gap:var(--space-lg);">
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-lg">
 
     {{-- Device Table --}}
-    <div class="card" style="padding:0; overflow:hidden;">
+    <div class="card p-0 overflow-hidden">
         <table class="data-table">
             <thead>
                 <tr>
@@ -28,14 +28,14 @@
                     <th>Gedung</th>
                     <th>Status</th>
                     <th>Heartbeat</th>
-                    <th style="text-align:right;">Aksi</th>
+                    <th class="text-right">Aksi</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($devices as $device)
                     <tr>
-                        <td style="font-weight:500; color:var(--color-ink);">{{ $device->name }}</td>
-                        <td style="font-family:monospace; font-size:12px;">{{ $device->device_code }}</td>
+                        <td class="font-medium text-ink">{{ $device->name }}</td>
+                        <td class="font-mono text-[12px]">{{ $device->device_code }}</td>
                         <td>{{ $device->building->name ?? '-' }}</td>
                         <td>
                             @if($device->isOnline())
@@ -44,21 +44,26 @@
                                 <span class="badge badge-muted">Offline</span>
                             @endif
                         </td>
-                        <td class="text-caption" style="color:var(--color-ink-muted);">
+                        <td class="text-caption text-ink-muted">
                             {{ $device->last_heartbeat_at ? $device->last_heartbeat_at->diffForHumans() : 'Belum pernah' }}
                         </td>
-                        <td style="text-align:right;">
+                        <td class="text-right">
                             <form method="POST" action="{{ route('devices.revoke', $device) }}" class="inline"
                                   onsubmit="return confirm('Cabut token perangkat ini?')">
                                 @csrf @method('DELETE')
-                                <button type="submit" class="btn-danger" style="font-size:12px;">Cabut Token</button>
+                                <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-[4px]">
+                                    <i data-lucide="power-off" class="w-3 h-3"></i> Cabut Token
+                                </button>
                             </form>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center; color:var(--color-ink-faint); padding:var(--space-xxl);">
-                            Belum ada perangkat. Generate kode pairing untuk mendaftarkan perangkat baru.
+                        <td colspan="6" class="text-center text-ink-faint p-xxl">
+                            <div class="flex flex-col items-center justify-center gap-sm">
+                                <i data-lucide="cpu" class="w-8 h-8 opacity-50"></i>
+                                Belum ada perangkat. Generate kode pairing untuk mendaftarkan perangkat baru.
+                            </div>
                         </td>
                     </tr>
                 @endforelse
@@ -69,35 +74,49 @@
     {{-- Add Device Sidebar --}}
     <div>
         {{-- Auto Discovery --}}
-        <div class="card" style="padding:var(--space-md); margin-bottom:var(--space-md);">
-            <p style="font-size:14px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Auto-Discovery (LAN)</p>
-            <p class="text-caption" style="color:var(--color-ink-muted); margin-bottom:var(--space-md);">
-                Cari perangkat Edge Engine yang terhubung di jaringan WiFi yang sama.
+        <div class="card p-md mb-md">
+            <h3 class="text-[14px] font-semibold text-ink mb-[4px] flex items-center gap-xs">
+                <i data-lucide="radar" class="w-4 h-4 text-primary"></i> Auto-Discovery (LAN)
+            </h3>
+            <p class="text-caption text-ink-muted mb-sm">
+                Cari dan pair perangkat Edge Engine di jaringan yang sama — tanpa terminal.
             </p>
+
+            {{-- Building selector for auto-pair --}}
+            <div class="mb-sm">
+                <label class="form-label">Gedung Tujuan</label>
+                <select id="auto-pair-building" class="form-select">
+                    <option value="">— Pilih Gedung —</option>
+                    @foreach($buildings as $building)
+                        <option value="{{ $building->id }}">{{ $building->name }}</option>
+                    @endforeach
+                </select>
+            </div>
             
-            <button onclick="scanNetwork()" id="btn-scan" class="btn btn-primary" style="width:100%; font-size:13px; padding:8px 0; border-radius:var(--rounded-md); display:flex; align-items:center; justify-content:center; gap:8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
-                Scan Jaringan Sekarang
+            <button onclick="scanNetwork()" id="btn-scan" class="btn btn-primary w-full text-[13px] py-2 rounded-md flex justify-center items-center gap-2">
+                <i data-lucide="search" class="w-4 h-4"></i> Scan Jaringan Sekarang
             </button>
             
-            <div id="scan-results" style="margin-top:var(--space-md); display:none;">
-                <p class="text-eyebrow" style="color:var(--color-ink-muted); margin-bottom:var(--space-xs);">Hasil Scan</p>
-                <div id="devices-list" style="display:flex; flex-direction:column; gap:8px;">
+            <div id="scan-results" class="mt-md hidden">
+                <p class="text-eyebrow text-ink-muted mb-xs">Hasil Scan</p>
+                <div id="devices-list" class="flex flex-col gap-2">
                     <!-- Injected by JS -->
                 </div>
             </div>
         </div>
 
         {{-- Manual Pairing Code --}}
-        <div class="card" style="padding:var(--space-md);">
-            <p style="font-size:14px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Pairing Manual</p>
-            <p class="text-caption" style="color:var(--color-ink-muted); margin-bottom:var(--space-md);">
+        <div class="card p-md">
+            <h3 class="text-[14px] font-semibold text-ink mb-[4px] flex items-center gap-xs">
+                <i data-lucide="key" class="w-4 h-4 text-primary"></i> Pairing Manual
+            </h3>
+            <p class="text-caption text-ink-muted mb-md">
                 Generate kode 8 karakter untuk di-input manual ke Orange Pi.
             </p>
 
             <form method="POST" action="{{ route('devices.pair.code') }}">
                 @csrf
-                <div style="margin-bottom:var(--space-md);">
+                <div class="mb-md">
                     <label class="form-label">Gedung / Lokasi</label>
                     <select name="building_id" required class="form-select">
                         <option value="">— Pilih Gedung —</option>
@@ -109,7 +128,7 @@
                         <p class="form-error">{{ $message }}</p>
                     @enderror
                 </div>
-                <button type="submit" class="btn" style="width:100%; font-size:13px; padding:8px 0; border-radius:var(--rounded-md); border:1px solid var(--color-hairline); background:#fff;">
+                <button type="submit" class="btn btn-secondary w-full text-[13px] py-2 rounded-md">
                     Generate Pairing Code
                 </button>
             </form>
@@ -124,9 +143,10 @@ async function scanNetwork() {
     const list = document.getElementById('devices-list');
     
     btn.disabled = true;
-    btn.innerHTML = 'Mencari perangkat...';
-    list.innerHTML = '<p class="text-caption" style="color:var(--color-ink-muted); text-align:center;">Scanning UDP Port 55555...</p>';
-    resultsDiv.style.display = 'block';
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Mencari...';
+    lucide.createIcons();
+    list.innerHTML = '<p class="text-caption text-ink-muted text-center py-4">Scanning UDP Port 55555...</p>';
+    resultsDiv.classList.remove('hidden');
 
     try {
         const res = await fetch('{{ route("devices.discover") }}');
@@ -134,19 +154,19 @@ async function scanNetwork() {
         
         list.innerHTML = '';
         if (data.devices.length === 0) {
-            list.innerHTML = '<p class="text-caption" style="color:var(--color-ink-muted); text-align:center;">Tidak ada perangkat ditemukan.</p>';
+            list.innerHTML = '<p class="text-caption text-ink-muted text-center py-4">Tidak ada perangkat ditemukan.</p>';
         } else {
             data.devices.forEach(dev => {
                 const isPaired = dev.status === 'paired';
                 const actionHtml = isPaired 
-                    ? `<span class="badge badge-muted">Sudah Paired</span>`
-                    : `<button onclick="autoPair('${dev.ip_address}', ${dev.port}, '${dev.device_id}')" class="btn btn-primary" style="font-size:11px; padding:4px 8px; border-radius:4px;">Pair</button>`;
+                    ? `<span class="badge badge-muted text-[10px]">Sudah Paired</span>`
+                    : `<button onclick="autoPair('${dev.ip_address}', ${dev.port}, '${dev.device_id}')" class="btn btn-primary text-[11px] px-2 py-1 rounded-sm">Pair</button>`;
                     
                 list.innerHTML += `
-                    <div style="padding:12px; border:1px solid var(--color-hairline); border-radius:var(--rounded-md); display:flex; justify-content:space-between; align-items:center;">
+                    <div class="p-3 border border-hairline rounded-md flex justify-between items-center bg-canvas">
                         <div>
-                            <div style="font-size:12px; font-weight:600; color:var(--color-ink);">${dev.device_id}</div>
-                            <div style="font-size:11px; color:var(--color-ink-muted); font-family:monospace;">${dev.ip_address}:${dev.port}</div>
+                            <div class="text-[12px] font-semibold text-ink">${dev.device_id}</div>
+                            <div class="text-[11px] text-ink-muted font-mono">${dev.ip_address}:${dev.port}</div>
                         </div>
                         ${actionHtml}
                     </div>
@@ -154,15 +174,21 @@ async function scanNetwork() {
             });
         }
     } catch (e) {
-        list.innerHTML = '<p class="text-caption" style="color:var(--color-danger); text-align:center;">Gagal melakukan scan jaringan.</p>';
+        list.innerHTML = '<p class="text-caption text-red-500 text-center py-4">Gagal melakukan scan jaringan.</p>';
     } finally {
         btn.disabled = false;
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg> Scan Jaringan Ulang`;
+        btn.innerHTML = '<i data-lucide="search" class="w-4 h-4"></i> Scan Jaringan Ulang';
+        lucide.createIcons();
     }
 }
 
 async function autoPair(ip, port, name) {
-    if(!confirm('Pair otomatis dengan perangkat ini?')) return;
+    const buildingId = document.getElementById('auto-pair-building').value;
+    if (!buildingId) {
+        alert('Pilih Gedung Tujuan terlebih dahulu sebelum pairing.');
+        return;
+    }
+    if (!confirm(`Pair otomatis dengan perangkat "${name}"?`)) return;
     
     try {
         const res = await fetch('{{ route("devices.auto-pair") }}', {
@@ -171,7 +197,7 @@ async function autoPair(ip, port, name) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
-            body: JSON.stringify({ ip_address: ip, port: port, name: name })
+            body: JSON.stringify({ ip_address: ip, port: port, building_id: buildingId })
         });
         
         const data = await res.json();
@@ -186,6 +212,5 @@ async function autoPair(ip, port, name) {
     }
 }
 </script>
-</div>
 
 @endsection

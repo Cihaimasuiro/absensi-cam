@@ -1,50 +1,81 @@
 @extends('layouts.app')
 @section('title', 'Dashboard')
 
+@section('header-actions')
+    <a href="{{ route('students.index') }}" class="btn btn-utility">
+        <i data-lucide="users" class="w-4 h-4"></i> Kelola Anggota
+    </a>
+@endsection
+
 @section('content')
-<div style="display:grid; grid-template-columns:1fr 320px; gap:var(--space-lg);">
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-lg">
 
     {{-- Live Camera --}}
-    <div class="card" style="padding:var(--space-md);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md); padding-bottom:var(--space-xs); border-bottom:1px solid var(--color-hairline);">
-            <span style="font-size:14px; font-weight:600; color:var(--color-ink);">Live Camera Stream</span>
-            <span class="text-eyebrow" style="color:var(--color-ink-faint);">Edge Engine 01 · 192.168.10.50</span>
+    <div class="card p-md flex flex-col">
+        <div class="flex justify-between items-center mb-md pb-xs border-b border-hairline">
+            <span class="text-[14px] font-semibold text-ink flex items-center gap-xs">
+                <i data-lucide="video" class="w-[14px] h-[14px] text-primary"></i>
+                Live Camera Stream
+            </span>
+            <span class="text-eyebrow text-ink-faint flex items-center gap-xs">
+                <i data-lucide="wifi" class="w-[12px] h-[12px]"></i>
+                {{ $streamName }} · {{ $streamIp }}
+            </span>
         </div>
-        <div style="background:#000; aspect-ratio:16/9; position:relative; border-radius:var(--rounded-sm); overflow:hidden; display:flex; align-items:center; justify-content:center;">
-            <span style="color:var(--color-ink-faint); font-size:13px; position:absolute; z-index:0;">Stream Offline</span>
-            <img src="http://192.168.10.50:5000/video_feed"
+        <div class="bg-black aspect-video relative rounded-sm overflow-hidden flex items-center justify-center group">
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-ink-faint z-0 gap-sm">
+                <i data-lucide="video-off" class="w-8 h-8 opacity-50"></i>
+                <span class="text-[13px]">Stream Offline / Loading...</span>
+            </div>
+            <img src="http://{{ $streamIp }}:5000/video_feed"
                  alt="Live Stream"
-                 style="position:relative; z-index:1; width:100%; height:100%; object-fit:contain;">
+                 class="relative z-5 w-full h-full object-contain"
+                 onerror="this.style.display='none'">
         </div>
     </div>
 
     {{-- Activity Log --}}
-    <div class="card" style="padding:var(--space-md); display:flex; flex-direction:column; max-height:520px;">
-        <div style="font-size:14px; font-weight:600; color:var(--color-ink); margin-bottom:var(--space-md); padding-bottom:var(--space-xs); border-bottom:1px solid var(--color-hairline);">
+    <div class="card p-md flex flex-col h-[520px]">
+        <div class="text-[14px] font-semibold text-ink mb-md pb-xs border-b border-hairline flex items-center gap-xs">
+            <i data-lucide="activity" class="w-[14px] h-[14px] text-accent-green"></i>
             Log Aktivitas Terbaru
         </div>
-        <div style="flex:1; overflow-y:auto;" class="custom-scroll">
+        <div class="flex-1 overflow-y-auto custom-scroll pr-xs">
             @if(isset($recentLogs) && $recentLogs->count() > 0)
                 @foreach($recentLogs as $log)
-                    <div style="display:flex; justify-content:space-between; padding:var(--space-xs) 0; border-bottom:1px solid var(--color-hairline);">
-                        <div>
-                            <div style="font-size:13px; font-weight:500; color:var(--color-ink);">{{ $log->student->full_name ?? 'Unknown' }}</div>
-                            <div class="text-caption" style="color:var(--color-ink-muted);">{{ $log->student->nis ?? '-' }}</div>
-                        </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:{{ $log->direction === 'in' ? 'var(--color-accent-green)' : 'var(--color-ink-muted)' }};">
-                                {{ $log->direction }}
+                    <div class="flex justify-between py-xs border-b border-hairline last:border-0 hover:bg-canvas-soft transition-colors px-xs -mx-xs rounded-xs">
+                        <div class="flex items-center gap-sm">
+                            <div class="w-8 h-8 rounded-full bg-canvas flex items-center justify-center border border-hairline shrink-0">
+                                <i data-lucide="user" class="w-4 h-4 text-ink-faint"></i>
                             </div>
-                            <div class="text-caption" style="color:var(--color-ink-faint);">{{ $log->scanned_at->format('H:i') }}</div>
+                            <div>
+                                <div class="text-[13px] font-medium text-ink">{{ $log->student->name ?? 'Unknown' }}</div>
+                                <div class="text-caption text-ink-muted">{{ $log->student->code ?? '-' }}</div>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col justify-center">
+                            <div class="text-[11px] font-semibold uppercase {{ $log->direction === 'in' ? 'text-accent-green' : 'text-ink-muted' }} flex items-center justify-end gap-[4px]">
+                                {{ $log->direction }}
+                                <i data-lucide="{{ $log->direction === 'in' ? 'log-in' : 'log-out' }}" class="w-3 h-3"></i>
+                            </div>
+                            <div class="text-caption text-ink-faint flex items-center justify-end gap-[4px]">
+                                <i data-lucide="clock" class="w-3 h-3"></i>
+                                {{ $log->scanned_at->format('H:i') }}
+                            </div>
                         </div>
                     </div>
                 @endforeach
             @else
-                <div class="text-caption" style="color:var(--color-ink-faint); text-align:center; padding:var(--space-xxl) 0;">Belum ada aktivitas.</div>
+                <div class="flex flex-col items-center justify-center h-full text-ink-faint gap-sm">
+                    <i data-lucide="history" class="w-6 h-6 opacity-50"></i>
+                    <div class="text-caption">Belum ada aktivitas.</div>
+                </div>
             @endif
         </div>
-        <div style="padding-top:var(--space-sm); border-top:1px solid var(--color-hairline); text-align:center;">
-            <a href="{{ route('reports.index') }}" style="font-size:13px; color:var(--color-primary); font-weight:500; text-decoration:none;">Lihat Semua Laporan →</a>
+        <div class="pt-sm border-t border-hairline text-center mt-auto">
+            <a href="{{ route('reports.index') }}" class="text-[13px] text-primary font-medium no-underline hover:underline flex items-center justify-center gap-xs">
+                Lihat Semua Laporan <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </a>
         </div>
     </div>
 

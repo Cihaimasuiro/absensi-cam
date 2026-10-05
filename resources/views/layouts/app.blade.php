@@ -1,89 +1,154 @@
 <!DOCTYPE html>
-<html lang="id" class="h-full">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="h-full" style="display:flex; background:var(--color-canvas-soft); color:var(--color-ink);">
+<body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
 
-{{-- ═══════ SIDEBAR ═══════ --}}
-<aside style="
-    width: 200px; flex-shrink: 0;
-    background: var(--color-canvas);
-    border-right: 1px solid var(--color-hairline);
-    display: flex; flex-direction: column;
-    height: 100vh; position: sticky; top: 0;
-">
-    {{-- Brand --}}
-    <div style="
-        height: 52px; display: flex; align-items: center;
-        padding: 0 var(--space-md);
-        border-bottom: 1px solid var(--color-hairline);
-        gap: var(--space-xs);
-    ">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.75">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175A2.31 2.31 0 0116.773 6.175l-.821-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/>
-        </svg>
-        <span style="font-size:14px; font-weight:600; color:var(--color-ink);">Smart Absensi</span>
+{{-- WowDash Sidebar --}}
+<aside class="fixed inset-y-0 left-0 w-[260px] bg-canvas border-r border-hairline flex flex-col transition-all duration-300 z-50 shadow-sm">
+    <div class="h-[72px] flex items-center px-xl border-b border-hairline shrink-0">
+        <a href="{{ route('dashboard') }}" class="flex items-center gap-sm">
+            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+                <i data-lucide="scan-face" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[20px] font-bold text-ink tracking-tight">Smart Absensi</span>
+        </a>
     </div>
 
-    {{-- Nav --}}
-    <nav style="flex:1; overflow-y:auto; padding:var(--space-xs);" class="custom-scroll">
-        <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
-        <a href="{{ route('students.index') }}" class="nav-item {{ request()->routeIs('students.*') ? 'active' : '' }}">Anggota</a>
-        <a href="{{ route('reports.index') }}" class="nav-item {{ request()->routeIs('reports.*') ? 'active' : '' }}">Laporan</a>
+    <div class="flex-1 overflow-y-auto py-md custom-scroll">
+        <ul class="flex flex-col gap-[4px] px-md">
+            <li>
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('dashboard') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
 
-        <div style="height:1px; background:var(--color-hairline); margin:var(--space-xs) 0;"></div>
-        <p style="font-size:10px; font-weight:600; letter-spacing:0.08em; color:var(--color-ink-faint); padding:0 var(--space-sm) 4px; text-transform:uppercase;">Manajemen</p>
+            <li class="mt-md mb-xs px-md">
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Application</span>
+            </li>
+            
+            <li>
+                <a href="{{ route('students.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('students.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                    <span>Anggota</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('reports.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('reports.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                    <span>Laporan</span>
+                </a>
+            </li>
 
-        <a href="{{ route('schools.index') }}" class="nav-item {{ request()->routeIs('schools.*') ? 'active' : '' }}">Sekolah</a>
-        <a href="{{ route('devices.index') }}" class="nav-item {{ request()->routeIs('devices.*') ? 'active' : '' }}">Perangkat</a>
-    </nav>
+            <li class="mt-md mb-xs px-md">
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Management</span>
+            </li>
 
-    {{-- Footer --}}
-    <div style="padding:var(--space-xs) var(--space-md); border-top:1px solid var(--color-hairline);">
-        <p style="font-size:11px; color:var(--color-ink-faint);">Edge → Laravel 13</p>
+            <li>
+                <a href="{{ route('schools.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('schools.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="building" class="w-5 h-5"></i>
+                    <span>Organisasi</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('devices.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('devices.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="cpu" class="w-5 h-5"></i>
+                    <span>Perangkat</span>
+                </a>
+            </li>
+        </ul>
     </div>
 </aside>
 
-{{-- ═══════ MAIN ═══════ --}}
-<div style="flex:1; display:flex; flex-direction:column; min-width:0;">
-
-    {{-- Top bar --}}
-    <header style="
-        height: 52px; display:flex; align-items:center; justify-content:space-between;
-        padding: 0 var(--space-lg);
-        background: var(--color-canvas);
-        border-bottom: 1px solid var(--color-hairline);
-        flex-shrink: 0;
-    ">
-        <h1 style="font-size:15px; font-weight:600; color:var(--color-ink);">@yield('title')</h1>
-        <div style="display:flex; align-items:center; gap:var(--space-xs);">
-            @yield('header-actions')
+{{-- WowDash Main Content --}}
+<main class="ml-[260px] min-h-screen flex flex-col transition-all duration-300 relative">
+    
+    {{-- WowDash Navbar Header --}}
+    <div class="h-[72px] px-xl bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40 shadow-sm">
+        <div class="flex items-center gap-md">
+            <button class="text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            <form class="relative hidden md:block">
+                <i data-lucide="search" class="w-4 h-4 absolute left-md top-1/2 -translate-y-1/2 text-ink-faint"></i>
+                <input type="text" placeholder="Search..." class="pl-[40px] pr-md py-[8px] rounded-full border border-hairline bg-canvas-soft text-[14px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-[320px] transition-all">
+            </form>
         </div>
-    </header>
+        
+        <div class="flex items-center gap-md">
+            <button class="w-10 h-10 rounded-full flex items-center justify-center bg-canvas-soft border border-hairline text-ink-muted hover:text-primary transition-colors">
+                <i data-lucide="moon" class="w-5 h-5"></i>
+            </button>
+            <button class="w-10 h-10 rounded-full flex items-center justify-center bg-canvas-soft border border-hairline text-ink-muted hover:text-primary transition-colors relative">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span class="absolute top-2 right-2 w-2 h-2 bg-accent-orange rounded-full border border-canvas"></span>
+            </button>
+            <div class="flex items-center gap-sm cursor-pointer ml-xs pl-md border-l border-hairline">
+                <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shrink-0">
+                    <img src="https://ui-avatars.com/api/?name=Admin+User&background=0075de&color=fff" class="w-full h-full rounded-full" alt="Profile">
+                </div>
+                <div class="hidden md:block text-left">
+                    <p class="text-[14px] font-semibold text-ink leading-tight">Admin User</p>
+                    <p class="text-[12px] text-ink-muted">Admin</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    {{-- Flash messages --}}
-    @if(session('success') || session('error'))
-        <div style="padding:var(--space-md) var(--space-lg) 0;">
-            @if(session('success'))
-                <div class="alert alert-success">{{ session('success') }}</div>
-            @endif
-            @if(session('error'))
-                <div class="alert alert-error">{{ session('error') }}</div>
+    {{-- WowDash Dashboard Main Body --}}
+    <div class="flex-1 p-xl">
+        {{-- Breadcrumb Area --}}
+        <div class="flex flex-wrap items-center justify-between gap-md mb-lg">
+            <div>
+                <h6 class="text-[24px] font-bold text-ink mb-1">@yield('title')</h6>
+                <ul class="flex items-center gap-2 text-[14px] text-ink-muted">
+                    <li>
+                        <a href="{{ route('dashboard') }}" class="flex items-center gap-1 hover:text-primary transition-colors">
+                            <i data-lucide="home" class="w-4 h-4"></i> Dashboard
+                        </a>
+                    </li>
+                    <li><span class="text-hairline">/</span></li>
+                    <li class="text-primary font-medium">@yield('title')</li>
+                </ul>
+            </div>
+            @hasSection('header-actions')
+                <div class="flex items-center gap-xs">
+                    @yield('header-actions')
+                </div>
             @endif
         </div>
-    @endif
 
-    {{-- Content --}}
-    <main style="flex:1; padding:var(--space-lg); overflow-y:auto;" class="custom-scroll">
+        {{-- Flash Messages --}}
+        @if(session('success') || session('error'))
+            <div class="mb-lg">
+                @if(session('success'))
+                    <div class="alert alert-success flex items-center gap-xs">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> {{ session('success') }}
+                    </div>
+                @endif
+                @if(session('error'))
+                    <div class="alert alert-error flex items-center gap-xs">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        {{-- Page Content --}}
         @yield('content')
-    </main>
-</div>
+    </div>
 
+</main>
+
+<script>
+  lucide.createIcons();
+</script>
 </body>
 </html>

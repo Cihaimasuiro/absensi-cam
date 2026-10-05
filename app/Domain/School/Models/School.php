@@ -14,7 +14,7 @@ class School extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
-    public function groups(): HasMany
+    public function classrooms(): HasMany
     {
         return $this->hasMany(Classroom::class);
     }

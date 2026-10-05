@@ -17,6 +17,14 @@ logger = logging.getLogger(__name__)
 # from core.models.liveness_detector.detector import LivenessDetector
 # from core.models.face_recognizer.recognizer import FaceRecognizer
 import os
+import sys
+
+# Tambahkan path 'packages' agar face_core bisa di-import
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_PACKAGES_DIR = os.path.join(_ROOT_DIR, "packages")
+if _PACKAGES_DIR not in sys.path:
+    sys.path.insert(0, _PACKAGES_DIR)
+
 import threading
 import time
 import uuid
@@ -32,7 +40,7 @@ from config.settings import (
     STREAM_PORT,
     load_env,
 )
-from core.models.face_detector.detector import FaceDetector
+from core.models import FaceDetector
 from database import DatabaseManager
 from hardware.arduino import ArduinoBridge
 from services.detection_pipeline import DetectionPipeline
@@ -47,7 +55,8 @@ class EdgeEngine:
         self.arduino = ArduinoBridge()
 
         # ── Persistence & Sync ────────────────────────────────────────
-        self.db = DatabaseManager()
+        key_b64 = config.get("ENROLLMENT_EMBED_KEY")
+        self.db = DatabaseManager(key_b64=key_b64)
         self.sync_worker = SyncWorker(
             self.db,
             config["SMART_ABSENSI_URL"],
@@ -55,12 +64,40 @@ class EdgeEngine:
         )
 
         # ── AI Models ─────────────────────────────────────────────────
-        detector = FaceDetector(model_path=os.path.join(MODELS_DIR, "detector.onnx"))
-        # liveness   = LivenessDetector(os.path.join(MODELS_DIR, "liveness.onnx"))
-        # recognizer = FaceRecognizer(os.path.join(MODELS_DIR, "recognizer.onnx"))
+        detector = FaceDetector(
+            model_path=os.path.join(MODELS_DIR, "detector.onnx"),
+            input_size=(FRAME_WIDTH, FRAME_HEIGHT),
+            conf_threshold=0.6,
+            nms_threshold=0.3,
+            top_k=5000,
+            min_face_size=20,
+        )
+
+        class SimpleRecognizer:
+            def __init__(self, path):
+                from face_core.session_utils import init_face_recognizer_session
+                self.session, self.input_name = init_face_recognizer_session(path)
+            
+            def embed(self, frame, face_dict):
+                from face_core.preprocess import align_faces_batch, preprocess_batch
+                import numpy as np
+                aligned = align_faces_batch(frame, [face_dict], (112, 112))
+                if not aligned:
+                    return None
+                tensor = preprocess_batch(aligned)
+                out = self.session.run(None, {self.input_name: tensor})[0][0]
+                norm = np.linalg.norm(out)
+                return out / norm if norm > 0 else out
+
+        try:
+            recognizer = SimpleRecognizer(os.path.join(MODELS_DIR, "recognizer.onnx"))
+        except Exception as e:
+            logger.error(f"Failed to load recognizer: {e}")
+            recognizer = None
+
         self.pipeline = DetectionPipeline(
             detector=detector,
-            recognizer=None,  # stub — ganti dengan FaceRecognizer()
+            recognizer=recognizer,
             liveness=None,  # stub — ganti dengan LivenessDetector()
         )
 
@@ -93,7 +130,9 @@ class EdgeEngine:
 
         logger.info("Kamera aktif. Mulai memindai wajah…")
 
+        frame_id = 0
         while True:
+            frame_id += 1
             ret, frame = cap.read()
             if not ret:
                 logger.warning("Frame tidak terbaca — kamera mungkin dicabut.")
@@ -107,10 +146,16 @@ class EdgeEngine:
             ms = (time.time() - t0) * 1000
 
             for r in results:
-                # Gambar bounding box
+                # Gambar bounding box tipis warna merah (0, 0, 255)
                 x, y, w, h = r.bbox
-                color = (0, 255, 0) if r.recognized else (0, 0, 255)
-                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
+                
+                # Teks score warna kuning (0, 255, 255)
+                cv2.putText(frame, f"score:{r.confidence:.2f}", (x, y + h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+                
+                # Teks id warna merah (0, 0, 255)
+                display_name = r.name if r.name else "Unknown"
+                cv2.putText(frame, f"id:{display_name}", (x, y + h - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
 
                 if r.recognized:
                     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -143,7 +188,8 @@ class EdgeEngine:
                         f"[✓] {r.name} dikenali  conf={r.confidence:.3f}  [{ms:.0f}ms]"
                     )
 
-            status = f"{len(results)} wajah | {ms:.0f}ms" if results else "Scanning…"
+            fps = 1000 / ms if ms > 0 else 0
+            status = f"FRAMEID= {frame_id} FPS: {fps:.2f}"
             stream.push_frame(frame, status)
 
             time.sleep(0.01)  # Hindari CPU lock 100% di H6
@@ -162,4 +208,8 @@ if __name__ == "__main__":
         f"[✓] Perangkat {cfg['SMART_ABSENSI_DEVICE_ID']} → {cfg['SMART_ABSENSI_URL']}"
     )
 
-    EdgeEngine(cfg).run()
+    try:
+        EdgeEngine(cfg).run()
+    except KeyboardInterrupt:
+        logger.info("Menerima sinyal berhenti (Ctrl+C). Keluar dengan aman...")
+        sys.exit(0)

@@ -36,64 +36,58 @@ class GenerateFaceEmbedding implements ShouldQueue
         }
 
         try {
-            $bin = env('FACE_EMBED_BIN', '/usr/local/bin/face-embed');
+            $pythonBin = env('PYTHON_BIN', base_path('clients/edge-engine/venv/Scripts/python.exe'));
+            $script = base_path('packages/face_core/extract.py');
+            $detectorModel = base_path('clients/edge-engine/assets/models/detector.onnx');
+            $recognizerModel = base_path('clients/edge-engine/assets/models/recognizer.onnx');
             
-            // --- PONYTAIL LOCAL DEV BYPASS ---
-            if (app()->environment('local') && (!file_exists($bin) && PHP_OS_FAMILY === 'Windows')) {
-                $stdout = random_bytes(2048);
-                $key = random_bytes(32);
-            } else {
-                $keyBase64 = env('ENROLLMENT_EMBED_KEY');
-                
-                if (!$keyBase64) {
-                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
-                }
-                
-                $key = base64_decode($keyBase64);
-                if (strlen($key) !== 32) {
-                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
-                }
-
-                $cmd = escapeshellcmd($bin) . " --model " . escapeshellarg($this->modelVersion) . " --input " . escapeshellarg($this->tmpPath) . " --output -";
-                
-                $descriptors = [
-                    1 => ['pipe', 'w'], // stdout
-                    2 => ['pipe', 'w'], // stderr
-                ];
-                
-                $process = proc_open($cmd, $descriptors, $pipes);
-                
-                if (!is_resource($process)) {
-                    throw new \RuntimeException("Failed to start face-embed process");
-                }
-                
-                $stdout = stream_get_contents($pipes[1]);
-                $stderr = stream_get_contents($pipes[2]);
-                
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                
-                $exitCode = proc_close($process);
-                
-                if ($exitCode !== 0) {
-                    throw new \RuntimeException("face-embed failed (Exit $exitCode): $stderr");
-                }
-
-                if (strlen($stdout) !== 2048) {
-                    throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes, got " . strlen($stdout));
-                }
+            $keyBase64 = env('ENROLLMENT_EMBED_KEY');
+            if (!$keyBase64) {
+                throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
             }
             
-            // AES-256-GCM Encrypt
-            $iv = random_bytes(12);
+            $key = base64_decode($keyBase64);
+            if (strlen($key) !== 32) {
+                throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
+            }
+
+            $process = new \Symfony\Component\Process\Process([
+                $pythonBin,
+                $script,
+                $detectorModel,
+                $recognizerModel,
+                $this->tmpPath
+            ], base_path(), ['PYTHONPATH' => base_path('packages')]);
+            
+            $process->run();
+            
+            if (!$process->isSuccessful()) {
+                throw new \RuntimeException("Python extraction failed: " . $process->getErrorOutput());
+            }
+
+            $output = json_decode($process->getOutput(), true);
+            if (!$output || !isset($output['success']) || !$output['success']) {
+                $err = $output['error'] ?? 'Unknown error';
+                throw new \RuntimeException("Python extraction error: $err");
+            }
+            
+            $stdout = base64_decode($output['embedding_b64']);
+
+            if (strlen($stdout) !== 2048) {
+                throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes, got " . strlen($stdout));
+            }
+            
+            // Apply AES-256-GCM encryption
+            $nonce = random_bytes(12);
+            $aad = $this->studentId . '_' . $this->modelVersion;
             $tag = '';
-            $ciphertext = openssl_encrypt($stdout, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, '', 16);
             
+            $ciphertext = openssl_encrypt($stdout, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $nonce, $tag, $aad, 16);
             if ($ciphertext === false) {
-                throw new \RuntimeException("AES-256-GCM encryption failed");
+                throw new \RuntimeException("AES encryption failed");
             }
 
-            $encryptedBlob = $iv . $tag . $ciphertext;
+            $encryptedBlob = $nonce . $ciphertext . $tag;
             $hash = hash('sha256', $stdout);
 
             DB::transaction(function () use ($encryptedBlob, $hash) {
@@ -103,6 +97,7 @@ class GenerateFaceEmbedding implements ShouldQueue
 
                 $data = [
                     'embedding_enc' => base64_encode($encryptedBlob),
+                    'key_id' => 'default_key', // This should match edge engine's configured key
                     'model_version' => $this->modelVersion,
                     'version_cursor' => $nextCursor,
                     'embedding_hash' => $hash,

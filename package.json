@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "start:all": "concurrently --kill-others -c \"cyan,magenta,yellow\" -n \"LARAVEL,VITE,EDGE\" \"php artisan serve\" \"npm run dev\" \"cd clients/edge-engine && .\\venv\\Scripts\\python.exe engine.py\""
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

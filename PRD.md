@@ -95,7 +95,7 @@ flowchart LR
 4. **Init Camera**: Kamera UVC (`/dev/video0`) diinisialisasi pada 640x480 @ 30 FPS format MJPEG (resolusi dapat dinaikkan ke 720p, lihat 10.1).
 5. **Deteksi & Tracking Multi-Wajah**: YuNet mendeteksi wajah hingga jarak 3 m; tracker memberi ID stabil pada tiap wajah.
 6. **Liveness & Anti-Spoofing**: Setiap track diverifikasi model Mini-FASNet ONNX. Keputusan diambil dari **beberapa frame** (mis. ≥ 3 dari 5 frame lolos) untuk mengurangi kesalahan tunggal-frame. Track yang gagal ditandai `SPOOF`.
-7. **Feature Matching & Logging**: Track yang lolos liveness diekstrak embedding SFace (128-d) pada frame terpilih (maks. 5 per track) lalu dicocokkan ke templet di memori (dimuat dari SQLite; **kapasitas ≥ 2000 wajah**). Identitas dikonfirmasi bila skor melewati threshold pada ≥ 3 frame berturut-turut. Hasil ditulis ke tabel `attendance` dan `outbox` dalam satu transaksi.
+7. **Feature Matching & Logging**: Track yang lolos liveness diekstrak embedding SFace (512-d) pada frame terpilih (maks. 5 per track) lalu dicocokkan ke templet di memori (dimuat dari SQLite; **kapasitas ≥ 2000 wajah**). Identitas dikonfirmasi bila skor melewati threshold pada ≥ 3 frame berturut-turut. Hasil ditulis ke tabel `attendance` dan `outbox` dalam satu transaksi.
 8. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial untuk TFT, LED, dan buzzer.
 9. **REST API Sync**: Worker terpisah mengirim isi `outbox` ke Server Pusat secara asynchronous (batch, idempotent, retry dengan backoff). Server Pusat menyimpan riwayat dan menyediakan laporan terpusat. Perubahan templet wajah ditarik oleh edge secara berkala (delta sync).
 
@@ -104,7 +104,7 @@ flowchart LR
 | Fitur Utama | Deskripsi Spesifikasi Teknikal | Target Objektif |
 |-------------|--------------------------------|-----------------|
 | **Web Admin Panel (Laravel 13)** | Manajemen anggota, enrollment wajah, sekolah, perangkat, laporan, dan backup melalui browser (menggantikan aplikasi desktop Electron). | Kontrol penuh dari PC admin tanpa instal aplikasi |
-| **Kapasitas ≥ 2000 Wajah** | Templet SFace 128-d (float32 = 512 byte/wajah; 2000 wajah ≈ 1 MB) dimuat ke RAM; pencarian *brute-force cosine*. Penyimpanan persisten di SQLite. | Lookup < 50 ms untuk 2000 wajah (AC-32) |
+| **Kapasitas ≥ 2000 Wajah** | Templet ArcFace 512-d (float32 = 2048 byte/wajah; 2000 wajah ≈ 1 MB) dimuat ke RAM; pencarian *brute-force cosine*. Penyimpanan persisten di SQLite. | Lookup < 50 ms untuk 2000 wajah (AC-32) |
 | **Connected Devices** | Heartbeat tiap 60 detik (suhu SoC, RAM, disk, FPS, versi firmware, panjang antrean outbox). Perangkat dianggap *offline* bila tidak ada heartbeat > 3 menit. | Monitoring status perangkat hampir real-time |
 | **Custom Branches / Locations** | Perangkat dikelompokkan berdasarkan gedung/gedung/pintu (mis. Gerbang Utama, Pintu Utara, Gedung Bandung). | Manajemen lokasi absensi multi-titik |
 | **Custom Organizations** | Hirarki sekolah -> divisi/departemen/kelas -> anggota. | Pengelompokan data pengguna fleksibel |
@@ -959,7 +959,7 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 |---------|------|
 | SBC | Single-Board Computer (Orange Pi Lite 2) |
 | UVC | USB Video Class — kamera USB tanpa driver khusus |
-| Embedding / Templet | Vektor numerik (128-d) yang mewakili wajah; bukan foto |
+| Embedding / Templet | Vektor numerik (512-d) yang mewakili wajah; bukan foto |
 | Liveness / PAD | Deteksi keaslian wajah (anti-spoofing) |
 | APCER | Attack Presentation Classification Error Rate — proporsi serangan yang lolos |
 | BPCER | Bona Fide Presentation Classification Error Rate — proporsi wajah asli yang ditolak |

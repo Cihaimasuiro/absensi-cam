@@ -59,6 +59,7 @@ class PairDevice
                 'device_id' => $device->device_code,
                 'token'     => $token->plainTextToken, // shown once
                 'building_id' => $device->building_id,
+                'embed_key' => env('ENROLLMENT_EMBED_KEY', ''),
             ];
         });
     }

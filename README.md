@@ -72,36 +72,61 @@ The Edge Engine is heavily optimized for resource-constrained Single Board Compu
 
 ## Quickstart
 
-### Setting up the Backend (Laravel)
+### 1. Backend (Laravel)
 ```bash
 composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate --seed
-
-# Run the local server and background worker
-php artisan serve
-php artisan horizon
 ```
 
-### Setting up the Edge Engine (Development)
+### 2. Edge Engine — setup venv (sekali saja)
 ```bash
 cd clients/edge-engine
 python -m venv venv
-source venv/bin/activate  # Windows: .\venv\Scripts\activate
-pip install -r requirements.txt
 
-# Run the engine
-python engine.py
+# Windows
+venv\Scripts\pip install -r requirements.txt
+
+# Linux / macOS
+venv/bin/pip install -r requirements.txt
 ```
 
-### Building for Production (Edge)
-To build the single-file binary for OTA deployment on the Orange Pi:
+### 3. Pairing Edge ke Backend (sekali saja, sebelum `dev:edge`)
+
+> [!IMPORTANT]
+> Tanpa token perangkat, edge tidak bisa sync ke Laravel.
+
+1. Buka admin Laravel → **Devices** → buat **Pairing Code** baru.
+2. Salin kode yang muncul (contoh: `AB12CD`).
+3. Buka `http://localhost:5000` di browser → masukkan URL backend dan kode pairing → klik **Pair**.
+4. File `.env` di dalam `clients/edge-engine/` akan terisi otomatis (`SMART_ABSENSI_TOKEN`, `SMART_ABSENSI_DEVICE_ID`).
+
+### 4. Menjalankan Development
+
+```bash
+# Semua sekaligus (Laravel + Vite + Edge Engine)
+npm run dev
+
+# Hanya web (Laravel + Vite) — tanpa edge
+npm run dev:web
+
+# Hanya Edge Engine — tanpa web
+npm run dev:edge
+```
+
+> [!NOTE]
+> `npm run dev` tidak menggunakan `--kill-others`. Edge Engine tetap berjalan walau Laravel mati, sesuai prinsip offline-first.
+
+### 5. Build Production (Edge Engine)
 ```bash
 cd clients/edge-engine
 python build.py
-# This generates `dist/absensi-engine` and prints its SHA-256 checksum.
+# Menghasilkan dist/absensi-engine dan mencetak SHA-256 checksum-nya.
 ```
+
+> [!WARNING]
+> Di Orange Pi (production), **jangan** pakai `npm run dev`. Gunakan: `systemctl start smart-absensi`
 
 ## Development Guidelines
 

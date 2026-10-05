@@ -3,9 +3,10 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite",
-        "start:all": "concurrently --kill-others -c \"cyan,magenta,yellow\" -n \"LARAVEL,VITE,EDGE\" \"php artisan serve\" \"npm run dev\" \"cd clients/edge-engine && .\\venv\\Scripts\\python.exe engine.py\""
+        "build":     "vite build",
+        "dev":       "concurrently -c \"cyan,magenta,yellow\" -n \"LARAVEL,VITE,EDGE\" \"php artisan serve\" \"node node_modules/vite/bin/vite.js\" \"node scripts/run-edge.mjs\"",
+        "dev:web":   "concurrently -c \"cyan,magenta\" -n \"LARAVEL,VITE\" \"php artisan serve\" \"node node_modules/vite/bin/vite.js\"",
+        "dev:edge":  "node scripts/run-edge.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

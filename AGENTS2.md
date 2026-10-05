@@ -1116,7 +1116,7 @@ Every write operation that can be retried must be idempotent.
 Rules:
 - Every attendance record must have a UUID `id` field generated on the Edge Device, not on the server. This ensures that retrying a failed sync never creates duplicates.
 - When syncing the outbox, the server must accept repeated POSTs of the same UUID `id` without creating a duplicate record (INSERT OR IGNORE / upsert).
-- When updating a `.env` file (e.g., during auto-pair), always read-modify-write atomically. Never append blindly.
+- When updating a `.env` file, always read-modify-write atomically. Never append blindly.
 
 ---
 
@@ -1313,8 +1313,6 @@ The Edge Engine exposes a small REST API. Version all routes from the start.
 @app.route("/api/v1/status")
 @app.route("/api/v1/video_feed")
 @app.route("/api/v1/history")
-@app.route("/api/v1/auto-pair", methods=["POST"])
-@app.route("/api/v1/auto-update", methods=["POST"])
 ```
 
 Rules:
@@ -1710,7 +1708,7 @@ When modifying code that loads or uses an ONNX model:
 
 # 62. Agent Behavior — OTA Changes
 
-When modifying `updater.sh` or the `/api/v1/auto-update` Flask route:
+When modifying updater scripts:
 
 - [ ] SHA-256 checksum verification is preserved.
 - [ ] Backup step is preserved for both binary and model update types.
@@ -2440,15 +2438,9 @@ from flask_limiter.util import get_remote_address
 
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day"])
 
-@app.route("/api/v1/auto-update", methods=["POST"])
-@limiter.limit("5 per minute")  # OTA updates should not be triggered rapidly
-def auto_update():
-    ...
-```
+
 
 Rules:
-- Rate-limit the `/api/v1/auto-update` endpoint: max 5 requests per minute.
-- Rate-limit the `/api/v1/auto-pair` endpoint: max 3 requests per minute.
 - The `/api/v1/video_feed` MJPEG stream should be limited to authenticated LAN clients only.
 - The heartbeat endpoint on the backend server side (not the Edge) must rate-limit to 1 request per 30 seconds per device.
 

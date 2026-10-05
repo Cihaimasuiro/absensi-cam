@@ -135,5 +135,7 @@ def kiosk():
 
 
 def start(port: int = STREAM_PORT) -> None:
-    logger.info(f"[Stream] Memulai server MJPEG di port {port}")
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
+    import os
+    bind_host = os.environ.get("STREAM_BIND_HOST", "127.0.0.1")
+    logger.info(f"[Stream] Memulai server MJPEG di port {port} (Host: {bind_host})")
+    app.run(host=bind_host, port=port, debug=False, use_reloader=False, threaded=True)

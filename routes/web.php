@@ -28,11 +28,6 @@ Route::prefix('devices')->name('devices.')->group(function () {
     Route::post('/pairing-code', [DeviceController::class, 'generatePairingCode'])->name('pair.code');
     Route::delete('/{device}/revoke', [DeviceController::class, 'revoke'])->name('revoke');
     
-    // Auto Discovery (Local dev only)
-    if (app()->environment('local', 'testing', 'development')) {
-        Route::get('/discover', [\App\Http\Controllers\Web\DeviceDiscoveryController::class, 'scan'])->name('discover');
-        Route::post('/auto-pair', [\App\Http\Controllers\Web\DeviceDiscoveryController::class, 'autoPair'])->name('auto-pair');
-    }
 });
 
 // Schools, Classrooms, Buildings

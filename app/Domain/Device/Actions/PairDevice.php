@@ -42,7 +42,7 @@ class PairDevice
             $device = Device::create([
                 'building_id'     => $pairingCode->building_id,
                 'name'          => $data['device_name'],
-                'device_code'   => 'dev-' . strtoupper(Str::random(4)),
+                'device_code'   => strtolower((string) Str::ulid()),
                 'fw_version'    => $data['fw_version'],
                 'model_version' => $data['model_version'],
                 'status'        => 'online',

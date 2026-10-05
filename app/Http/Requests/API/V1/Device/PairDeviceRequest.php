@@ -8,11 +8,8 @@ class PairDeviceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $ip = $this->ip();
-        $isLocalEnv = app()->environment('local', 'testing', 'development');
-
-        if (!$isLocalEnv && !$this->isSecure()) {
-            return false; // Force HTTPS in production
+        if (!env('PAIRING_ALLOW_HTTP', false) && !$this->isSecure()) {
+            return false; // Force HTTPS unless explicitly disabled for development
         }
 
         return true; 

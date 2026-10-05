@@ -99,7 +99,7 @@ venv/bin/pip install -r requirements.txt
 
 1. Buka admin Laravel → **Devices** → buat **Pairing Code** baru.
 2. Salin kode yang muncul (contoh: `AB12CD`).
-3. Buka `http://localhost:5000` di browser → masukkan URL backend dan kode pairing → klik **Pair**.
+3. Jalankan `python pairing.py` di terminal edge → masukkan URL backend dan kode pairing sesuai instruksi.
 4. File `.env` di dalam `clients/edge-engine/` akan terisi otomatis (`SMART_ABSENSI_TOKEN`, `SMART_ABSENSI_DEVICE_ID`).
 
 ### 4. Menjalankan Development

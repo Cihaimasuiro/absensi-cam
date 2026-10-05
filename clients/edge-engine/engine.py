@@ -101,10 +101,7 @@ class EdgeEngine:
             liveness=None,  # stub — ganti dengan LivenessDetector()
         )
 
-        # ── UDP Auto-Discovery ────────────────────────────────────────
-        import services.discovery_service as discovery
 
-        discovery.start()
 
         # ── Web Stream (daemon thread) ────────────────────────────────
         threading.Thread(

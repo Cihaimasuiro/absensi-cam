@@ -53,7 +53,7 @@ class SyncWorker:
             "records": [
                 {
                     "id": r["id"],
-                    "member_id": r["member_id"],
+                    "student_id": r["student_id"],
                     "captured_at": r["captured_at"],
                     "direction": r["direction"],
                     "score": r["score"],
@@ -88,17 +88,15 @@ class SyncWorker:
                     f"Gagal push absensi. HTTP {response.status_code}: {response.text}"
                 )
 
-        except requests.exceptions.RequestException as e:
-            logger.warning(
-                f"Server tidak dapat dihubungi, absensi tetap aman di Outbox: {e}"
-            )
+        except requests.exceptions.RequestException:
+            logger.info("Menunggu server online untuk push absensi (offline mode).")
 
     def pull_templates(self):
         last_sync = self.db.get_last_template_sync_time()
 
         url = f"{self.api_url}/api/v1/templates"
         if last_sync:
-            url += f"?last_sync={last_sync}"
+            url += f"?cursor={last_sync}"
 
         headers = {
             "Accept": "application/json",
@@ -109,7 +107,7 @@ class SyncWorker:
             response = requests.get(url, headers=headers, timeout=15)
             if response.status_code == 200:
                 data = response.json()
-                templates = data.get("data", [])
+                templates = data.get("items", [])
                 if templates:
                     logger.info(
                         f"Mengunduh {len(templates)} pembaruan wajah dari server..."
@@ -123,5 +121,5 @@ class SyncWorker:
                 logger.error(
                     f"Gagal pull templates. HTTP {response.status_code}: {response.text}"
                 )
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Gagal menghubungi server untuk pull templates: {e}")
+        except requests.exceptions.RequestException:
+            logger.info("Menunggu server online untuk pull templates (offline mode).")

@@ -66,12 +66,13 @@ def do_pair(server_url: str, code: str, device_name: str) -> dict:
     return resp.json()
 
 
-def save_env(server_url: str, token: str, device_id: str) -> None:
+def save_env(server_url: str, token: str, device_id: str, embed_key: str) -> None:
     """Tulis konfigurasi ke file .env."""
     content = (
         f"SMART_ABSENSI_URL={server_url}\n"
         f"SMART_ABSENSI_TOKEN={token}\n"
         f"SMART_ABSENSI_DEVICE_ID={device_id}\n"
+        f"ENROLLMENT_EMBED_KEY={embed_key}\n"
     )
     with open(ENV_PATH, "w") as f:
         f.write(content)
@@ -135,8 +136,9 @@ def main():
 
     token = result["token"]
     device_id = result["device_id"]
+    embed_key = result.get("embed_key", "")
 
-    save_env(server_url, token, device_id)
+    save_env(server_url, token, device_id, embed_key)
 
     print("\n╔══════════════════════════════════════╗")
     print("║           Pairing Berhasil!          ║")

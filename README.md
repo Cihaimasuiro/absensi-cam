@@ -118,15 +118,14 @@ npm run dev:edge
 > [!NOTE]
 > `npm run dev` tidak menggunakan `--kill-others`. Edge Engine tetap berjalan walau Laravel mati, sesuai prinsip offline-first.
 
-### 5. Build Production (Edge Engine)
+### 5. Production Deployment (Edge Engine)
+Di Orange Pi (production), instal menggunakan skrip otomatis yang akan membuat *virtual environment* Python dan layanan systemd:
+
 ```bash
 cd clients/edge-engine
-python build.py
-# Menghasilkan dist/absensi-engine dan mencetak SHA-256 checksum-nya.
+sudo ./install.sh
+# Skrip akan menginstal dependencies ke /opt/smart-absensi/edge-engine dan mengaktifkan smart-absensi.service
 ```
-
-> [!WARNING]
-> Di Orange Pi (production), **jangan** pakai `npm run dev`. Gunakan: `systemctl start smart-absensi`
 
 ## Development Guidelines
 

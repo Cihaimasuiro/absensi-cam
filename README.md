@@ -35,7 +35,8 @@ Most face recognition attendance systems rely on cloud inference, which requires
 
 ## Core Features
 
-- **On-Device AI Inference:** Real-time face detection (e.g., YuNet) and recognition (e.g., MobileFaceNet/SFace) running entirely on local ARM hardware using `onnxruntime`.
+- **On-Device AI Inference:** Real-time face detection (e.g., YuNet) and recognition (e.g., MobileFaceNet/SFace) running entirely on local ARM hardware using `onnxruntime` via the cross-platform `face_core` module.
+- **Biometric Security:** Face embeddings are strictly encrypted at rest in the database using AES-256-GCM. Keys are securely rotated and distributed to paired edge devices.
 - **Offline-First Syncing:** SQLite-backed outbox mechanism ensures no attendance records are lost during network outages.
 - **Over-The-Air (OTA) Updates:** Deploy new face recognition `.onnx` models and engine binary updates directly from the Laravel dashboard to fleets of edge devices.
 - **Latent Space Versioning:** Strict `MODEL_VERSION` tagging ensures biometric vectors from different model architectures are never incorrectly compared.
@@ -49,14 +50,14 @@ The project consists of two primary components:
 ### 1. The Backend (Laravel)
 A Modular Monolith built with Laravel, responsible for:
 - Managing Students, Employees, and Devices.
-- Generating Face Embeddings (via background Queues) during enrollment.
+- Generating Face Embeddings securely via a Python `face_core` integration running in background Queues during enrollment.
 - Providing the REST API for Edge Devices to sync attendance.
 - Broadcasting OTA update triggers.
 
 ### 2. The Edge Engine (Python)
 A lightweight, high-performance Python application running on the edge:
 - **Runtime:** Python 3.11+
-- **Inference:** ONNX Runtime (CPU Execution Provider)
+- **Inference:** ONNX Runtime (CPU Execution Provider) via `face_core`.
 - **Web API:** Flask for local network setup and status.
 - **Packaging:** Compiled into a single binary using PyInstaller.
 

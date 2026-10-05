@@ -8,13 +8,20 @@ class PairDeviceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true; // public endpoint — auth via one-time pairing code, not Bearer token
+        $ip = $this->ip();
+        $isLocalEnv = app()->environment('local', 'testing', 'development');
+
+        if (!$isLocalEnv && !$this->isSecure()) {
+            return false; // Force HTTPS in production
+        }
+
+        return true; 
     }
 
     public function rules(): array
     {
         return [
-            'code'          => ['required', 'string', 'size:9'],  // format: K7M2-9QXA (8 chars + dash)
+            'code'          => ['required', 'string', 'size:9'],
             'device_name'   => ['required', 'string', 'max:100'],
             'fw_version'    => ['required', 'string', 'max:30'],
             'model_version' => ['required', 'string', 'max:60'],

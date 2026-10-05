@@ -19,21 +19,21 @@ class PairDevice
      */
     public function execute(array $data): array
     {
-        // Validate the 8-char code (stored as SHA-256 hash)
         $codeHash = hash('sha256', strtoupper($data['code']));
 
-        $pairingCode = PairingCode::where('code_hash', $codeHash)
-            ->whereNull('used_at')
-            ->where('expires_at', '>', now())
-            ->first();
+        return DB::transaction(function () use ($data, $codeHash): array {
+            $pairingCode = PairingCode::where('code_hash', $codeHash)
+                ->whereNull('used_at')
+                ->where('expires_at', '>', now())
+                ->lockForUpdate()
+                ->first();
 
-        if (! $pairingCode) {
-            throw ValidationException::withMessages([
-                'code' => ['Invalid or expired pairing code.'],
-            ]);
-        }
+            if (! $pairingCode) {
+                throw ValidationException::withMessages([
+                    'code' => ['Invalid or expired pairing code.'],
+                ]);
+            }
 
-        return DB::transaction(function () use ($data, $pairingCode): array {
             // Mark code as used immediately (one-time)
             $pairingCode->update(['used_at' => now()]);
 
@@ -59,7 +59,7 @@ class PairDevice
                 'device_id' => $device->device_code,
                 'token'     => $token->plainTextToken, // shown once
                 'building_id' => $device->building_id,
-                'embed_key' => env('ENROLLMENT_EMBED_KEY', ''),
+                'embed_key' => config('app.enrollment_embed_key', ''),
             ];
         });
     }

@@ -41,7 +41,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             $detectorModel = base_path('clients/edge-engine/assets/models/detector.onnx');
             $recognizerModel = base_path('clients/edge-engine/assets/models/recognizer.onnx');
             
-            $keyBase64 = env('ENROLLMENT_EMBED_KEY');
+            $keyBase64 = config('app.enrollment_embed_key');
             if (!$keyBase64) {
                 throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
             }

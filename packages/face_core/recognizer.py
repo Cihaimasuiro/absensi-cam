@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
-from database.face import FaceDatabaseManager
+import numpy as np
 
 from .postprocess import (
     find_best_match,

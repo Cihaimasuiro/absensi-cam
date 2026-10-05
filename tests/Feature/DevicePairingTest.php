@@ -121,7 +121,7 @@ class DevicePairingTest extends TestCase
 
     public function test_pairing_rejects_http_when_flag_false(): void
     {
-        putenv('PAIRING_ALLOW_HTTP=false');
+        config(['app.pairing_allow_http' => false]);
 
         $response = $this->postJson('/api/v1/devices/pair', [
             'code'          => 'ABCD-1234',
@@ -135,7 +135,7 @@ class DevicePairingTest extends TestCase
 
     public function test_pairing_accepts_https_when_flag_false(): void
     {
-        putenv('PAIRING_ALLOW_HTTP=false');
+        config(['app.pairing_allow_http' => false]);
         
         // Mock a valid pairing code
         $building = Building::factory()->create();
@@ -148,13 +148,13 @@ class DevicePairingTest extends TestCase
             'created_by'  => $user->id,
         ]);
 
-        // Override the request to pretend it is secure
-        $response = $this->postJson('/api/v1/devices/pair', [
+        // Override the request to pretend it is secure by using https://
+        $response = $this->postJson('https://localhost/api/v1/devices/pair', [
             'code'          => $plain,
             'device_name'   => 'Test HTTPS Device',
             'fw_version'    => '1.0.0',
             'model_version' => 'sface-2021dec',
-        ], ['HTTPS' => 'on']);
+        ]);
 
         $response->assertStatus(201);
     }

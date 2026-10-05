@@ -12,6 +12,7 @@ Absensi-Cam combines several open-source frameworks, libraries, and AI models ac
 | Flask | BSD-3-Clause | https://github.com/pallets/flask |
 | ONNX Runtime | MIT | https://github.com/microsoft/onnxruntime |
 | OpenCV | Apache-2.0 | https://github.com/opencv/opencv |
+| Cryptography | Apache-2.0 / BSD | https://github.com/pyca/cryptography |
 
 ## Bundled Model Components
 

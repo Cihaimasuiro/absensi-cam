@@ -36,7 +36,8 @@ Examples of high-severity issues in Absensi-Cam include:
 - Bypassing the Device Pairing mechanism to spoof attendance records.
 - Over-The-Air (OTA) update vulnerabilities (e.g., bypassing SHA-256 checksum verification).
 - Exploiting the SQLite outbox or Flask API on the edge device to execute arbitrary code.
-- Extracting the `SMART_ABSENSI_TOKEN` from the edge device's `.env` remotely.
+- Extracting the `SMART_ABSENSI_TOKEN` or `ENROLLMENT_EMBED_KEY` from the edge device's `.env` remotely.
+- Bypassing or cracking the AES-256-GCM encryption used for biometric template storage.
 
 ## Architecture Scope
 

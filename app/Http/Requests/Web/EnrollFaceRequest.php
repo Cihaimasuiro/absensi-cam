@@ -12,6 +12,11 @@ class EnrollFaceRequest extends FormRequest
         return $student && $student->hasActiveConsent();
     }
 
+    protected function failedAuthorization()
+    {
+        throw new \Illuminate\Auth\Access\AuthorizationException('Siswa ini belum menyetujui pemrosesan data wajah (Consent). Silakan edit anggota dan centang persetujuan terlebih dahulu.');
+    }
+
     public function rules(): array
     {
         return [

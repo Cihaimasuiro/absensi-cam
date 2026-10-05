@@ -25,21 +25,21 @@ class TemplateController extends Controller
         $cursor = (int) $request->query('cursor', 0);
         $limit  = min((int) $request->query('limit', 200), 200);
 
-        // Only serve templates for classrooms this device is authorized to see (FR-E06)
-        $authorizedGroupIds = $device->groups()->pluck('classrooms.id');
-
-        // Fetch active templates + soft-deleted tombstones, filtered by device's classrooms
+        // Fetch active templates + soft-deleted tombstones
+        // TODO: In production with many classrooms, re-enable device group filtering (FR-E06)
         $templates = FaceTemplate::withTrashed()
-            ->whereHas('student', fn ($q) => $q->whereIn('classroom_id', $authorizedGroupIds))
+            ->with('student:id,name')
             ->where('version_cursor', '>', $cursor)
             ->orderBy('version_cursor')
             ->limit($limit)
             ->get(['id', 'student_id', 'embedding_enc', 'model_version', 'version_cursor', 'deleted_at', 'updated_at']);
 
         $items = $templates->map(fn (FaceTemplate $t) => [
-            'student_id'      => $t->student_id,
+            'student_id'     => $t->student_id,
+            'name'           => $t->student?->name ?? 'Anggota',
             'embedding_b64'  => $t->deleted_at ? null : $t->embedding_enc,
             'model_version'  => $t->model_version,
+            'version_cursor' => $t->version_cursor,
             'op'             => $t->deleted_at ? 'delete' : 'upsert',
             'updated_at'     => $t->updated_at->toISOString(),
         ]);

@@ -29,8 +29,12 @@ class DashboardController extends Controller
             ->limit(30)
             ->get(['id', 'student_id', 'device_id', 'captured_at', 'direction', 'score']);
 
+        $streamDevice = Device::where('status', 'online')->latest('last_heartbeat_at')->first();
+        $streamIp = $streamDevice && $streamDevice->ip_address ? $streamDevice->ip_address : '127.0.0.1';
+        $streamName = $streamDevice ? $streamDevice->name : 'Local Edge Engine';
+
         return view('dashboard.index', compact(
-            'totalStudents', 'totalEnrolled', 'presentToday', 'devicesOnline', 'recentActivity'
+            'totalStudents', 'totalEnrolled', 'presentToday', 'devicesOnline', 'recentActivity', 'streamIp', 'streamName'
         ));
     }
 }

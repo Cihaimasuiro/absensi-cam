@@ -129,4 +129,71 @@ class StudentWebController extends Controller
             'message' => 'Enrollment dijadwalkan. Template akan tersedia dalam beberapa detik.'
         ]);
     }
+
+    public function bulkEnroll(Request $request)
+    {
+        $request->validate([
+            'zip_file' => ['required', 'file', 'mimes:zip', 'max:51200'], // 50MB max
+            'has_consent' => ['required', 'boolean'],
+        ]);
+
+        try {
+            $zip = new \ZipArchive;
+            $res = $zip->open($request->file('zip_file')->path());
+            if ($res === true) {
+                // Extract to temp folder
+                $extractPath = storage_path('app/tmp/bulk_enroll_' . \Illuminate\Support\Str::uuid());
+                if (!\Illuminate\Support\Facades\File::exists($extractPath)) {
+                    \Illuminate\Support\Facades\File::makeDirectory($extractPath, 0755, true);
+                }
+                
+                $zip->extractTo($extractPath);
+                $zip->close();
+                
+                // Read all files
+                $files = \Illuminate\Support\Facades\File::allFiles($extractPath);
+                $successCount = 0;
+                $skippedCount = 0;
+
+                foreach ($files as $file) {
+                    // Skip hidden files like .DS_Store
+                    if (str_starts_with($file->getFilename(), '.')) continue;
+
+                    $code = pathinfo($file->getFilename(), PATHINFO_FILENAME);
+                    
+                    $student = Student::where('code', $code)->first();
+                    if ($student) {
+                        // Make sure consent is recorded
+                        if (!$student->hasActiveConsent() && $request->boolean('has_consent')) {
+                            $student->consents()->create([
+                                'given_at'     => now(),
+                                'text_version' => 'v1.0 (bulk)',
+                                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+                            ]);
+                        }
+                        
+                        // Fake an UploadedFile
+                        $uploadedFile = new \Illuminate\Http\UploadedFile(
+                            $file->getPathname(),
+                            $file->getFilename(),
+                            \Illuminate\Support\Facades\File::mimeType($file->getPathname()),
+                            null,
+                            true
+                        );
+
+                        (new \App\Domain\Enrollment\Actions\EnrollFace)->execute($student, $uploadedFile);
+                        $successCount++;
+                    } else {
+                        $skippedCount++;
+                    }
+                }
+
+                return redirect()->route('students.index')->with('success', "Proses pendaftaran massal dijadwalkan: $successCount siswa berhasil, $skippedCount tidak ditemukan/dilewati.");
+            } else {
+                return redirect()->route('students.index')->with('error', 'Gagal membuka berkas ZIP.');
+            }
+        } catch (\Exception $e) {
+            return redirect()->route('students.index')->with('error', 'Gagal memproses ZIP: ' . $e->getMessage());
+        }
+    }
 }

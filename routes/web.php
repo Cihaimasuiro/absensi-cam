@@ -12,6 +12,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 // Students — full CRUD + enrollment
 Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
+Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
 Route::resource('students', StudentWebController::class);
 Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
 
@@ -36,6 +37,8 @@ Route::prefix('devices')->name('devices.')->group(function () {
 Route::prefix('schools')->name('schools.')->group(function () {
     Route::get('/',                    [SchoolController::class, 'index'])->name('index');
     Route::post('/',                   [SchoolController::class, 'store'])->name('store');
+    Route::put('/{school}',            [SchoolController::class, 'update'])->name('update');
+    Route::delete('/{school}',         [SchoolController::class, 'destroy'])->name('destroy');
     Route::post('/classrooms',             [SchoolController::class, 'storeGroup'])->name('classrooms.store');
     Route::post('/buildings',           [SchoolController::class, 'storeBuilding'])->name('buildings.store');
 });

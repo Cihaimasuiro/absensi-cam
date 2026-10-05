@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'enrollment_embed_key' => env('ENROLLMENT_EMBED_KEY', ''),
+
 ];

@@ -23,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 FW_VERSION = "1.0.0"
-MODEL_VERSION = "yunet-2303"
+MODEL_VERSION = "sface-2021dec"
 
 
 def get_device_name() -> str:

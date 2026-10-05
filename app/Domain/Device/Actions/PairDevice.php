@@ -6,6 +6,7 @@ use App\Domain\Device\Models\Device;
 use App\Domain\Device\Models\PairingCode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\NewAccessToken;
 
@@ -41,7 +42,7 @@ class PairDevice
             $device = Device::create([
                 'building_id'     => $pairingCode->building_id,
                 'name'          => $data['device_name'],
-                'device_code'   => 'dev-' . str_pad(Device::count() + 1, 4, '0', STR_PAD_LEFT),
+                'device_code'   => 'dev-' . strtoupper(Str::random(4)),
                 'fw_version'    => $data['fw_version'],
                 'model_version' => $data['model_version'],
                 'status'        => 'online',

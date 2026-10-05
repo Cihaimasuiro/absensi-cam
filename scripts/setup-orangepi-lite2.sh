@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup-orangepi-m0.sh — Smart Absensi M0 Benchmark Environment
+# setup-orangepi-lite2.sh — Smart Absensi M0 Benchmark Environment
 # =============================================================================
-# Installs the Facenox Python pipeline on Orange Pi Lite 2 for benchmarking.
+# Installs the Python pipeline on Orange Pi Lite 2 for benchmarking.
 # Runs entirely from your Windows PC over SSH (no manual steps on the board).
 #
 # Usage (from project root, Git Bash or WSL):
-#   bash scripts/setup-orangepi-m0.sh
+#   bash scripts/setup-orangepi-lite2.sh
 #
 # Target:  Orange Pi Lite 2 · Allwinner H6 · aarch64 · Debian 12
-# Facenox: AGPL-3.0 (templates/facenox_repo/) — benchmark use only.
-#          Do NOT ship any Facenox-derived code without complying with AGPL.
 #
 # PRD reference:
 #   §4.1 hardware table — Orange Pi Lite 2, 1 GB LPDDR3
 #   §14  M0 gate — latency, RSS, temperature
-#   §12.4 AGPL licence obligation
 # =============================================================================
 
 set -euo pipefail
@@ -23,12 +20,12 @@ set -euo pipefail
 # ── Configuration ─────────────────────────────────────────────────────────────
 HOST="192.168.10.50"
 #HOST="192.168.1.200"
-USER="root"
-PASS="orangepi"            # ⚠ Change on the board after M0 is done: passwd root
-REMOTE_BASE="/opt/facenox-bench"
-REMOTE_SERVER="${REMOTE_BASE}/server"
+USER="edge"
+PASS="YOUR_PASSWORD_HERE"  # ⚠ Change this to the board's password
+REMOTE_BASE="/opt/smart-absensi"
+REMOTE_SERVER="${REMOTE_BASE}/edge-engine"
 REMOTE_VENV="${REMOTE_BASE}/venv"
-LOCAL_SERVER="templates/facenox_repo/server"
+LOCAL_SERVER="clients/edge-engine"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GRN='\033[0;32m'; YLW='\033[1;33m'; CYN='\033[0;36m'; RST='\033[0m'

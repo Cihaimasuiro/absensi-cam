@@ -119,6 +119,46 @@ class DevicePairingTest extends TestCase
             ->assertJsonValidationErrors(['code', 'device_name', 'fw_version', 'model_version']);
     }
 
+    public function test_pairing_rejects_http_when_flag_false(): void
+    {
+        putenv('PAIRING_ALLOW_HTTP=false');
+
+        $response = $this->postJson('/api/v1/devices/pair', [
+            'code'          => 'ABCD-1234',
+            'device_name'   => 'Test HTTP Device',
+            'fw_version'    => '1.0.0',
+            'model_version' => 'sface-2021dec',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_pairing_accepts_https_when_flag_false(): void
+    {
+        putenv('PAIRING_ALLOW_HTTP=false');
+        
+        // Mock a valid pairing code
+        $building = Building::factory()->create();
+        $user = \App\Domain\User\Models\User::factory()->create();
+        $plain = 'ABCD-1234';
+        PairingCode::create([
+            'building_id' => $building->id,
+            'code_hash'   => hash('sha256', $plain),
+            'expires_at'  => now()->addMinutes(15),
+            'created_by'  => $user->id,
+        ]);
+
+        // Override the request to pretend it is secure
+        $response = $this->postJson('/api/v1/devices/pair', [
+            'code'          => $plain,
+            'device_name'   => 'Test HTTPS Device',
+            'fw_version'    => '1.0.0',
+            'model_version' => 'sface-2021dec',
+        ], ['HTTPS' => 'on']);
+
+        $response->assertStatus(201);
+    }
+
     // ─── POST /api/v1/devices/heartbeat ─────────────────────────────────
 
     public function test_authenticated_device_can_send_heartbeat(): void

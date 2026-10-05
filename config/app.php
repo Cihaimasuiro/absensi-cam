@@ -15,6 +15,8 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'pairing_allow_http' => env('PAIRING_ALLOW_HTTP', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

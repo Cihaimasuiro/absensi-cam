@@ -104,7 +104,7 @@ Rules:
 | Function | `snake_case` | `get_embedding()` |
 | Variable | `snake_case` | `frame_count` |
 | Class | `PascalCase` | `FaceRecognizer` |
-| Constant | `UPPER_SNAKE_CASE` | `UDP_PORT = 55555` |
+
 | Private | `_single_leading_underscore` | `_latest_status` |
 | Protected from name-mangling | `__double_leading` | `__internal` (use sparingly) |
 | Type variable | `PascalCase` or single letter | `T`, `KT`, `VT` |
@@ -163,7 +163,7 @@ clients/edge-engine/
 ├── services/
 │   ├── __init__.py
 │   ├── stream_service.py     # Flask MJPEG + REST API
-│   └── discovery_service.py  # UDP broadcast listener
+
 │
 ├── models/                   # Binary .onnx model files (not Python)
 │   ├── recognizer.onnx
@@ -175,7 +175,7 @@ clients/edge-engine/
 ├── requirements-dev.txt      # Dev/test-only dependencies
 ├── build.py                  # PyInstaller compilation script
 ├── engine.spec               # PyInstaller spec file
-├── updater.sh                # OTA update script
+
 ├── engine.py                 # Main entry point
 └── .env                      # Local config (never committed)
 ```
@@ -280,14 +280,14 @@ Use Python's built-in `logging` module. Never use `print()` in production code p
 ```python
 import logging
 
-logging.info("[Discovery] UDP Listener started on port %d", UDP_PORT)
+
 logging.warning("[OTA] Checksum mismatch: expected=%s got=%s", expected, actual)
 logging.error("[Recognizer] ONNX session load failed: %s", e)
 ```
 
 **Bad:**
 ```python
-print(f"Started on port {UDP_PORT}")
+
 ```
 
 Rules:
@@ -511,7 +511,7 @@ hiddenimports=['onnxruntime.capi._pybind_state']
 
 - `build.py` must be idempotent. Running it twice produces the same artifact.
 - Clean `build/` and `dist/` at the start of every build run.
-- After compilation, print the SHA-256 checksum of the output binary. This checksum is used by `updater.sh` for verification:
+
 
 ```python
 import hashlib
@@ -526,7 +526,7 @@ print(f"SHA-256: {sha256}")
 When pushing a new binary or model to a device via the OTA system:
 - The payload must be a `tar.gz` archive.
 - The SHA-256 checksum of the `tar.gz` must be computed before upload and sent in the backend server OTA trigger payload.
-- The Edge Engine's `updater.sh` must verify the checksum before replacing any files.
+
 - A backup of the previous binary/models must be kept for automatic rollback.
 
 ---
@@ -766,7 +766,7 @@ build/
 Commit messages for Python changes follow Conventional Commits:
 ```
 feat(recognizer): add model_version to embedding cache
-fix(discovery): handle socket timeout on UDP recvfrom
+
 perf(onnx): pre-warm session with dummy inference at startup
 refactor(stream): move business logic out of /status route handler
 test(recognizer): add test for cache eviction at 2000 face limit
@@ -1143,7 +1143,7 @@ while not _shutdown_event.is_set():
     process_frame()
 
 # Cleanup
-discovery_service.stop()
+
 camera.release()
 logging.info("Engine shut down cleanly.")
 ```
@@ -1380,7 +1380,7 @@ Every magic number must be a named constant. Never scatter raw numbers throughou
 **Good:**
 ```python
 # config/settings.py
-UDP_PORT: int = 55555
+
 BUFFER_SIZE: int = 1024
 MAX_FACE_CACHE: int = 2000
 HEARTBEAT_INTERVAL_SECONDS: int = 60
@@ -1683,7 +1683,7 @@ Checklist for adding any new endpoint to `stream_service.py`:
 
 # 60. Agent Behavior — Security Review
 
-Before committing any code that handles external input (HTTP requests, UDP packets, file system paths):
+
 
 - [ ] Input is validated for type and value range.
 - [ ] No secrets are logged.
@@ -1822,7 +1822,7 @@ If you remember nothing else from this document, remember these:
 4. **Every vector has a version.** A model update without re-enrollment is a bug.
 5. **OTA must be atomic and safe.** Backup before replace; rollback if the service dies.
 6. **The camera loop must never block.** Inference in background threads only.
-7. **Never trust the network.** Validate every byte from every HTTP request and UDP packet.
+
 8. **Pin your dependencies.** Unpinned = non-reproducible = broken deployment on the device.
 9. **The device has 1 GB of RAM.** Every import costs memory. Every loop costs CPU time.
 10. **This is a school gate.** A crash means students cannot get in. Reliability is not optional.
@@ -2008,7 +2008,7 @@ Use `Final` to declare constants that must never be reassigned, and `ClassVar` f
 ```python
 from typing import Final, ClassVar
 
-UDP_PORT: Final = 55555
+
 BUFFER_SIZE: Final[int] = 1024
 
 class FaceRecognizer:
@@ -2623,7 +2623,7 @@ Keep functions short and focused.
 Rules:
 - Maximum function body length: **40 lines** (excluding blank lines and comments).
 - If a function exceeds 40 lines, it likely does more than one thing. Split it.
-- The camera main loop, startup initialization, and `updater.sh` wrapper are permitted exceptions — document the reason in a comment.
+
 
 ---
 
@@ -2812,8 +2812,8 @@ DEVICE_TOKEN=
 # Model version string (must match the recognizer.onnx model)
 MODEL_VERSION=example_model_v1
 
-# UDP port for auto-discovery broadcast listener
-UDP_PORT=55555
+
+
 
 # HMAC secret for OTA payload verification (min 32 bytes hex)
 OTA_SIGNING_SECRET=
@@ -2982,7 +2982,7 @@ Rules:
 
 # 119. Non-Blocking Sockets
 
-When implementing the UDP auto-discovery listener, prevent it from freezing the thread indefinitely.
+
 
 **Good:**
 ```python

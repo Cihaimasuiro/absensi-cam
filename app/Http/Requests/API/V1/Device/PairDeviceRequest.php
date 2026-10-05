@@ -8,7 +8,7 @@ class PairDeviceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        if (!env('PAIRING_ALLOW_HTTP', false) && !$this->isSecure()) {
+        if (!config('app.pairing_allow_http', false) && !$this->isSecure()) {
             return false; // Force HTTPS unless explicitly disabled for development
         }
 

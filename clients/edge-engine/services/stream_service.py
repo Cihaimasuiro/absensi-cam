@@ -134,7 +134,7 @@ def auto_pair():
         result = resp.json()
     except Exception as e:
         logger.error(f"[Auto-Pair] Gagal exchange pairing code: {e}")
-        return jsonify({"success": False, "error": f"Gagal exchange pairing code: {e}"}), 500
+        return jsonify({"success": False, "error": "Gagal exchange pairing code: Internal error"}), 500
 
     token     = result.get("token")
     device_id = result.get("device_id")
@@ -155,7 +155,7 @@ def auto_pair():
         os.chmod(env_path, 0o600)
     except Exception as e:
         logger.error(f"[Auto-Pair] Gagal simpan .env: {e}")
-        return jsonify({"success": False, "error": f"Gagal simpan .env: {e}"}), 500
+        return jsonify({"success": False, "error": "Gagal menyimpan konfigurasi: Internal error"}), 500
 
     logger.info(f"[Auto-Pair] Berhasil! Device ID={device_id} Server={backend_url}")
 
@@ -227,9 +227,8 @@ def auto_update():
             }
         )
     except Exception as e:  # noqa: BLE001
-
-        return jsonify({"success": False, "error": str(e)}), 500
-
+        logger.error(f"[OTA] Gagal menjalankan updater: {e}")
+        return jsonify({"success": False, "error": "Internal error saat menjalankan updater"}), 500
 
 @app.route("/")
 def kiosk():

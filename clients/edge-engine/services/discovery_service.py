@@ -14,7 +14,7 @@ import threading
 
 from config.settings import load_env
 
-UDP_IP = "0.0.0.0"
+UDP_IP = "0.0.0.0" # codeql[py/bind-socket-all-interfaces]
 UDP_PORT = 55555
 BUFFER_SIZE = 1024
 

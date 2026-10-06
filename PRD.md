@@ -1,7 +1,7 @@
 # PRD — Sistem Absensi "Smart Absensi"
 ## Product Requirement Document (PRD) — Monorepo
 
-> **Versi**: 2.2.1
+> **Versi**: 2.4.0
 > **Tanggal**: 2026-10-06
 > **Status**: Draft — Menunggu Review
 > **Penulis**: Tim Smart Absensi
@@ -87,7 +87,9 @@ flowchart LR
     LIV -->|lolos| REC["Embedding SFace<br/>+ pencocokan"]
     LIV -->|gagal| FAIL["Status SPOOF"]
     REC --> DB[("SQLite lokal<br/>+ outbox")]
-    REC --> ARD["Arduino Uno<br/>TFT / LED / Buzzer"]
+    REC --> ARD["Arduino Uno + shield TFT<br/>(display saja)"]
+    REC --> GP["GPIO SBC (3,3 V)<br/>LED / buzzer / tombol"]
+    RTCM["RTC DS3231<br/>(I2C SBC)"] -->|"waktu bila offline"| DB
     RFID["Pembaca RFID<br/>RC522 (SPI)"] -->|"UID kartu"| DB
     QRG["Generator QR<br/>kode 10 detik"] --> ARD
     DB -->|"REST JSON (async)"| SRV["Server Pusat<br/>Laravel 13"]
@@ -98,12 +100,12 @@ flowchart LR
 
 1. **Power ON**: Adaptor 5V/4A menyuplai modul UPS 18650 (charger + boost). Modul UPS mendistribusikan 5V ke SBC dan Arduino.
 2. **Boot SBC**: Orange Pi Lite 2 boot dari MicroSD dalam **< 45 detik** hingga service systemd `smart-absensi.service` (Engine C++) berstatus `active (running)`.
-3. **Sinkronisasi Waktu**: Engine membaca waktu dari RTC DS3231 (via Arduino) bila jaringan belum tersedia; NTP mengoreksi setelah jaringan aktif. Setiap record menyimpan `time_source` (`ntp` / `rtc` / `unsynced`).
+3. **Sinkronisasi Waktu**: Engine membaca waktu dari RTC DS3231 (I2C pada SBC, 3,3 V) bila jaringan belum tersedia; NTP mengoreksi setelah jaringan aktif. Setiap record menyimpan `time_source` (`ntp` / `rtc` / `unsynced`).
 4. **Init Camera**: Kamera UVC (`/dev/video0`) diinisialisasi pada 640x480 @ 30 FPS format MJPEG (resolusi dapat dinaikkan ke 720p, lihat 10.1).
 5. **Deteksi & Tracking Multi-Wajah**: YuNet mendeteksi wajah hingga jarak 3 m; tracker memberi ID stabil pada tiap wajah.
 6. **Liveness & Anti-Spoofing**: Setiap track diverifikasi model Mini-FASNet ONNX. Keputusan diambil dari **beberapa frame** (mis. ≥ 3 dari 5 frame lolos) untuk mengurangi kesalahan tunggal-frame. Track yang gagal ditandai `SPOOF`.
 7. **Feature Matching & Logging**: Track yang lolos liveness diekstrak embedding ArcFace (512-d) pada frame terpilih (maks. 5 per track) lalu dicocokkan ke templet di memori (dimuat dari SQLite; **kapasitas ≥ 2000 wajah**). Identitas dikonfirmasi bila skor melewati threshold pada ≥ 3 frame berturut-turut. Hasil ditulis ke tabel `attendance` dan `outbox` dalam satu transaksi.
-8. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial untuk TFT, LED, dan buzzer.
+8. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial hanya untuk TFT; LED dan buzzer digerakkan langsung oleh engine lewat GPIO SBC (lewat transistor NPN). Semua output GPIO OFF saat boot (AC-19a).
 9. **REST API Sync**: Worker terpisah mengirim isi `outbox` ke Server Pusat secara asynchronous (batch, idempotent, retry dengan backoff). Server Pusat menyimpan riwayat dan menyediakan laporan terpusat. Perubahan templet wajah ditarik oleh edge secara berkala (delta sync).
 
 **Metode presensi cadangan (V1):**
@@ -139,7 +141,7 @@ absensi-cam/
 │   ├── central-server/      # Laravel 13: Web Admin + REST API + laporan + queue worker + kartu RFID/verifikasi QR
 │   └── edge-engine/         # C++17: pipeline kamera -> deteksi -> liveness -> match, sync worker, serial bridge, pembaca RFID, generator QR
 ├── firmware/
-│   └── arduino-display/     # Arduino Uno: TFT (termasuk render QR), touch, LED/buzzer/tombol (via I2C expander), RTC
+│   └── arduino-display/     # Arduino Uno + shield: render TFT (termasuk QR); display saja (tanpa LED/buzzer/tombol/RTC)
 ├── packages/
 │   ├── face-core/           # Pustaka C++ bersama (YuNet, SFace, Mini-FASNet); dibangun untuk ARM64 (edge) dan x86_64/ARM64 (server)
 │   ├── protocol/            # Skema JSON serial + OpenAPI REST (sumber kebenaran tunggal)
@@ -153,8 +155,8 @@ absensi-cam/
 | Package | Bahasa / Stack | Tanggung Jawab | Berjalan Di |
 |---------|----------------|----------------|-------------|
 | `apps/central-server` | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, kartu RFID, verifikasi QR, laporan, audit | Server pusat (PC admin/VPS) |
-| `apps/edge-engine` | C++17, OpenCV, ONNX Runtime/OpenCV DNN, SQLite | Pengenalan wajah real-time, pembaca RFID (SPI), generator QR, outbox, sync, serial | Orange Pi Lite 2 |
-| `firmware/arduino-display` | C++ (Arduino) | Render TFT (termasuk QR), IO feedback, RTC, event tombol | Arduino Uno |
+| `apps/edge-engine` | C++17, OpenCV, ONNX Runtime/OpenCV DNN, SQLite | Pengenalan wajah real-time, pembaca RFID (SPI), LED/buzzer/tombol (GPIO), RTC (I2C), generator QR, outbox, sync, serial | Orange Pi Lite 2 |
+| `firmware/arduino-display` | C++ (Arduino) | Render TFT shield 8-bit paralel (termasuk QR); touch opsional | Arduino Uno |
 | `packages/face-core` | C++17 | Logika model bersama agar embedding identik di edge dan server | Edge + server |
 | `packages/protocol` | JSON Schema / OpenAPI 3 | Kontrak antar-komponen | — |
 | `packages/models` | ONNX | Model + versi | Edge + server |
@@ -172,8 +174,9 @@ flowchart TB
     LV -->|"queue job / CLI"| FC["face-core<br/>face-embed"]
     LV <-->|"REST JSON + Bearer token (HTTPS)"| EDG["edge-engine<br/>Orange Pi Lite 2"]
     EDG <-->|"USB Serial 115200, JSON per baris"| ARD["arduino-display<br/>Arduino Uno"]
-    ARD -->|SPI| TFT["TFT 2.4 inci + touch"]
-    ARD -->|I2C| IO["PCF8574: LED, buzzer, tombol<br/>DS3231: RTC"]
+    ARD -->|"8-bit paralel (shield)"| TFT["TFT 2.4 inci (shield MAR2406)"]
+    EDG -->|"GPIO 3,3 V + transistor NPN"| IO["LED, buzzer, tombol"]
+    EDG -->|"I2C 3,3 V"| RTCM["DS3231: RTC"]
     EDG --> CAM["Kamera UVC"]
     EDG -->|SPI| RFID["RC522: kartu 13,56 MHz"]
     EDG --> SQ[("SQLite lokal")]
@@ -181,7 +184,9 @@ flowchart TB
 
 | Jalur | Protokol | Arah | Isi |
 |-------|----------|------|-----|
-| Edge <-> Arduino | USB Serial JSON (4.1) | dua arah | Perintah tampil/LED/buzzer; event tombol; waktu RTC |
+| Edge <-> Arduino | USB Serial JSON (4.1) | dua arah | Perintah tampil dan QR; `ack`/`pong`/`ready` (display saja) |
+| Edge -> LED/buzzer, tombol -> Edge | GPIO 3,3 V (libgpiod) | dua arah | Output LED/buzzer lewat transistor NPN; input tombol (4.4) |
+| Edge <-> DS3231 | I2C 3,3 V (`/dev/i2c-*`) | dua arah | Baca/tulis waktu RTC (4.3) |
 | Edge -> Server | HTTPS REST JSON | upload | Batch absensi, heartbeat, log perangkat |
 | Server -> Edge | HTTPS REST JSON | download | Delta templet wajah, konfigurasi, tombstone |
 | Server -> face-core | Proses lokal (CLI) | satu arah | Foto enrollment -> embedding |
@@ -199,21 +204,22 @@ flowchart TB
 |----|----------|---------------------|-----|--------------|---------|------------|-----------|---------|
 | 1 | SBC Utama | Orange Pi Lite 2 | 1 | Main processing unit | 5.0 | 2000 | USB, header 26-pin, WiFi, HDMI | Allwinner H6 Quad-core Cortex-A53 @1.8GHz, 1GB LPDDR3. **Hanya 2 port USB host** (1x USB 3.0, 1x USB 2.0) + 1x micro-USB OTG (juga input daya) |
 | 2 | Camera USB | UVC Mini USB Web Camera | 1 | Capture wajah | 5.0 (VBUS) | 500 | USB 2.0 (UVC) | Plug & Play (`/dev/video0`); wajib mendukung MJPEG 640x480 @ 30 FPS; disarankan 720p untuk jarak jauh |
-| 3 | Display | LCD Wiki 2.4" Arduino Shield (parallel) | 1 | Status absensi, nama, waktu | 5.0 | 120 | 8-bit parallel | Driver ILI9341/ILI9325 (auto-detect via `MCUFRIEND_kbv`); 320×240 px; touch resistif 4-wire. Shield langsung dipasang di atas Arduino Uno. Memakai D2-D9 (data bus) + A0(RS) A1(WR) A2(CS) A3(RST) |
+| 3 | Display | LCD Wiki 2.4" Arduino Shield MAR2406 (parallel) | 1 | Status absensi, nama, waktu | 5.0 | 120 | 8-bit parallel | Driver ILI9341 (vendor; varian ST7789V dijual terpisah); 320×240 px; touch resistif opsional (tipe dan pin belum terdokumentasi). Shield langsung di atas Arduino Uno; memakai hampir semua pin Uno (4.2). **Pustaka Adafruit SPI tidak berlaku**; gunakan pustaka vendor/`MCUFRIEND_kbv` dan cek `readID()` |
 | 4 | Storage | MicroSD 16GB (min. 8GB), A1 / high-endurance | 1 | OS, service, database lokal | 3.3 | 100 | SDIO | Class 10 minimum; SanDisk/Samsung Endurance direkomendasikan |
-| 5 | MCU | Arduino Uno (ATmega328P) | 1 | Offload IO: TFT, LED, Buzzer, Button, RTC; bridge serial ke SBC | 5.0 | 500 | USB-B Serial, I2C | ATmega328P @16MHz |
+| 5 | MCU | Arduino Uno (ATmega328P) | 1 | Terminal display: driver TFT shield; bridge serial ke SBC | 5.0 | 500 | USB-B Serial | ATmega328P @16MHz, SRAM 2 KB. **Tidak** menangani LED, buzzer, tombol, atau RTC (dipindah ke SBC) |
 | 7 | Adaptor | Adaptor DC 5V/4A | 1 | Sumber daya utama dari 220V AC | Out: 5.0 | 4000 | DC Barrel 5.5x2.1mm | Ripple < 50mV; beban puncak + charging ≈ 3.3A sehingga 5V/3A tidak cukup |
 | 8 | Ethernet (opsional) | USB-to-Ethernet RTL8153 + UTP Cat5e/Cat6 3m | 1 set | Koneksi kabel ke LAN | - | ~300 | USB 3.0 / RJ45 | Butuh port USB tambahan -> perlu **hub USB berdaya** (No 16). Jaringan utama V1 adalah **WiFi 802.11ac** |
 | 9 | Modul UPS | Modul UPS 18650 (charger + boost 5V, ≥ 3A) | 1 | Charging baterai + output 5V saat AC putus | In/Out: 5.0 | 3000 | Passthrough | Gunakan boost berbasis XL6009 atau setara ≥ 3A. **MT3608 tidak direkomendasikan** (batas 2A). Proteksi over-charge 4.2V, over-discharge 3.0V; switchover < 100ms |
 | 10 | Baterai | Li-Ion 18650 ≥ 2500 mAh (NCR18650B / Samsung 25R / LG MH1) | 2 (min) – 4 (rekomendasi) | Daya cadangan | 3.7 nominal | ≥ 2C | Slot UPS (paralel) | 2 sel ≈ 2.5 jam, 4 sel ≈ 5 jam (lihat 5.2) |
-| 11 | LED Indikator | LED 5mm (Hijau, Merah) | 2 | Success, Fail | 5.0 | 10 per LED | Direct ke Arduino D10, D11 (active HIGH) | Resistor 330 Ω; terhubung langsung ke pin Arduino tanpa expander |
-| 12 | Buzzer | Piezo Buzzer Aktif 5V | 1 | Feedback audio | 5.0 | 30 | Direct ke Arduino D12 (active HIGH) | Buzzer aktif (osilator internal ~2.4kHz); SPL ≥ 85dB @10cm; arus 30mA masih aman untuk pin Uno |
-| 13 | Tombol Tactile | Push Button 6x6mm | 1 | Trigger manual absensi | 5.0 | < 1 | Direct ke Arduino D13 (INPUT_PULLUP) | SPST NO; satu ujung ke D13, ujung lain ke GND; debounce software 20 ms |
-| 14 | RTC | Modul RTC DS3231 (+ baterai CR2032) | 1 | Waktu akurat saat offline (OPi Lite 2 tidak punya RTC) | 3.3 / 5.0 | < 1 | I2C (0x68) — A4(SDA)/A5(SCL) | A4/A5 bebas karena shield paralel tidak memakai I2C hardware |
+| 11 | LED Indikator | LED 5mm (Hijau, Merah) | 2 | Success, Fail | 5.0 | 10 per LED | GPIO SBC 3,3 V -> transistor NPN -> LED (pin ditetapkan setelah verifikasi) | Resistor seri 330 Ω; LED disuplai rail 5 V lewat transistor sehingga arus tidak melalui pin GPIO; output default OFF saat boot |
+| 12 | Buzzer | Piezo Buzzer Aktif 5V | 1 | Feedback audio | 5.0 | 30 | GPIO SBC 3,3 V -> transistor NPN (pin ditetapkan setelah verifikasi) | Buzzer aktif (osilator internal ~2.4kHz); SPL ≥ 85dB @10cm; disuplai rail 5 V lewat transistor, **bukan** dari pin GPIO; dioda flyback tidak perlu untuk piezo aktif, tetapi pasang resistor basis (mis. 1 kΩ, nilai awal) |
+| 13 | Tombol Tactile | Push Button 6x6mm | 1 | Trigger manual absensi | 3.3 | < 1 | GPIO SBC 3,3 V (pin ditetapkan setelah verifikasi) | SPST NO ke GND dengan pull-up ke 3,3 V; debounce software 20 ms di engine. **Jangan memberi 5 V ke pin GPIO** |
+| 14 | RTC | Modul RTC DS3231 (+ baterai CR2032) | 1 | Waktu akurat saat offline (OPi Lite 2 tidak punya RTC) | **3.3** | < 1 | I2C (0x68) pada bus I2C SBC | **Daya 3,3 V, bukan 5 V**: pull-up onboard modul (mis. ZS-042) ke 5 V dapat memasukkan 5 V ke pin SBC. Ketersediaan `/dev/i2c-*` pada image Buster belum diverifikasi (R21) |
 | 15 | Heat sink | Aluminium ≥ 14x14mm + thermal pad | 1 | Pendingin SoC H6 | - | - | - | Wajib (lihat 6.2) |
 | 16 | Hub USB (opsional) | Hub USB 2.0/3.0 berdaya | 1 | Menambah port bila memakai Ethernet | 5.0 | - | USB | Wajib jika dongle Ethernet dipakai bersama kamera + Arduino |
-| 17 | Komponen pasif | Kapasitor 1000µF/10V + 100µF; resistor 330Ω x2, 4.7kΩ x2 | 1 set | Stabilisasi rail 5V | - | - | - | Kapasitor bulk untuk mitigasi R01; pull-up 4.7kΩ untuk I2C RTC |
+| 17 | Komponen pasif | Kapasitor 1000µF/10V + 100µF; resistor 330Ω x2 (LED), 1kΩ x3 (basis transistor), 4.7kΩ (pull-up tombol/I2C bila perlu) | 1 set | Stabilisasi rail 5V dan driver GPIO | - | - | - | Kapasitor bulk untuk mitigasi R01; pull-up I2C hanya bila modul RTC tidak memilikinya, ke 3,3 V |
 | 18 | Pembaca RFID | RC522 (MFRC522, 13,56 MHz) + kartu/tag MIFARE 13,56 MHz | 1 modul + kartu uji | Presensi kartu (metode cadangan) | 3.3 | ~30 | SPI (3,3 V) ke header 26-pin SBC | Modul sudah dimiliki. **Hanya 3,3 V**: 5 V merusak pin SBC. Pin header dan ketersediaan `/dev/spidev*` pada image Buster belum diverifikasi (R24). Hanya UID yang dibaca; data sektor kartu tidak dipakai |
+| 19 | Transistor NPN | NPN signal kecil (mis. 2N2222A/BC547) | 3 | Driver buzzer, LED hijau, LED merah dari GPIO | 5.0 (beban) | ≤ 100 per kanal | GPIO SBC 3,3 V ke basis lewat resistor | Jenis dan resistor basis adalah nilai awal; verifikasi arus basis dan tegangan saturasi pada 3,3 V saat komisioning (R22) |
 
 ### 3.2 Spesifikasi Hardware SBC & Kamera
 
@@ -222,7 +228,7 @@ flowchart TB
 | SBC Model | Orange Pi Lite 2 (Allwinner H6 Quad-Core Cortex-A53 @ 1.8 GHz) |
 | RAM | 1GB LPDDR3 (dibagi dengan GPU) |
 | Port USB | 1x USB 3.0 Host, 1x USB 2.0 Host, 1x micro-USB OTG (juga input daya) |
-| Header | 26-pin (dipakai di V1 hanya untuk RC522 via SPI, lihat 4.8; komunikasi ke Arduino lewat USB) |
+| Header | 26-pin (dipakai di V1 untuk RC522 via SPI (4.8), LED/buzzer/tombol via GPIO (4.4), dan DS3231 via I2C (4.3); komunikasi ke Arduino lewat USB; **nomor pin belum ditetapkan**, verifikasi dahulu) |
 | Camera Input | USB Web Camera UVC driverless via USB 2.0/3.0 |
 | Network | WiFi onboard AP6255 (802.11 a/b/g/n/ac) + Bluetooth 4.1; Ethernet hanya lewat dongle USB |
 | Operating System | Image resmi Orange Pi Debian Buster |
@@ -239,7 +245,7 @@ flowchart TB
 | Baud Rate | 115200 bps |
 | Data / Stop / Parity | 8 / 1 / None |
 | Device Node | `/dev/ttyACM0` atau `/dev/ttyUSB0` (gunakan aturan udev agar nama tetap, mis. `/dev/smart-arduino`) |
-| Protokol Paket | JSON *line-delimited*, diakhiri `\n`, maks 256 byte per baris |
+| Protokol Paket | JSON *line-delimited*, diakhiri `\n`, **maks 160 byte per baris** (SRAM Uno 2 KB; buffer statis, tanpa kelas `String`) |
 
 > **Catatan Auto-Reset**: Arduino Uno ter-reset saat port serial dibuka (sinyal DTR). Engine harus menunggu ≥ 2 detik setelah membuka port dan mengirim ulang state terakhir. Arduino mengirim event `ready` setelah boot.
 
@@ -253,10 +259,6 @@ flowchart TB
 {"cmd":"standby","msg":"Silakan hadapkan wajah Anda"}
 {"cmd":"display","status":"RECOGNIZED","name":"Budi S.","dept":"Engineering","time":"2026-09-28 07:30:15","method":"card"}
 {"cmd":"qr","data":"SA1.dev-0007.48213977","ttl":10}
-{"cmd":"io","led":"green","buzzer":"2short"}
-{"cmd":"backlight","level":180}
-{"cmd":"get_time"}
-{"cmd":"set_time","time":"2026-09-30 07:30:00"}
 {"cmd":"ping","seq":42}
 {"cmd":"reboot"}
 ```
@@ -264,82 +266,68 @@ flowchart TB
 **Arduino -> SBC**
 
 ```json
-{"evt":"ready","fw":"1.0.0"}
-{"evt":"button","id":"trigger"}
-{"evt":"button","id":"reset"}
-{"evt":"time","time":"2026-09-30 07:30:00","rtc_ok":true}
+{"evt":"ready","fw":"1.0.0","lcd_id":"0x9341"}
 {"evt":"pong","seq":42}
 {"evt":"ack","cmd":"display"}
 ```
+
+> **Display saja (v2.3.0)**: perintah `io`, `backlight`, `get_time`, `set_time` dan event `button`, `time` dihapus. LED, buzzer, tombol, dan RTC ditangani engine lewat GPIO/I2C SBC (4.3, 4.4). Backlight shield terpasang tetap (tidak dapat diredupkan lewat perangkat lunak). Baris yang melebihi 160 byte dibuang dan dibalas `{"evt":"error","code":"too_long"}`; engine memotong `name`/`dept` agar baris `display` ≤ 160 byte. `lcd_id` pada `ready` melaporkan hasil `readID()`.
 
 **Aturan**: Arduino membalas `ack` untuk tiap perintah. Bila SBC tidak mendapat `pong` selama 5 detik, service mencatat log `serial_lost` dan mencoba membuka ulang port. Bila Arduino tidak menerima paket selama 10 detik, TFT menampilkan status "Menunggu sistem".
 
 > **Perintah `qr`**: `data` berupa teks ≤ 32 karakter (`SA1.<device_id>.<kode 8 digit>`) agar muat pada QR versi 2 (25×25 modul, ECC L). Arduino membuat QR sendiri dan menampilkannya di layar standby sampai perintah `qr` berikutnya atau status lain. Bila tidak ada `qr` baru dalam `ttl` × 2 detik, Arduino menghapus QR dan menampilkan "Menunggu sistem" agar kode kedaluwarsa tidak tertinggal di layar. Penggunaan RAM pustaka QR pada ATmega328P (2 KB SRAM) **belum diverifikasi** (AC-52). Field `method` pada `display` (`face`/`card`) hanya untuk tampilan.
 
-### 4.2 Arduino Uno <-> LCD Wiki 2.4" Arduino Shield (Paralel)
+### 4.2 Arduino Uno <-> LCD Wiki 2.4" Arduino Shield MAR2406 (Paralel)
 
-Shield dipasang langsung di atas Arduino Uno (form-factor shield). Tidak diperlukan kabel jumper untuk display.
+Shield dipasang langsung di atas Arduino Uno (form-factor shield); tidak diperlukan kabel jumper untuk display. Karena shield 8-bit paralel memakai hampir semua pin Uno (termasuk A4), **Arduino hanya berfungsi sebagai terminal display**; LED, buzzer, tombol, dan RTC dipindah ke SBC (4.3, 4.4).
 
-| Shield (bus internal) | Arduino Uno Pin | Keterangan |
-|-----------------------|-----------------|------------|
+> **Belum diverifikasi.** Tabel di bawah adalah tata letak umum shield 2.4" 8-bit dan pemetaan contoh pustaka `LCDWIKI_KBV` (`cs, cd, wr, rd, reset` = A3, A2, A1, A0, A4). Halaman produk tidak mencantumkan tabel pin; konfirmasi pada manual MAR2406 sebelum menulis firmware.
+
+| Sinyal shield | Arduino Uno Pin | Keterangan |
+|---------------|-----------------|------------|
 | Data bus D0-D7 | D2-D9 | 8-bit parallel data |
-| RS (Register Select) | A0 | |
+| RD (Read Strobe) | A0 | |
 | WR (Write Strobe) | A1 | |
-| CS (Chip Select LCD) | A2 | |
-| RST (Reset) | A3 | |
-| Touch YP | A1 | Shared dengan WR; library TouchScreen mengambil alih saat baca touch |
-| Touch XM | A2 | Shared dengan CS |
-| Touch YM | D7 | |
-| Touch XP | D6 | |
-| Backlight | Hardwired ke 3.3V | Tidak dapat dikontrol software pada shield standar |
+| RS / CD (Register Select) | A2 | |
+| CS (Chip Select LCD) | A3 | |
+| RST (Reset) | A4 | Pin A4 terpakai: tidak tersedia untuk I2C |
+| Slot microSD shield | D10-D13 (SPI) | Tidak dipakai di V1; pin tidak dialokasikan untuk fungsi lain |
+| Touch resistif (opsional) | Berbagi pin dengan A1-A3 dan D8-D9 (tipikal: YP, XM, YM, XP) | Tipe dan pin belum terdokumentasi; FR-A05 (Could) |
+| Backlight | Hardwired ke 3,3 V | Tidak dapat dikontrol software pada shield standar |
 | VCC/GND | 5V / GND | Dari Arduino |
 
-**Pin Arduino yang tersisa bebas** (dipakai firmware):
+**Tidak ada pin Arduino yang dialokasikan untuk IO lain.** LED, buzzer, tombol, dan RTC tidak terhubung ke Arduino.
 
-| Arduino Pin | Fungsi | Keterangan |
-|-------------|--------|------------|
-| D10 | LED Hijau (Success) | 330Ω → LED → GND, active HIGH |
-| D11 | LED Merah (Fail) | 330Ω → LED → GND, active HIGH |
-| D12 | Buzzer | Active piezo 5V, active HIGH. Arus 30mA aman langsung dari pin |
-| D13 | Button Trigger | INPUT_PULLUP, active LOW → GND |
-| A4 (SDA) | DS3231 RTC I2C | |
-| A5 (SCL) | DS3231 RTC I2C | |
-
-> **Library Arduino**: `MCUFRIEND_kbv` + `Adafruit_GFX` + `TouchScreen` + `ArduinoJson` + `RTClib` + pustaka QR ringan (mis. `QRCode` oleh Richard Moore; pilihan akhir menunggu uji RAM, AC-52).
+> **Library Arduino**: pustaka vendor `LCDWIKI_KBV` atau `MCUFRIEND_kbv` + `Adafruit_GFX` (pilih satu setelah uji `readID()`), `ArduinoJson` (atau parser manual berbuffer statis agar muat 2 KB SRAM) + pustaka QR ringan (mis. `QRCode` oleh Richard Moore; pilihan akhir menunggu uji RAM, AC-52). `TouchScreen` hanya bila touch dipakai.
 > **Layar QR**: 33 modul (25 + quiet zone 4 di tiap sisi) × 7 px = 231 px, muat pada sisi 240 px; area sisa untuk teks status. Tata letak final ditentukan setelah uji keterbacaan (AC-52).
-> `MCUFRIEND_kbv` melakukan auto-detect ID driver (ILI9341, ILI9325, ILI9486, dll.) via `tft.readID()`.
+> `MCUFRIEND_kbv` melakukan auto-detect ID driver (ILI9341, ILI9325, ILI9486, dll.) via `tft.readID()`; laporkan hasilnya pada event `ready` (4.1).
 
-### 4.3 Arduino Uno <-> DS3231 RTC (I2C)
+### 4.3 Orange Pi Lite 2 <-> DS3231 RTC (I2C, 3,3 V)
 
-Tidak ada PCF8574. I2C hanya dipakai oleh DS3231.
+RTC kini berada di bus I2C SBC (sebelumnya di Arduino). **Nomor pin fisik tidak ditetapkan di dokumen ini**: pinout header 26-pin dan overlay I2C pada image Debian Buster belum diverifikasi. Periksa dengan `uname -r; ls /dev/i2c-* /dev/gpiochip*` dan `i2cdetect -y <bus>` (harus menampilkan `0x68`).
 
-| I2C Pin | Arduino Uno Pin | Keterangan |
-|---------|-----------------|------------|
-| SDA | A4 | I2C Data |
-| SCL | A5 | I2C Clock |
-| VCC | 5V | Supply |
-| GND | GND | Ground |
+| Sinyal | Sambungan ke SBC | Keterangan |
+|--------|------------------|------------|
+| VCC | **3,3 V** header | **Jangan 5 V**: pull-up modul ke VCC dapat memasukkan 5 V ke pin I2C SBC |
+| GND | GND | |
+| SDA / SCL | Pin I2C header (ditetapkan setelah verifikasi) | Alamat 0x68 (tetap) |
 
-| Perangkat I2C | Alamat | Konfigurasi |
-|---------------|--------|-------------|
-| DS3231 | 0x68 | Tetap (fixed) |
-
-**Pull-up**: 4.7kΩ dari SDA dan SCL ke VCC. Modul DS3231 (ZS-042) umumnya sudah punya pull-up onboard.
+**Pull-up**: gunakan pull-up onboard modul bila VCC modul 3,3 V; bila tidak ada, pasang 4.7 kΩ ke 3,3 V (bukan 5 V). Engine menyetel waktu sistem dari RTC saat boot tanpa jaringan dan menulis ulang RTC setelah NTP sinkron (FR-E22); setiap record menyimpan `time_source`.
 
 > **Modul DS3231 ZS-042**: rangkaian pengisi baterai CR2032 yang **tidak dapat diisi ulang** dapat merusak baterai. Lepas dioda/resistor pengisi atau gunakan LIR2032.
 
-### 4.4 Arduino Uno <-> LED, Buzzer, Button (Direct Wiring)
+### 4.4 Orange Pi Lite 2 <-> LED, Buzzer, Tombol (GPIO 3,3 V)
 
-LED dan buzzer dihubungkan langsung ke pin Arduino Uno (aktif HIGH) tanpa expander.
+LED dan buzzer dikendalikan engine lewat GPIO SBC (libgpiod) dan **transistor NPN**; beban diambil dari rail 5 V, bukan dari pin GPIO. Pin GPIO H6 hanya 3,3 V dan arusnya terbatas. **Nomor pin tidak ditetapkan**; periksa dengan `gpioinfo` setelah memastikan `/dev/gpiochip*` ada (R21).
 
-| Arduino Pin | Komponen | Keterangan |
-|-------------|----------|------------|
-| D10 | LED Hijau 5mm | D10 → 330Ω → Anoda → Katoda → GND; **HIGH = ON** |
-| D11 | LED Merah 5mm | D11 → 330Ω → Anoda → Katoda → GND; **HIGH = ON** |
-| D12 | Piezo Buzzer Aktif 5V | D12 → Buzzer+ → Buzzer− → GND; **HIGH = bunyi**. Arus ≤ 30mA aman langsung dari pin Uno |
-| D13 | Tactile Button | Satu kaki ke D13, kaki lain ke GND; `INPUT_PULLUP`; **LOW = ditekan** |
+| Fungsi | Rangkaian | Keterangan |
+|--------|-----------|------------|
+| LED Hijau 5mm | GPIO -> 1 kΩ -> basis NPN; kolektor ke katoda LED, anoda -> 330 Ω -> 5 V; emitor GND | **HIGH = ON**; nilai resistor awal, verifikasi saat komisioning |
+| LED Merah 5mm | Sama dengan LED Hijau | **HIGH = ON** |
+| Piezo Buzzer Aktif 5V | GPIO -> 1 kΩ -> basis NPN; buzzer antara 5 V dan kolektor; emitor GND | **HIGH = bunyi**; arus ≤ 30 mA lewat transistor |
+| Tombol Tactile | Satu kaki ke GPIO (pull-up ke 3,3 V), kaki lain ke GND | **LOW = ditekan**; debounce software 20 ms (FR-E21) |
 
-Arduino melakukan *polling* tombol setiap 20 ms dengan debounce software 20 ms (FR-A03).
+**Keamanan saat boot**: semua output harus OFF saat boot, saat engine berhenti, dan sebelum `smart-absensi.service` berjalan (AC-19a); gunakan pull-down pada basis transistor agar pin yang mengambang tidak menyalakan beban. Engine membaca tombol tiap 20 ms atau lewat event libgpiod.
 
 ### 4.5 Orange Pi Lite 2 <-> USB Camera
 
@@ -377,14 +365,13 @@ Rail 5V Utama  (+ kapasitor bulk 1000uF + 100uF)
   ├── Orange Pi Lite 2 (5V, maks ~1.5A) via input daya SBC (micro-USB atau pin 5V header; verifikasi pada board)
   │   ├── USB host 1: Kamera UVC (maks 500mA)
   │   ├── USB host 2: Arduino Uno (data serial)
-  │   └── Header 26-pin: RC522 (3,3 V dari SBC, ±30 mA, SPI)
-  └── Arduino Uno + beban IO (~350mA)
-      ├── TFT LCD (3.3V/5V dari Arduino header)
-      ├── PCF8574 + DS3231 (5V dari Arduino header)
-      └── LED, Buzzer, Tombol (via PCF8574)
+  │   └── Header 26-pin: RC522 (3,3 V, ±30 mA, SPI); DS3231 (3,3 V, I2C); sinyal GPIO 3,3 V ke transistor NPN dan tombol
+  ├── LED + Buzzer (5 V dari rail, lewat transistor NPN yang dikendalikan GPIO SBC)
+  └── Arduino Uno + shield TFT (~130-220 mA)
+      └── TFT LCD (backlight hardwired, dari Arduino header)
 ```
 
-> **Catatan Daya Arduino**: Beban sisi Arduino (Arduino ~50–100 mA + TFT ~80–120 mA + LED ≤ 80 mA + buzzer 30 mA) dapat mencapai ~350 mA; ini mendekati batas 500 mA port USB 2.0 yang sama-sama dipakai SBC untuk kamera. **Pengukuran wajib saat komisioning.** Jika beban > 400 mA atau SBC brown-out, pasok Arduino langsung dari rail 5V UPS ke pin 5V dan gunakan **kabel USB data-only (VBUS diputus)** agar tidak terjadi *back-feed* ke SBC.
+> **Catatan Daya Arduino**: Beban sisi Arduino (Arduino ~50–100 mA + TFT ~80–120 mA) dapat mencapai ~220 mA (LED dan buzzer kini tidak dari Arduino); ini mendekati batas 500 mA port USB 2.0 yang sama-sama dipakai SBC untuk kamera. **Pengukuran wajib saat komisioning.** Jika beban > 400 mA atau SBC brown-out, pasok Arduino langsung dari rail 5V UPS ke pin 5V dan gunakan **kabel USB data-only (VBUS diputus)** agar tidak terjadi *back-feed* ke SBC.
 
 ### 4.8 Orange Pi Lite 2 <-> RC522 (SPI, 3,3 V)
 
@@ -422,8 +409,8 @@ Pembaca RC522 (MFRC522, 13,56 MHz) dihubungkan langsung ke header 26-pin SBC lew
 | Orange Pi Lite 2 | 400 | 1500 | Peak: inferensi (H6 full load) |
 | UVC USB Camera | 100 | 400 | Video capture stream |
 | Arduino Uno | 50 | 100 | Idle serial listen / update TFT |
-| TFT LCD 2.4" (backlight penuh) | 80 | 120 | Dapat dikurangi ke 50 mA dengan PWM dimming |
-| I2C IO Expander + RTC | 5 | 10 | Standby / aktif |
+| TFT LCD 2.4" (backlight penuh) | 80 | 120 | Backlight shield terpasang tetap; tidak dapat diredupkan lewat perangkat lunak (4.2) |
+| RTC DS3231 (I2C pada SBC) | 5 | 10 | Sebelumnya "I2C IO Expander + RTC"; nilai dipertahankan sebagai margin, total tidak diubah |
 | LED Indikator (semua nyala) | 40 | 80 | ≈ 10–20 mA per LED |
 | Piezo Buzzer | 0 | 30 | Hanya saat berbunyi |
 | Pembaca RFID RC522 | 15 | 30 | Disuplai 3,3 V dari header SBC (datasheet: 13–26 mA); tercakup margin 0,1 A (5.3), total tidak diubah; wajib diukur saat komisioning |
@@ -506,10 +493,10 @@ I   = beban rail 5V (A)
 | R02 | Kontensi bandwidth USB kamera + SBC | Frame drop, latensi naik | Sedang | Gunakan MJPEG; **resolusi default 640x480 (maks 720p)**, bukan 1080p; kamera di port USB 3.0 |
 | R03 | MicroSD korupsi akibat power loss | OS gagal boot, data hilang | Sedang-Tinggi | UPS seamless takeover; `noatime`; SD endurance; SQLite WAL |
 | R04 | Overheating H6 -> throttle -> pengenalan lambat | Latensi > 3 detik | Tinggi | Heat sink wajib; ventilasi; throttling software (6.2) |
-| R05 | Konflik bus/pin I2C-SPI | Artefak display, IO tidak respons | Rendah | TFT SPI (D8–D13, D2–D4), I2C di A4/A5; **jangan gunakan shield paralel** (memakai A4) |
+| R05 | Shield TFT 8-bit paralel memakai hampir semua pin Uno (D2-D9, A0-A4, termasuk A4) | Tidak ada pin/I2C tersisa untuk LED, buzzer, tombol, RTC di Arduino; salah pemetaan pin menghasilkan layar kosong | Sedang | Arduino hanya display; IO dipindah ke SBC (4.3, 4.4); pemetaan pin shield diverifikasi dengan manual MAR2406 dan `readID()` sebelum firmware |
 | R06 | 18650 swelling akibat over-charge/discharge | Kebakaran / kerusakan fisik | Rendah | Modul UPS dengan proteksi; verifikasi cutoff; fuse |
 | R07 | Dongle Ethernet tidak dikenali OS | Tidak ada jaringan kabel | Sedang | Chipset RTL8153; verifikasi `lsusb`; WiFi sebagai jaringan utama |
-| R08 | Pin TFT salah/ tidak sesuai library | Display tidak berfungsi | Sedang | Verifikasi pinout dengan `Adafruit_ILI9341`; jangan colok modul saat daya menyala |
+| R08 | Pin/driver shield tidak sesuai pustaka (shield 8-bit, bukan SPI; Adafruit SPI tidak berlaku) | Display tidak berfungsi atau warna/orientasi salah | Sedang | Gunakan pustaka vendor `LCDWIKI_KBV`/`MCUFRIEND_kbv`; cek `readID()`; jangan pasang shield saat daya menyala |
 | R09 | Baterai 18650 palsu | Runtime jauh di bawah estimasi | Tinggi | Supplier terpercaya (Panasonic NCR, Samsung INR, LG MH1); *capacity test* |
 | R10 | Pencahayaan kurang | Pengenalan gagal | Sedang | LED ring light 5V di sekitar kamera; pilih kamera sensor baik |
 | R11 | Beban Arduino dari port USB SBC melebihi 500 mA | Brown-out SBC/kamera | Sedang | Ukur arus; bila perlu pasok Arduino dari rail 5V + kabel USB data-only (4.7) |
@@ -517,6 +504,8 @@ I   = beban rail 5V (A)
 | R13 | Hanya 2 port USB host | Ethernet + kamera + Arduino tidak muat | Tinggi | WiFi utama; hub USB berdaya bila Ethernet dibutuhkan |
 | R14 | Akurasi turun pada jarak 3 m (wajah kecil di 640x480) | Salah kenal / gagal kenal | Tinggi | Batasi identifikasi 0.5–1.5 m pada 640x480; opsi 720p + crop; validasi AC-34 |
 | R15 | Model liveness ringan dapat diakali (video replay berkualitas, topeng 3D) | Kecurangan absensi | Sedang | Multi-frame voting, kalibrasi threshold, uji serangan (AC-33); pengawasan manusia pada lokasi berisiko tinggi |
+| R21 | Header GPIO dan bus I2C SBC belum diverifikasi; image Debian Buster vendor mungkin tanpa `/dev/gpiochip*` atau `/dev/i2c-*` (atau overlay I2C belum aktif) | LED/buzzer/tombol/RTC tidak berfungsi | Sedang | Uji di M0: `uname -r; ls /dev/gpiochip* /dev/i2c-*`, `gpioinfo`, `i2cdetect`; bila tidak ada, ganti library/image (alasan kuat untuk reflash dengan microSD cadangan) |
+| R22 | Pin GPIO H6 hanya 3,3 V dan arus terbatas; 5 V dari RTC/modul atau beban langsung ke pin | Pin SBC rusak; LED/buzzer tidak menyala/terlalu redup | Sedang | Transistor NPN per beban dari rail 5 V; RTC dan RC522 pada 3,3 V; ukur tegangan sebelum menyalakan; resistor basis dan pull-down (4.4) |
 | R24 | SPI/pin RC522 pada header 26-pin belum diverifikasi; image Debian Buster vendor mungkin tanpa `/dev/spidev*` atau overlay SPI | Pembaca kartu tidak berfungsi | Sedang | Uji di M0 (AC-48) sebelum merakit; aktifkan overlay SPI bila tersedia; bila tidak, pertimbangkan OS/kernel lain (lihat juga Q9) atau pembaca RFID USB (butuh hub USB berdaya, R13) |
 | R25 | RC522 hanya 3,3 V; salah colok 5 V, kabel panjang, atau noise | Pin SBC rusak atau pembacaan UID tidak stabil | Sedang | Label 3,3 V pada kabel; kabel ≤ 15 cm; ukur tegangan sebelum menyalakan; jangan colok saat daya menyala |
 | R26 | QR di TFT sulit dipindai (silau, kontras rendah) atau jam terminal salah sehingga kode ditolak | Presensi QR gagal | Sedang | QR versi 2 skala 7 px + quiet zone; kontras tinggi (hitam di putih); uji dekat jendela/sinar matahari (AC-52); jam dari RTC/NTP dan toleransi window di server (AC-54) |
@@ -562,7 +551,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | Surface Finish | HASL (lead-free) atau ENIG |
 | Min. Track | 0.2mm signal, 0.5mm power |
 | Via | Drill 0.3mm, pad 0.6mm |
-| Komponen Terintegrasi | Rangkaian UPS (boost + charger + proteksi), PCF8574, DS3231, transistor buzzer/backlight, array resistor LED, RC debounce, konektor ke SBC, header Arduino/MCU, USB, DC barrel jack |
+| Komponen Terintegrasi | Rangkaian UPS (boost + charger + proteksi), DS3231, transistor NPN buzzer/LED, array resistor LED, RC debounce, konektor ke SBC, header Arduino/MCU, USB, DC barrel jack |
 | Software EDA | KiCad 7.x atau lebih baru |
 
 > **Catatan desain V2 (perlu diselesaikan sebelum layout):**
@@ -575,10 +564,9 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | Fitur V1 (Modul Terpisah) | Implementasi V2 (PCB Carrier) |
 |---------------------------|-------------------------------|
 | Modul UPS 18650 terpisah | Boost XL6009 (≥ 3A) + charger power-path + proteksi (DW01A/FS8205) onboard |
-| Modul PCF8574 terpisah | PCF8574 SMD di PCB |
 | Modul RTC DS3231 | DS3231M SMD + holder CR2032 |
 | LED + resistor flying wire | Resistor array + footprint LED |
-| Buzzer + transistor driver | Transistor PNP SOT-23 + pad buzzer |
+| Buzzer + transistor driver | Transistor NPN SOT-23 + pad buzzer (dikendalikan GPIO SBC) |
 | Tombol dengan kabel dupont | Tactile switch langsung di PCB |
 | Kabel power terpisah | Jalur copper + fuse holder + dioda TVS |
 
@@ -644,16 +632,18 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 - [ ] **AC-11**: Arduino terdeteksi: `ls /dev/ttyACM*` atau `/dev/ttyUSB*`.
 - [ ] **AC-12**: TFT menampilkan standby dalam 10 detik setelah Arduino power-on.
 - [ ] **AC-13**: SBC berhasil mengirim JSON ke Arduino, TFT menampilkan data sesuai, dan Arduino membalas `ack`.
-- [ ] **AC-14**: Brightness TFT dikontrol via PWM dan arus backlight tidak melalui pin Arduino langsung (transistor terpasang).
+- [ ] **AC-14**: Shield terpasang pada Uno tanpa kabel tambahan; `tft.readID()` terbaca dan dilaporkan pada event `ready` (ILI9341 diharapkan), serta teks standby terbaca jelas.
 - [ ] **AC-14a**: Setelah Arduino di-reset atau kabel serial dicabut-pasang, engine pulih otomatis dalam < 15 detik.
 
-### D. IO Feedback (LED, Buzzer, Button)
+### D. IO Feedback (LED, Buzzer, Button — GPIO SBC)
 
 - [ ] **AC-15**: LED Hijau menyala + Buzzer 2 beep pendek saat `RECOGNIZED`.
 - [ ] **AC-16**: LED Merah menyala + Buzzer 1 beep panjang saat `UNKNOWN` atau `SPOOF`.
 - [ ] **AC-17**: LED Kuning berkedip saat `PROCESSING`.
 - [ ] **AC-18**: Tombol Manual Trigger terdeteksi < 200 ms setelah ditekan (debounced).
 - [ ] **AC-19**: Feedback total (dari keputusan pengenalan hingga LED + buzzer aktif) **< 500 ms**.
+- [ ] **AC-19a**: Semua output GPIO (LED, buzzer) OFF saat boot, saat engine berhenti, dan sebelum `smart-absensi.service` berjalan; tidak ada LED/buzzer menyala saat power-on *(target)*.
+- [ ] **AC-19b**: `/dev/gpiochip*` dan `/dev/i2c-*` tersedia pada image yang dipakai; DS3231 terdeteksi di `0x68` dengan daya 3,3 V dan waktu terbaca valid *(target; diuji di M0)*.
 
 ### E. Face Recognition
 
@@ -743,16 +733,19 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-E17 | Membaca UID kartu dari RC522 via SPI (polling), mencari anggota di tabel lokal `member_cards` (terbatas pada kelas/perangkat yang berhak, FR-E06), menulis record `method=card` ke `attendance` dan `outbox` dalam satu transaksi, menerapkan cooldown (FR-E07), dan mengirim feedback ke Arduino. Kartu tak dikenal -> `UNKNOWN` tanpa record. Hanya UID yang dibaca. | Must |
 | FR-E18 | Menghitung kode QR tiap 10 detik: HMAC-SHA256 dari `device_id` dan nomor langkah waktu (`floor(t/10)`) dengan kunci `qr_secret`, pemotongan dinamis gaya RFC 4226/6238 menjadi 8 digit; mengirim perintah `qr` ke Arduino saat standby. `qr_secret` disimpan berizin `0600`; waktu dari RTC/NTP; bila `time_source=unsynced`, tampilkan status alih-alih QR. | Should |
 | FR-E19 | Delta sync kartu (`GET /cards`) dengan *tombstone* dan penerapan ke tabel `member_cards`. | Must |
+| FR-E20 | Mengendalikan LED hijau/merah dan buzzer lewat GPIO SBC (libgpiod, transistor NPN) sesuai status (AC-15..17); semua output OFF saat boot dan saat engine keluar (AC-19a). | Must |
+| FR-E21 | Membaca tombol manual lewat GPIO dengan debounce 20 ms dan memicu absensi manual (AC-18). | Must |
+| FR-E22 | Membaca/menulis RTC DS3231 lewat I2C SBC: set waktu sistem dari RTC saat boot tanpa jaringan; tulis ulang RTC setelah NTP sinkron; isi `time_source` (AC-47). | Must |
 
 ### 10.2 Firmware Arduino (`firmware/arduino-display`)
 
 | ID | Requirement | Prioritas |
 |----|-------------|-----------|
 | FR-A01 | Render layar standby, `RECOGNIZED`, `UNKNOWN`, `SPOOF`, `PROCESSING`, "Menunggu sistem". | Must |
-| FR-A02 | Mengatur LED (aktif-LOW) dan pola buzzer sesuai status (AC-15..17). | Must |
-| FR-A03 | Polling tombol tiap 20 ms dengan debounce; kirim event `button`. | Must |
-| FR-A04 | Baca/tulis RTC DS3231 atas perintah `get_time`/`set_time`. | Must |
-| FR-A05 | Kontrol PWM backlight; redup otomatis saat idle (mis. 60 detik). | Should |
+| FR-A02 | Membalas `ack` untuk tiap perintah dan `pong` untuk `ping`; mengirim `ready` (dengan `lcd_id`) setelah boot (4.1). | Must |
+| FR-A03 | Membaca baris serial ke buffer statis; baris > 160 byte dibuang dan dibalas `error` `too_long`; tanpa kelas `String`. | Must |
+| FR-A04 | Mendeteksi driver TFT via `readID()` dan melaporkannya pada `ready`. | Should |
+| FR-A05 | Dukungan touch resistif — opsional; tipe dan pin belum terdokumentasi (4.2). Arduino tidak mengendalikan LED, buzzer, tombol, atau RTC. | Could |
 | FR-A06 | Watchdog: reset mandiri bila loop utama macet > 8 detik. | Should |
 | FR-A07 | Membuat dan menampilkan QR (versi 2, ECC L, skala 7 px + quiet zone) dari perintah `qr` pada layar standby; kembali ke QR ± 3 detik setelah menampilkan hasil presensi; menghapus QR bila tidak ada `qr` baru dalam `ttl` × 2 detik (4.1). Naik ke Must bila uji RAM lulus (AC-52). | Should |
 
@@ -866,6 +859,21 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `POST /logs` | Kirim log error perangkat | Opsional, batas ukuran |
 | `GET /cards?cursor=&limit=200` | Delta kartu RFID per perangkat (termasuk tombstone) | Hanya kartu anggota yang berhak pada perangkat; mengembalikan `next_cursor` |
 | `POST /attendance/qr` | Verifikasi kode QR hasil pindai ponsel | **Bukan token perangkat**: memakai token anggota/aplikasi ponsel (Q11); rate limit per anggota |
+
+**Catatan untuk `GET /config`**: 
+Format terbaru v2.4.0 mengembalikan array `groups` yang berisi konfigurasi spesifik per tipe:
+```json
+{
+  "device_id": "...",
+  "etag": "W/\"3d9f1f77896fb3d1\"",
+  "groups": [
+    { "id": 1, "name": "Kelas 10", "type": "class", "start_time": "07:30:00", "late_tolerance_minutes": 15 },
+    { "id": 2, "name": "GURU", "type": "staff", "start_time": "06:30:00", "late_tolerance_minutes": 120 }
+  ],
+  "track_checkout": false
+}
+```
+Toleransi keterlambatan 120 menit digunakan untuk staf, yang berarti DTR akan menandai kedatangan di atas 120 menit sebagai terlambat (menggantikan setting lama "late tracking off").
 
 **Contoh `POST /devices/pair`**
 
@@ -1026,11 +1034,11 @@ Urutan berikut memindahkan risiko terbesar (R16) ke awal. Milestone berikutnya d
 
 | Milestone | Isi | Gate (kriteria lulus) |
 |-----------|-----|-----------------------|
-| M0 Spike kelayakan | Jalankan YuNet + Mini-FASNet + SFace di Orange Pi Lite 2 dengan kamera UVC; ukur FPS, latensi, RSS, suhu; cek `/dev/spidev*` dan baca RC522 | FPS ≥ 10, keputusan < 3 s, RSS < 150 MB, suhu ≤ 75 °C, dan AC-48 lulus. Gagal performa -> Q9; gagal SPI -> R24 |
+| M0 Spike kelayakan | Jalankan YuNet + Mini-FASNet + SFace di Orange Pi Lite 2 dengan kamera UVC; ukur FPS, latensi, RSS, suhu; cek `/dev/spidev*`, `/dev/gpiochip*`, `/dev/i2c-*`; baca RC522 dan DS3231 | FPS ≥ 10, keputusan < 3 s, RSS < 150 MB, suhu ≤ 75 °C, AC-48 dan AC-19b lulus. Gagal performa -> Q9; gagal SPI -> R24; gagal GPIO/I2C -> R21 |
 | M1 Server inti | Skeleton Laravel 13, modul Organization/Member/Device, Sanctum + pairing, API `/api/v1` dasar (FR-S01, S02, S04, S05, S06, S14, S16) | Feature test pairing dan otorisasi lulus (AC-41, 43) |
 | M2 Enrollment & templet | Job `face-embed`, hapus foto, delta sync + tombstone (FR-S03, S07) | AC-36, AC-37, AC-42, AC-44 |
 | M3 Edge end-to-end | Engine C++ tanpa Arduino (log/CLI), SQLite + outbox + sync (FR-E01..E12, E17, E19) | AC-10, 20..26, 31, 32, 35, 51 |
-| M4 Hardware V1 | Rakit perangkat, firmware Arduino, bridge serial (FR-E13, E18, FR-A01..A04, A07) | AC-01..19, 49, 50, 52 |
+| M4 Hardware V1 | Rakit perangkat, firmware Arduino, bridge serial (FR-E13, E18, E20..E22, FR-A01..A07) | AC-01..19, 19a, 19b, 49, 50, 52 |
 | M5 Laporan & dashboard | Dashboard perangkat, DTR .xlsx/PDF/CSV, audit log, verifikasi QR (FR-S08, S09, S11, S15) | AC-38, 39, 40, 53, 55, 56 |
 | M6 Hardening | Uji 8 jam, uji anti-spoofing, uji jarak, RTC, restore backup | AC-27..30, 33, 34, 45..47, 54 |
 
@@ -1049,6 +1057,8 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | 2.1.0 | 2026-09-30 | Revisi teknis & kelengkapan: melengkapi Bagian 1–2 (diagram, package, alur komunikasi); memperbaiki penomoran, blok kode, dan nama service; koreksi spesifikasi Orange Pi Lite 2 (2 port USB host, header 26-pin, WiFi 802.11ac); koreksi rangkaian PCF8574 (LED/buzzer aktif-LOW), TFT (modul SPI, driver backlight), power budget dan runtime baterai, adaptor 5V/4A; konsistensi kapasitas wajah, resolusi kamera, dan target latensi; menambah RTC, protokol serial dua arah, Acceptance Criteria H–J, Bagian 10–13 (requirement software, model data & API, keamanan/privasi, asumsi) | Tim Smart Absensi |
 | 2.2.0 | 2026-09-30 | Perbaikan konsistensi dan kelengkapan: alur embedding per-track (FR-E05), rangkaian backlight TFT (PNP high-side), catatan pull-up I2C dan pengisi CR2032 pada DS3231, ukuran BLOB terenkripsi (540 byte), input daya SBC, batas arus UPS, FPS AC-31 = NFR-01, interval worker outbox (AC-26); menambah 7.3 risiko software (R16–R20), 10.3.1 arsitektur Laravel sesuai AGENTS.md, tabel `device_groups`/`pairing_codes`/`attendance_corrections`/`device_logs`, contoh `POST /devices/pair`, format galat seragam, AC-44..47, Q9, dan Bagian 14 (milestone dengan gate M0) | Tim Smart Absensi |
 | 2.2.1 | 2026-10-06 | Menambah metode presensi cadangan **kartu RFID (RC522)** dan **QR dinamis di TFT** tanpa mengubah struktur dokumen: konteks SekolahKita, lingkup dan perbandingan (1.1–1.4), package dan jalur komunikasi (2), BOM No 18 dan header SBC (3), perintah serial `qr` dan bagian 4.8 (RC522, pin belum ditetapkan), power budget (5.1), risiko R24–R28, AC-48..56 (grup L), FR-E17..E19, FR-A07, FR-S14..S17, model data dan API (`member_cards`, `method`, `qr_secret`, `GET /cards`, `POST /attendance/qr`), keamanan/privasi/retensi, asumsi A7–A8, pertanyaan Q10–Q12, dan penyesuaian milestone M0–M6. Sidik jari dan telapak tangan dinyatakan di luar lingkup V1 | Tim Smart Absensi |
+| 2.3.0 | 2026-10-06 | Rebase perubahan hardware pada basis v2.2.1: display MAR2406 8-bit paralel (bukan SPI); Arduino Uno hanya terminal display; LED, buzzer, tombol dipindah ke GPIO SBC lewat transistor NPN; RTC DS3231 dipindah ke I2C SBC (3,3 V); protokol serial disederhanakan (baris maks 160 byte; `io`, `backlight`, `get_time`, `set_time`, `button`, `time` dihapus); backlight tidak dapat diredupkan; BOM (No 3, 5, 11-14, 17, 19), 4.1-4.4, 4.7, 5.1, R05, R08, R21, R22, 8.2-8.3, AC-14, AC-19a/b, FR-E20..E22, FR-A02..A05, M0/M4, referensi; nomor pin GPIO/I2C/SPI SBC **belum ditetapkan**. | Tim Smart Absensi |
+| 2.4.0 | 2026-10-06 | Revisi `/api/v1/config`: array `groups` per tipe (`class`, `staff`) dengan `start_time` dan `late_tolerance_minutes`; field flat `class_start_time` dan `late_threshold_minutes` dihapus; mencatat konsekuensi 120 menit untuk DTR staf. | Tim Smart Absensi |
 
 ### B. Referensi
 
@@ -1057,8 +1067,7 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | Orange Pi Lite 2 | http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details Orange-Pi-Lite-2.html |
 | Orange Pi Lite 2 (linux-sunxi) | https://linux-sunxi.org/Orange_Pi_Lite_2 |
 | 2.4inch Arduino Display Docs | https://www.lcdwiki.com/2.4inch_Arduino_Display |
-| XPT2046 Touch Controller Datasheet | https://datasheetspdf.com/pdf/731591/XPT/XPT2046/1 |
-| PCF8574 I2C Expander Datasheet | https://www.ti.com/lit/ds/symlink/pcf8574.pdf |
+| LCDWIKI_KBV (pustaka shield) | https://github.com/lcdwiki/LCDWIKI_kbv |
 | XL6009 Boost Converter Datasheet | https://www.xlsemi.com/datasheet/XL6009%20datasheet.pdf |
 | OpenCV Zoo (YuNet, SFace) | https://github.com/opencv/opencv_zoo |
 | Silent-Face-Anti-Spoofing (Mini-FASNet) | https://github.com/minivision-ai/Silent-Face-Anti-Spoofing |

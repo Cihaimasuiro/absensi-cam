@@ -127,4 +127,6 @@ return [
 
     'enrollment_embed_key' => env('ENROLLMENT_EMBED_KEY', ''),
 
+    'trusted_proxies' => env('TRUSTED_PROXIES', '127.0.0.1'),
+
 ];

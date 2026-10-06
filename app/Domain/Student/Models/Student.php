@@ -85,6 +85,13 @@ class Student extends Model
                 $student->faceTemplate->delete();
             }
         });
+
+        static::updated(function (Student $student) {
+            if ($student->wasChanged('classroom_id') && $student->faceTemplate) {
+                // Touch the faceTemplate to bump version_cursor so devices get the tombstone if it moved out of scope
+                $student->faceTemplate->touch();
+            }
+        });
     }
 }
 

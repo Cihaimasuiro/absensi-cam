@@ -694,7 +694,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-S04 | Pencatatan persetujuan (consent) per anggota (tanggal, versi teks, pencatat; untuk anak di bawah 18 tahun: wali) dan penarikan persetujuan. | Must |
 | FR-S05 | Pairing perangkat dengan kode sekali pakai -> token perangkat; cabut/rotasi token. | Must |
 | FR-S06 | REST API untuk edge (Bagian 11.2) dengan validasi, idempotensi, rate limit. | Must |
-| FR-S07 | Distribusi templet ke perangkat berdasarkan kelas/gedung yang berhak (delta + tombstone). | Must |
+| FR-S07 | Distribusi templet ke perangkat berdasarkan kelas/gedung yang berhak (delta + tombstone). **Aturan Gate Device:** Gedung yang tidak memiliki kelas yang ditugaskan akan menerima *semua* templet dari satu sekolah. | Must |
 | FR-S08 | Dashboard perangkat (status, suhu, versi, antrean) dan absensi hari ini. | Must |
 | FR-S09 | Laporan DTR harian/bulanan (jam masuk pertama, jam keluar terakhir, terlambat, durasi kerja) — ekspor **.xlsx**, **PDF**, dan **CSV** mentah. | Must |
 | FR-S10 | Koreksi absensi manual (dengan alasan, tercatat di audit log; data asli tidak ditimpa). | Should |

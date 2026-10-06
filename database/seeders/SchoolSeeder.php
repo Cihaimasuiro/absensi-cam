@@ -26,6 +26,7 @@ class SchoolSeeder extends Seeder
             ['school_id' => $school->id, 'code' => 'X-IPA-1'],
             [
                 'name' => 'Kelas X IPA 1',
+                'building_id' => $building->id,
                 'type' => 'classroom',
                 'is_active' => true,
                 'class_start_time' => '07:00',
@@ -40,11 +41,27 @@ class SchoolSeeder extends Seeder
             ['school_id' => $school->id, 'code' => 'XI-IPA-1'],
             [
                 'name' => 'Kelas XI IPA 1',
+                'building_id' => $building->id,
                 'type' => 'classroom',
                 'is_active' => true,
                 'class_start_time' => '07:00',
                 'late_threshold_enabled' => true,
                 'late_threshold_minutes' => 15,
+                'track_checkout' => true,
+                'biometric_consent_certified' => true,
+            ]
+        );
+
+        $staffGroup = Classroom::firstOrCreate(
+            ['school_id' => $school->id, 'code' => 'GURU-STAF'],
+            [
+                'name' => 'Guru & Staf',
+                'building_id' => $building->id,
+                'type' => 'department',
+                'is_active' => true,
+                'class_start_time' => '06:30',
+                'late_threshold_enabled' => true,
+                'late_threshold_minutes' => 30,
                 'track_checkout' => true,
                 'biometric_consent_certified' => true,
             ]
@@ -56,6 +73,7 @@ class SchoolSeeder extends Seeder
             ['code' => 'STU-003', 'name' => 'Ahmad Fauzi',   'classroom_id' => $classXI->id, 'role' => 'student'],
             ['code' => 'STU-004', 'name' => 'Rina Marlina',  'classroom_id' => $classXI->id, 'role' => 'student'],
             ['code' => 'STU-005', 'name' => 'Dodi Prasetya', 'classroom_id' => $classX->id,  'role' => 'student'],
+            ['code' => 'EMP-001', 'name' => 'Pak Guru Budi', 'classroom_id' => $staffGroup->id, 'role' => 'teacher'],
         ];
 
         foreach ($students as $data) {

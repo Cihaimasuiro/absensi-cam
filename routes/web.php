@@ -18,15 +18,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Students — full CRUD + enrollment
-    Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
-    Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
-    Route::resource('students', StudentWebController::class);
+    Route::middleware('role:super_admin|admin')->group(function () {
+        Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
+        Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
+        Route::delete('students/{student}', [StudentWebController::class, 'destroy'])->name('students.destroy');
+    });
+    Route::resource('students', StudentWebController::class)->except(['destroy']);
     Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
 
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/',    [ReportController::class, 'index'])->name('index');
-        Route::get('/csv', [ReportController::class, 'exportCsv'])->name('export.csv');
+        Route::get('/csv', [ReportController::class, 'exportCsv'])->middleware('role:super_admin|admin')->name('export.csv');
     });
 
     // Devices / Pairing

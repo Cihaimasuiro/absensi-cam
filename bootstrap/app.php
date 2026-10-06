@@ -13,12 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $trustedProxies = env('TRUSTED_PROXIES', '127.0.0.1');
-        if ($trustedProxies === '*') {
-            $middleware->trustProxies(at: '*');
-        } else {
-            $middleware->trustProxies(at: explode(',', $trustedProxies));
-        }
+
         $middleware->alias([
             'abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'ability' => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,

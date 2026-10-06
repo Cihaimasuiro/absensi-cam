@@ -41,15 +41,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             $detectorModel = base_path('clients/edge-engine/assets/models/detector.onnx');
             $recognizerModel = base_path('clients/edge-engine/assets/models/recognizer.onnx');
             
-            $keyBase64 = config('app.enrollment_embed_key');
-            if (!$keyBase64) {
-                throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
-            }
-            
-            $key = base64_decode($keyBase64);
-            if (strlen($key) !== 32) {
-                throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
-            }
+
 
             $process = new \Symfony\Component\Process\Process([
                 $pythonBin,
@@ -78,16 +70,9 @@ class GenerateFaceEmbedding implements ShouldQueue
             }
             
             // Apply AES-256-GCM encryption
-            $nonce = random_bytes(12);
-            $aad = $this->studentId . '_' . $this->modelVersion;
-            $tag = '';
-            
-            $ciphertext = openssl_encrypt($stdout, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $nonce, $tag, $aad, 16);
-            if ($ciphertext === false) {
-                throw new \RuntimeException("AES encryption failed");
-            }
+            $encryptionService = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class);
+            $encryptedBlob = $encryptionService->encrypt($stdout, $this->studentId, $this->modelVersion);
 
-            $encryptedBlob = $nonce . $ciphertext . $tag;
             $hash = hash('sha256', $stdout);
 
             DB::transaction(function () use ($encryptedBlob, $hash) {

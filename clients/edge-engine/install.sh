@@ -52,9 +52,12 @@ CURRENT_DIR=$(pwd)
 if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     log_info "Copying files from $CURRENT_DIR to $INSTALL_DIR..."
     rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$INSTALL_DIR/"
-    if [ -d "$CURRENT_DIR/../../packages/models" ]; then
-        log_info "Copying models from packages/models..."
-        rsync -a "$CURRENT_DIR/../../packages/models/" "$INSTALL_DIR/models/"
+    MODELS_SRC=${MODELS_SRC:-"$CURRENT_DIR/../../packages/models"}
+    if [ -d "$MODELS_SRC" ]; then
+        log_info "Copying models from $MODELS_SRC..."
+        rsync -L -a "$MODELS_SRC/" "$INSTALL_DIR/models/"
+    else
+        log_warn "Models directory not found at $MODELS_SRC. Set MODELS_SRC env var if it's elsewhere."
     fi
 fi
 
@@ -125,7 +128,12 @@ echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Configure your API URL in $INSTALL_DIR/.env if needed."
 echo "2. Run the pairing script to connect to the Laravel backend:"
 echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
-echo "3. Models are placed in '$INSTALL_DIR/models'."
+# Check if .onnx files exist
+if ls "$INSTALL_DIR/models"/*.onnx 1> /dev/null 2>&1; then
+    echo "3. Models are placed in '$INSTALL_DIR/models'."
+else
+    echo -e "${RED}3. WARNING: No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models there.${NC}"
+fi
 echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
 echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"
 echo "============================================================================"

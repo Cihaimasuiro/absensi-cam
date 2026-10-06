@@ -15,7 +15,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Paths
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 DB_PATH = os.path.join(BASE_DIR, "local_edge.db")
-MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
+
+_default_models_dir = os.path.join(BASE_DIR, "models")
+_monorepo_models_dir = os.path.join(os.path.dirname(os.path.dirname(BASE_DIR)), "packages", "models")
+if not os.path.exists(_default_models_dir) and os.path.exists(_monorepo_models_dir):
+    _default_models_dir = _monorepo_models_dir
+
+MODELS_DIR = os.environ.get("MODELS_DIR", _default_models_dir)
 DEFAULT_MODEL_VERSION = "3d9f1f77896fb3d1"
 
 # Camera

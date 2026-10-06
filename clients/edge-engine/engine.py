@@ -39,6 +39,7 @@ from config.settings import (
     MODELS_DIR,
     STREAM_PORT,
     load_env,
+    DEFAULT_MODEL_VERSION,
 )
 from core.models import FaceDetector
 from database import DatabaseManager
@@ -56,7 +57,7 @@ class EdgeEngine:
 
         # ── Persistence & Sync ────────────────────────────────────────
         key_b64 = config.get("ENROLLMENT_EMBED_KEY")
-        model_version = config.get("MODEL_VERSION", "3d9f1f77896fb3d1")
+        model_version = config.get("MODEL_VERSION", DEFAULT_MODEL_VERSION)
         self.db = DatabaseManager(key_b64=key_b64, model_version=model_version)
         self.sync_worker = SyncWorker(
             self.db,

@@ -15,7 +15,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Paths
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 DB_PATH = os.path.join(BASE_DIR, "local_edge.db")
-MODELS_DIR = os.path.join(BASE_DIR, "assets", "models")
+MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(BASE_DIR, "models"))
+DEFAULT_MODEL_VERSION = "3d9f1f77896fb3d1"
 
 # Camera
 CAMERA_INDEX = 0

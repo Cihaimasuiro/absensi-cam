@@ -21,6 +21,7 @@ except ImportError:
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
+from config.settings import DEFAULT_MODEL_VERSION
 
 FW_VERSION = "1.0.0"
 
@@ -136,7 +137,7 @@ def main():
     token = result["token"]
     device_id = result["device_id"]
     embed_key = result.get("embed_key", "")
-    model_version = result.get("model_version", "3d9f1f77896fb3d1")
+    model_version = result.get("model_version", DEFAULT_MODEL_VERSION)
 
     save_env(server_url, token, device_id, embed_key, model_version)
 

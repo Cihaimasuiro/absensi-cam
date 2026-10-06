@@ -46,7 +46,10 @@ console.log(`[run-edge] Menggunakan Python: ${python}`);
 const result = spawnSync(python, ['engine.py'], {
     cwd:   ENGINE,
     stdio: 'inherit',
-    env:   { ...process.env },
+    env:   { 
+        ...process.env,
+        MODELS_DIR: join(ROOT, 'packages', 'models')
+    },
 });
 
 process.exit(result.status ?? 1);

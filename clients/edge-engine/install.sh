@@ -45,13 +45,17 @@ apt-get install -y --no-install-recommends \
 # 2. Setup Working Directory
 log_info "Setting up working directory at $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/assets/models"
+mkdir -p "$INSTALL_DIR/models"
 
 # Copy current directory contents to INSTALL_DIR if we are not already there
 CURRENT_DIR=$(pwd)
 if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     log_info "Copying files from $CURRENT_DIR to $INSTALL_DIR..."
     rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$INSTALL_DIR/"
+    if [ -d "$CURRENT_DIR/../../packages/models" ]; then
+        log_info "Copying models from packages/models..."
+        rsync -a "$CURRENT_DIR/../../packages/models/" "$INSTALL_DIR/models/"
+    fi
 fi
 
 cd "$INSTALL_DIR"
@@ -121,7 +125,7 @@ echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Configure your API URL in $INSTALL_DIR/.env if needed."
 echo "2. Run the pairing script to connect to the Laravel backend:"
 echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
-echo "3. Copy your AI models (e.g., detector.onnx) to '$INSTALL_DIR/assets/models'."
+echo "3. Models are placed in '$INSTALL_DIR/models'."
 echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
 echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"
 echo "============================================================================"

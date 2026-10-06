@@ -17,14 +17,14 @@ class GenerateFaceEmbedding implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
-    public $timeout = 60;
+    public $timeout = 120;
     
     public function __construct(
         public string $studentId,
         public string $tmpPath,
         public ?string $photoPath = null,
         public bool $deleteAfter = true,
-        public string $modelVersion = '3d9f1f77896fb3d1'
+        public ?string $modelVersion = null
     ) {
         $this->onQueue('enrollments');
     }
@@ -45,6 +45,7 @@ class GenerateFaceEmbedding implements ShouldQueue
 
 
             $result = Process::path(base_path())
+                ->timeout(120)
                 ->env(['PYTHONPATH' => base_path('packages')])
                 ->run([
                     $pythonBin,
@@ -72,7 +73,8 @@ class GenerateFaceEmbedding implements ShouldQueue
             
             // Apply AES-256-GCM encryption
             $encryptionService = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class);
-            $encryptedBlob = $encryptionService->encrypt($stdout, $this->studentId, $this->modelVersion);
+            $usedModelVersion = $this->modelVersion ?? config('app.model_version');
+            $encryptedBlob = $encryptionService->encrypt($stdout, $this->studentId, $usedModelVersion);
 
             $hash = hash('sha256', $stdout);
 
@@ -80,7 +82,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                 $data = [
                     'embedding_enc' => base64_encode($encryptedBlob),
                     'key_id' => 'default_key', // This should match edge engine's configured key
-                    'model_version' => $this->modelVersion,
+                    'model_version' => $usedModelVersion,
                     'embedding_hash' => $hash,
                     'deleted_at' => null
                 ];

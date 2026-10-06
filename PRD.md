@@ -1,8 +1,8 @@
 # PRD — Sistem Absensi "Smart Absensi"
 ## Product Requirement Document (PRD) — Monorepo
 
-> **Versi**: 2.2.0
-> **Tanggal**: 2026-09-30
+> **Versi**: 2.2.1
+> **Tanggal**: 2026-10-06
 > **Status**: Draft — Menunggu Review
 > **Penulis**: Tim Smart Absensi
 > **Repositori**: `d:\Github\absensi-cam`
@@ -45,18 +45,21 @@ Dokumen ini mendefinisikan:
 
 **Hubungan dengan Facenox**: [Facenox](https://github.com/facenox/facenox) digunakan sebagai **referensi konsep dan pembanding**, bukan basis kode. Facenox berlisensi **AGPL-3.0**; jika ada kode Facenox yang disalin/diturunkan, seluruh produk turunan wajib mengikuti AGPL-3.0 (lihat Bagian 12.4).
 
+**Hubungan dengan SekolahKita.net**: Proyek ini bagian dari ekosistem SekolahKita.net (CV Watulintang Media). Terminal ini adalah perangkat keras "Mesin Presensi Terintegrasi" yang tercantum di halaman publik SekolahKita tetapi **belum tersedia**; yang dibangun di sini adalah mesin tersebut. Arah integrasi dengan platform SekolahKita (sinkronisasi data siswa/kelas, aplikasi ponsel) belum diputuskan (Q10, Q11).
+
 ### 1.2 Lingkup Proyek & Keunggulan Kompetitif
 
 **Dalam lingkup (In Scope)**
 
-- Terminal absensi edge: kamera UVC, engine C++ (deteksi, tracking, liveness, pengenalan), display TFT, LED/buzzer/tombol, baterai cadangan.
+- Terminal absensi edge: kamera UVC, engine C++ (deteksi, tracking, liveness, pengenalan), display TFT, LED/buzzer/tombol, baterai cadangan, pembaca kartu RFID 13,56 MHz (RC522), dan QR dinamis pada TFT sebagai metode presensi cadangan.
+- Metode presensi V1: **wajah** (utama), **kartu RFID**, dan **QR dinamis** (dipindai dari aplikasi ponsel yang terautentikasi; verifikasi di Server Pusat).
 - Server Pusat Laravel 13: manajemen sekolah/gedung/perangkat/anggota, enrollment wajah, sinkronisasi templet, penyimpanan riwayat absensi, laporan (Excel/PDF/CSV), audit log.
 - Sinkronisasi dua arah edge <-> server via REST API / JSON.
 
 **Di luar lingkup (Out of Scope) untuk rilis ini**
 
 - Aplikasi desktop Electron seperti Facenox (tidak layak pada RAM 1 GB; fungsinya dipindahkan ke Web Admin Laravel dan layar sentuh TFT).
-- Aplikasi mobile, integrasi payroll langsung (hanya ekspor CSV), sensor IR/3D, sidik jari, RFID.
+- Aplikasi mobile (pemindai QR di aplikasi SekolahKita berada di luar repo ini; di sini hanya disediakan endpoint verifikasi), integrasi payroll langsung (hanya ekspor CSV), sensor IR/3D, sidik jari, telapak tangan.
 - Sertifikasi biometrik formal (mis. ISO/IEC 30107-3).
 
 **Perbandingan** *(angka Smart Absensi adalah **target desain** yang wajib divalidasi lewat Bagian 9; data pembanding berasal dari dokumentasi publik/brosur dan belum diverifikasi independen — jangan dipakai di materi eksternal sebelum diverifikasi)*
@@ -71,6 +74,8 @@ Dokumen ini mendefinisikan:
 | **Target Hardware** | Orange Pi Lite 2 (ARM SBC, ~US$25) | PC / laptop | Hemat daya dan biaya |
 | **Server Pusat** | Laravel 13 — REST API / JSON, self-hosted | Facenox Dashboard (cloud) / proprietary | Data tetap di infrastruktur sendiri |
 | **Sinkronisasi** | REST API JSON, idempotent, offline-queue | Proprietary / tidak ada | Standar dan audit-friendly |
+| **Metode Presensi** | Wajah (utama), kartu RFID 13,56 MHz, QR dinamis di TFT | Facenox: wajah; DT-12MQ: wajah, kartu RFID 13,56 MHz, PIN, QR | Sidik jari/telapak tangan tidak ada di V1. Keunggulan hanya boleh diklaim setelah AC-48..AC-56 lulus |
+| **Daya Cadangan** | UPS 18650 (target ≥ 2 jam, AC-06a) | DT-12MQ: tanpa baterai cadangan (spesifikasi vendor) | Keunggulan berlaku bila *switchover* dan runtime terbukti (AC-05, AC-06a) |
 
 ### 1.3 Alur Kerja Sistem
 
@@ -83,6 +88,8 @@ flowchart LR
     LIV -->|gagal| FAIL["Status SPOOF"]
     REC --> DB[("SQLite lokal<br/>+ outbox")]
     REC --> ARD["Arduino Uno<br/>TFT / LED / Buzzer"]
+    RFID["Pembaca RFID<br/>RC522 (SPI)"] -->|"UID kartu"| DB
+    QRG["Generator QR<br/>kode 10 detik"] --> ARD
     DB -->|"REST JSON (async)"| SRV["Server Pusat<br/>Laravel 13"]
     SRV -->|"delta templet wajah"| DB
 ```
@@ -99,6 +106,11 @@ flowchart LR
 8. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial untuk TFT, LED, dan buzzer.
 9. **REST API Sync**: Worker terpisah mengirim isi `outbox` ke Server Pusat secara asynchronous (batch, idempotent, retry dengan backoff). Server Pusat menyimpan riwayat dan menyediakan laporan terpusat. Perubahan templet wajah ditarik oleh edge secara berkala (delta sync).
 
+**Metode presensi cadangan (V1):**
+
+- **Kartu RFID**: Engine membaca UID kartu 13,56 MHz lewat RC522 (SPI), mencari anggota dari tabel `member_cards` lokal (hasil delta sync), lalu menulis record `method=card` ke `attendance` dan `outbox` dengan cooldown yang sama (FR-E07). Feedback LED/buzzer/TFT sama seperti pengenalan wajah. UID hanya mengidentifikasi, tidak mengotentikasi: kartu dapat dipinjamkan atau digandakan (R28).
+- **QR dinamis**: Saat standby, TFT menampilkan kode QR yang berganti tiap 10 detik. Kode dihitung engine dari `qr_secret` perangkat dan waktu (RTC/NTP) dengan skema mirip TOTP. Siswa memindainya dari aplikasi ponsel yang sudah login; **aplikasi mengirim kode ke Server Pusat**, yang memverifikasi dan membuat record `method=qr` (FR-S15). Terminal tidak mengetahui siapa yang memindai, sehingga tidak ada konfirmasi nama di TFT; konfirmasi tampil di aplikasi ponsel. QR tetap valid saat terminal offline karena server menghitung ulang kode dari rahasia yang sama, tetapi ponsel harus punya internet.
+
 ### 1.4 Objektif
 
 | Fitur Utama | Deskripsi Spesifikasi Teknikal | Target Objektif |
@@ -113,6 +125,7 @@ flowchart LR
 | **Audit Logs** | Pencatatan pendaftaran/penghapusan wajah, perubahan hak akses, status perangkat, dan kesalahan sistem; *append-only*. | Jejak audit operasional |
 | **Laporan DTR Excel & PDF** | Laporan Daily Time Record harian/bulanan format **.xlsx** dan **PDF**. | Siap cetak untuk rekapitulasi |
 | **Ekspor CSV Mentah** | Ekspor data mentah absensi untuk HRMS/Payroll eksternal. | Interoperabilitas tinggi |
+| **Presensi Kartu RFID & QR Dinamis** | Kartu RFID 13,56 MHz (RC522) dan QR berganti tiap 10 detik di TFT sebagai metode cadangan bila wajah gagal atau tidak tersedia; setiap record menyimpan `method` (`face`/`card`/`qr`). | Siswa tanpa ponsel tetap bisa presensi lewat kartu; tanpa kartu lewat QR |
 
 ---
 
@@ -123,10 +136,10 @@ Monorepo dibagi menjadi paket-paket yang dapat dibangun dan diuji terpisah.
 ```text
 absensi-cam/
 ├── apps/
-│   ├── central-server/      # Laravel 13: Web Admin + REST API + laporan + queue worker
-│   └── edge-engine/         # C++17: pipeline kamera -> deteksi -> liveness -> match, sync worker, serial bridge
+│   ├── central-server/      # Laravel 13: Web Admin + REST API + laporan + queue worker + kartu RFID/verifikasi QR
+│   └── edge-engine/         # C++17: pipeline kamera -> deteksi -> liveness -> match, sync worker, serial bridge, pembaca RFID, generator QR
 ├── firmware/
-│   └── arduino-display/     # Arduino Uno: TFT, touch, LED/buzzer/tombol (via I2C expander), RTC
+│   └── arduino-display/     # Arduino Uno: TFT (termasuk render QR), touch, LED/buzzer/tombol (via I2C expander), RTC
 ├── packages/
 │   ├── face-core/           # Pustaka C++ bersama (YuNet, SFace, Mini-FASNet); dibangun untuk ARM64 (edge) dan x86_64/ARM64 (server)
 │   ├── protocol/            # Skema JSON serial + OpenAPI REST (sumber kebenaran tunggal)
@@ -139,9 +152,9 @@ absensi-cam/
 
 | Package | Bahasa / Stack | Tanggung Jawab | Berjalan Di |
 |---------|----------------|----------------|-------------|
-| `apps/central-server` | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, laporan, audit | Server pusat (PC admin/VPS) |
-| `apps/edge-engine` | C++17, OpenCV, ONNX Runtime/OpenCV DNN, SQLite | Pengenalan wajah real-time, outbox, sync, serial | Orange Pi Lite 2 |
-| `firmware/arduino-display` | C++ (Arduino) | Render TFT, IO feedback, RTC, event tombol | Arduino Uno |
+| `apps/central-server` | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, kartu RFID, verifikasi QR, laporan, audit | Server pusat (PC admin/VPS) |
+| `apps/edge-engine` | C++17, OpenCV, ONNX Runtime/OpenCV DNN, SQLite | Pengenalan wajah real-time, pembaca RFID (SPI), generator QR, outbox, sync, serial | Orange Pi Lite 2 |
+| `firmware/arduino-display` | C++ (Arduino) | Render TFT (termasuk QR), IO feedback, RTC, event tombol | Arduino Uno |
 | `packages/face-core` | C++17 | Logika model bersama agar embedding identik di edge dan server | Edge + server |
 | `packages/protocol` | JSON Schema / OpenAPI 3 | Kontrak antar-komponen | — |
 | `packages/models` | ONNX | Model + versi | Edge + server |
@@ -155,12 +168,14 @@ absensi-cam/
 ```mermaid
 flowchart TB
     ADM["Admin (Browser)"] -->|HTTPS| LV["central-server<br/>Laravel 13"]
+    PHN["Aplikasi ponsel<br/>(pemindai QR)"] -->|"HTTPS: kode QR"| LV
     LV -->|"queue job / CLI"| FC["face-core<br/>face-embed"]
     LV <-->|"REST JSON + Bearer token (HTTPS)"| EDG["edge-engine<br/>Orange Pi Lite 2"]
     EDG <-->|"USB Serial 115200, JSON per baris"| ARD["arduino-display<br/>Arduino Uno"]
     ARD -->|SPI| TFT["TFT 2.4 inci + touch"]
     ARD -->|I2C| IO["PCF8574: LED, buzzer, tombol<br/>DS3231: RTC"]
     EDG --> CAM["Kamera UVC"]
+    EDG -->|SPI| RFID["RC522: kartu 13,56 MHz"]
     EDG --> SQ[("SQLite lokal")]
 ```
 
@@ -170,6 +185,9 @@ flowchart TB
 | Edge -> Server | HTTPS REST JSON | upload | Batch absensi, heartbeat, log perangkat |
 | Server -> Edge | HTTPS REST JSON | download | Delta templet wajah, konfigurasi, tombstone |
 | Server -> face-core | Proses lokal (CLI) | satu arah | Foto enrollment -> embedding |
+| Edge <-> RC522 | SPI 3,3 V (`/dev/spidev*`) | edge membaca | UID kartu (4.8) |
+| Edge -> Arduino | USB Serial JSON (`qr`, 4.1) | satu arah | Payload QR berganti tiap 10 detik |
+| Ponsel -> Server | HTTPS REST JSON | upload | Kode QR hasil pindai (`POST /attendance/qr`) |
 
 ---
 
@@ -195,6 +213,7 @@ flowchart TB
 | 15 | Heat sink | Aluminium ≥ 14x14mm + thermal pad | 1 | Pendingin SoC H6 | - | - | - | Wajib (lihat 6.2) |
 | 16 | Hub USB (opsional) | Hub USB 2.0/3.0 berdaya | 1 | Menambah port bila memakai Ethernet | 5.0 | - | USB | Wajib jika dongle Ethernet dipakai bersama kamera + Arduino |
 | 17 | Komponen pasif | Kapasitor 1000µF/10V + 100µF; resistor 330Ω x2, 4.7kΩ x2 | 1 set | Stabilisasi rail 5V | - | - | - | Kapasitor bulk untuk mitigasi R01; pull-up 4.7kΩ untuk I2C RTC |
+| 18 | Pembaca RFID | RC522 (MFRC522, 13,56 MHz) + kartu/tag MIFARE 13,56 MHz | 1 modul + kartu uji | Presensi kartu (metode cadangan) | 3.3 | ~30 | SPI (3,3 V) ke header 26-pin SBC | Modul sudah dimiliki. **Hanya 3,3 V**: 5 V merusak pin SBC. Pin header dan ketersediaan `/dev/spidev*` pada image Buster belum diverifikasi (R24). Hanya UID yang dibaca; data sektor kartu tidak dipakai |
 
 ### 3.2 Spesifikasi Hardware SBC & Kamera
 
@@ -203,7 +222,7 @@ flowchart TB
 | SBC Model | Orange Pi Lite 2 (Allwinner H6 Quad-Core Cortex-A53 @ 1.8 GHz) |
 | RAM | 1GB LPDDR3 (dibagi dengan GPU) |
 | Port USB | 1x USB 3.0 Host, 1x USB 2.0 Host, 1x micro-USB OTG (juga input daya) |
-| Header | 26-pin (tidak dipakai di V1; komunikasi ke Arduino lewat USB) |
+| Header | 26-pin (dipakai di V1 hanya untuk RC522 via SPI, lihat 4.8; komunikasi ke Arduino lewat USB) |
 | Camera Input | USB Web Camera UVC driverless via USB 2.0/3.0 |
 | Network | WiFi onboard AP6255 (802.11 a/b/g/n/ac) + Bluetooth 4.1; Ethernet hanya lewat dongle USB |
 | Operating System | Image resmi Orange Pi Debian Buster |
@@ -232,6 +251,8 @@ flowchart TB
 {"cmd":"display","status":"SPOOF","name":"---","dept":"---","time":"2026-09-28 07:30:25"}
 {"cmd":"display","status":"PROCESSING"}
 {"cmd":"standby","msg":"Silakan hadapkan wajah Anda"}
+{"cmd":"display","status":"RECOGNIZED","name":"Budi S.","dept":"Engineering","time":"2026-09-28 07:30:15","method":"card"}
+{"cmd":"qr","data":"SA1.dev-0007.48213977","ttl":10}
 {"cmd":"io","led":"green","buzzer":"2short"}
 {"cmd":"backlight","level":180}
 {"cmd":"get_time"}
@@ -252,6 +273,8 @@ flowchart TB
 ```
 
 **Aturan**: Arduino membalas `ack` untuk tiap perintah. Bila SBC tidak mendapat `pong` selama 5 detik, service mencatat log `serial_lost` dan mencoba membuka ulang port. Bila Arduino tidak menerima paket selama 10 detik, TFT menampilkan status "Menunggu sistem".
+
+> **Perintah `qr`**: `data` berupa teks ≤ 32 karakter (`SA1.<device_id>.<kode 8 digit>`) agar muat pada QR versi 2 (25×25 modul, ECC L). Arduino membuat QR sendiri dan menampilkannya di layar standby sampai perintah `qr` berikutnya atau status lain. Bila tidak ada `qr` baru dalam `ttl` × 2 detik, Arduino menghapus QR dan menampilkan "Menunggu sistem" agar kode kedaluwarsa tidak tertinggal di layar. Penggunaan RAM pustaka QR pada ATmega328P (2 KB SRAM) **belum diverifikasi** (AC-52). Field `method` pada `display` (`face`/`card`) hanya untuk tampilan.
 
 ### 4.2 Arduino Uno <-> LCD Wiki 2.4" Arduino Shield (Paralel)
 
@@ -282,7 +305,8 @@ Shield dipasang langsung di atas Arduino Uno (form-factor shield). Tidak diperlu
 | A4 (SDA) | DS3231 RTC I2C | |
 | A5 (SCL) | DS3231 RTC I2C | |
 
-> **Library Arduino**: `MCUFRIEND_kbv` + `Adafruit_GFX` + `TouchScreen` + `ArduinoJson` + `RTClib`.
+> **Library Arduino**: `MCUFRIEND_kbv` + `Adafruit_GFX` + `TouchScreen` + `ArduinoJson` + `RTClib` + pustaka QR ringan (mis. `QRCode` oleh Richard Moore; pilihan akhir menunggu uji RAM, AC-52).
+> **Layar QR**: 33 modul (25 + quiet zone 4 di tiap sisi) × 7 px = 231 px, muat pada sisi 240 px; area sisa untuk teks status. Tata letak final ditentukan setelah uji keterbacaan (AC-52).
 > `MCUFRIEND_kbv` melakukan auto-detect ID driver (ILI9341, ILI9325, ILI9486, dll.) via `tft.readID()`.
 
 ### 4.3 Arduino Uno <-> DS3231 RTC (I2C)
@@ -352,7 +376,8 @@ Modul UPS 18650 (charger + boost, passthrough)
 Rail 5V Utama  (+ kapasitor bulk 1000uF + 100uF)
   ├── Orange Pi Lite 2 (5V, maks ~1.5A) via input daya SBC (micro-USB atau pin 5V header; verifikasi pada board)
   │   ├── USB host 1: Kamera UVC (maks 500mA)
-  │   └── USB host 2: Arduino Uno (data serial)
+  │   ├── USB host 2: Arduino Uno (data serial)
+  │   └── Header 26-pin: RC522 (3,3 V dari SBC, ±30 mA, SPI)
   └── Arduino Uno + beban IO (~350mA)
       ├── TFT LCD (3.3V/5V dari Arduino header)
       ├── PCF8574 + DS3231 (5V dari Arduino header)
@@ -360,6 +385,31 @@ Rail 5V Utama  (+ kapasitor bulk 1000uF + 100uF)
 ```
 
 > **Catatan Daya Arduino**: Beban sisi Arduino (Arduino ~50–100 mA + TFT ~80–120 mA + LED ≤ 80 mA + buzzer 30 mA) dapat mencapai ~350 mA; ini mendekati batas 500 mA port USB 2.0 yang sama-sama dipakai SBC untuk kamera. **Pengukuran wajib saat komisioning.** Jika beban > 400 mA atau SBC brown-out, pasok Arduino langsung dari rail 5V UPS ke pin 5V dan gunakan **kabel USB data-only (VBUS diputus)** agar tidak terjadi *back-feed* ke SBC.
+
+### 4.8 Orange Pi Lite 2 <-> RC522 (SPI, 3,3 V)
+
+Pembaca RC522 (MFRC522, 13,56 MHz) dihubungkan langsung ke header 26-pin SBC lewat SPI. **Nomor pin fisik tidak ditetapkan di dokumen ini** karena pinout header dan overlay SPI pada image Debian Buster belum diverifikasi; isi tabel setelah memeriksa dokumentasi board, menjalankan `ls /dev/spidev*`, dan uji baca (AC-48).
+
+| Sinyal RC522 | Sambungan ke SBC | Keterangan |
+|--------------|------------------|------------|
+| 3.3V | Pin 3,3 V header | **Jangan 5 V.** Arus ≈ 13–26 mA (datasheet MFRC522) |
+| GND | GND | |
+| SDA (SS/CS) | CS SPI (pin ditetapkan setelah verifikasi) | Mode SPI; CS hardware atau GPIO |
+| SCK | SCK SPI | |
+| MOSI | MOSI SPI | |
+| MISO | MISO SPI | |
+| RST | GPIO bebas (3,3 V) | Reset oleh engine bila pembaca tidak merespons |
+| IRQ | Tidak dipakai | Engine memakai *polling* |
+
+| Parameter | Nilai |
+|-----------|-------|
+| Kartu didukung | ISO/IEC 14443A, 13,56 MHz (mis. MIFARE Classic/Ultralight) |
+| Data yang dibaca | **UID saja** (4/7/10 byte); sektor kartu tidak dibaca/ditulis |
+| Polling | Tiap 100–200 ms (nilai awal, dapat dikonfigurasi) |
+| Kabel | ≤ 15 cm (nilai awal); kabel panjang menurunkan keandalan SPI |
+| Jangkauan baca | Beberapa cm (tipikal modul RC522); beri penanda area tap di casing dan ukur pada casing akhir |
+
+> **Catatan**: UID bukan otentikasi kuat — beberapa kartu dapat digandakan (R28). Kartu 125 kHz (EM4100) **tidak** terbaca RC522. Bila `/dev/spidev*` tidak tersedia pada image yang dipakai, lihat R24.
 
 ---
 
@@ -376,6 +426,7 @@ Rail 5V Utama  (+ kapasitor bulk 1000uF + 100uF)
 | I2C IO Expander + RTC | 5 | 10 | Standby / aktif |
 | LED Indikator (semua nyala) | 40 | 80 | ≈ 10–20 mA per LED |
 | Piezo Buzzer | 0 | 30 | Hanya saat berbunyi |
+| Pembaca RFID RC522 | 15 | 30 | Disuplai 3,3 V dari header SBC (datasheet: 13–26 mA); tercakup margin 0,1 A (5.3), total tidak diubah; wajib diukur saat komisioning |
 | **Total Beban Rail 5V** | **~675** | **~2240** | Belum termasuk rugi konversi boost UPS (dihitung terpisah lewat efisiensi η = 0.85) |
 
 **Beban rata-rata operasional** (asumsi 80% waktu idle, 20% puncak): 0.8 × 675 + 0.2 × 2240 ≈ **~1000 mA (5 W)**.
@@ -466,6 +517,9 @@ I   = beban rail 5V (A)
 | R13 | Hanya 2 port USB host | Ethernet + kamera + Arduino tidak muat | Tinggi | WiFi utama; hub USB berdaya bila Ethernet dibutuhkan |
 | R14 | Akurasi turun pada jarak 3 m (wajah kecil di 640x480) | Salah kenal / gagal kenal | Tinggi | Batasi identifikasi 0.5–1.5 m pada 640x480; opsi 720p + crop; validasi AC-34 |
 | R15 | Model liveness ringan dapat diakali (video replay berkualitas, topeng 3D) | Kecurangan absensi | Sedang | Multi-frame voting, kalibrasi threshold, uji serangan (AC-33); pengawasan manusia pada lokasi berisiko tinggi |
+| R24 | SPI/pin RC522 pada header 26-pin belum diverifikasi; image Debian Buster vendor mungkin tanpa `/dev/spidev*` atau overlay SPI | Pembaca kartu tidak berfungsi | Sedang | Uji di M0 (AC-48) sebelum merakit; aktifkan overlay SPI bila tersedia; bila tidak, pertimbangkan OS/kernel lain (lihat juga Q9) atau pembaca RFID USB (butuh hub USB berdaya, R13) |
+| R25 | RC522 hanya 3,3 V; salah colok 5 V, kabel panjang, atau noise | Pin SBC rusak atau pembacaan UID tidak stabil | Sedang | Label 3,3 V pada kabel; kabel ≤ 15 cm; ukur tegangan sebelum menyalakan; jangan colok saat daya menyala |
+| R26 | QR di TFT sulit dipindai (silau, kontras rendah) atau jam terminal salah sehingga kode ditolak | Presensi QR gagal | Sedang | QR versi 2 skala 7 px + quiet zone; kontras tinggi (hitam di putih); uji dekat jendela/sinar matahari (AC-52); jam dari RTC/NTP dan toleransi window di server (AC-54) |
 
 ### 7.2 Constraint Teknis
 
@@ -486,6 +540,8 @@ I   = beban rail 5V (A)
 | R17 | Embedding server (x86_64/ARM64, `face-embed`) berbeda dari edge (ARM64) akibat decode JPEG/numerik | Salah kenal pada anggota hasil enrollment server | Sedang | Satu pustaka `face-core` + versi OpenCV/ONNX Runtime terkunci; uji paritas AC-44 |
 | R18 | RAM 1 GB dibagi OS, GPU, engine, SQLite | OOM / swap pada SD card | Sedang | OS minimal tanpa desktop; RSS < 150 MB (AC-29); zram; tanpa swap di SD |
 | R19 | Model liveness/pengenalan diperbarui tanpa re-embedding | Templet tidak kompatibel | Sedang | `model_version` per templet; edge menolak versi berbeda (AC-45) |
+| R27 | Kode QR diteruskan (foto/layar) ke orang yang tidak hadir, atau dipindai dari jauh | Titip absen lewat QR | Tinggi | Kode berganti tiap 10 detik dan hanya berlaku ≤ 20 detik; aplikasi ponsel memakai geofence/selfie bila tersedia; server mencatat `method=qr` dan menandai pola janggal (banyak anggota dari lokasi berjauhan pada kode yang sama); QR adalah metode cadangan dengan jaminan lebih rendah dari wajah (AC-53) |
+| R28 | UID kartu RFID dapat dibaca/digandakan, atau kartu dipinjamkan | Titip absen lewat kartu | Tinggi | Catat `method=card`; cooldown (FR-E07); UID dicabut saat kartu hilang (FR-S14); kartu terotentikasi di luar lingkup V1; laporan menampilkan metode agar pola janggal dapat ditinjau |
 
 ---
 
@@ -648,6 +704,18 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 - [ ] **AC-46**: Restore backup server ke instance baru memulihkan data; perangkat yang sudah dipasangkan tetap tersinkron tanpa pairing ulang.
 - [ ] **AC-47**: Setelah power-loss ≥ 1 jam tanpa jaringan, record baru bertanda `time_source=rtc` dan selisihnya ≤ 2 detik terhadap NTP saat koreksi.
 
+### L. Metode Presensi Cadangan (RFID & QR)
+
+- [ ] **AC-48**: `ls /dev/spidev*` menampilkan node SPI dan RC522 terbaca: register `VersionReg` mengembalikan `0x91` atau `0x92`.
+- [ ] **AC-49**: Tap kartu terdaftar menghasilkan record `method=card` di SQLite, dan LED + buzzer + TFT aktif **< 500 ms** setelah tap *(target, selaras AC-19)*; ≥ 20 tap berturut-turut tanpa salah baca.
+- [ ] **AC-50**: Kartu tidak terdaftar atau nonaktif menampilkan `UNKNOWN`, **tidak** membuat record absensi, dan tercatat di log perangkat; tap berulang dalam waktu cooldown (FR-E07) tidak membuat record ganda.
+- [ ] **AC-51**: UID kartu yang didaftarkan atau dicabut di Web Admin berlaku di perangkat target dalam < 5 menit (daftar) dan < 15 menit (cabut), tercatat di audit log; satu UID aktif hanya untuk satu anggota.
+- [ ] **AC-52**: QR di TFT berganti tiap 10 detik (± 1 detik) dan terbaca kamera ponsel pada 20–50 cm dengan keberhasilan ≥ 95% dalam ≥ 20 percobaan pada pencahayaan indoor ≥ 300 lux *(target)*; hasil uji dekat jendela/sinar matahari dicatat; SRAM bebas Arduino saat QR tampil diukur dan dicatat.
+- [ ] **AC-53**: Server menerima kode QR pada window saat ini atau sebelumnya (≤ 20 detik), dan menolak kode lebih lama, kode perangkat lain, perangkat yang dicabut, serta anggota yang tidak berhak pada perangkat itu (`device_groups`).
+- [ ] **AC-54**: Setelah power-loss tanpa jaringan, terminal tetap menampilkan QR yang valid dari waktu RTC (selisih jam ≤ 2 detik, selaras AC-47); server menerima kodenya selama ponsel terhubung internet.
+- [ ] **AC-55**: Record QR tersimpan dengan `method=qr`, `device_id`, dan `captured_at` dari server; scan kode yang sama oleh anggota yang sama dalam satu window dijawab `duplicate`.
+- [ ] **AC-56**: Laporan DTR dan CSV mentah memuat kolom `method` (`face`/`card`/`qr`) untuk setiap record.
+
 ---
 
 ## 10. Requirement Perangkat Lunak
@@ -672,6 +740,9 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-E14 | Menerapkan throttling termal (6.2) dan alert. | Should |
 | FR-E15 | Menyediakan CLI diagnostik lokal (`smart-absensi-cli status/sync/export`). | Could |
 | FR-E16 | Enrollment langsung di perangkat (tombol/touch) — ditunda ke fase berikutnya; enrollment utama di Web Admin. | Won't (rilis ini) |
+| FR-E17 | Membaca UID kartu dari RC522 via SPI (polling), mencari anggota di tabel lokal `member_cards` (terbatas pada kelas/perangkat yang berhak, FR-E06), menulis record `method=card` ke `attendance` dan `outbox` dalam satu transaksi, menerapkan cooldown (FR-E07), dan mengirim feedback ke Arduino. Kartu tak dikenal -> `UNKNOWN` tanpa record. Hanya UID yang dibaca. | Must |
+| FR-E18 | Menghitung kode QR tiap 10 detik: HMAC-SHA256 dari `device_id` dan nomor langkah waktu (`floor(t/10)`) dengan kunci `qr_secret`, pemotongan dinamis gaya RFC 4226/6238 menjadi 8 digit; mengirim perintah `qr` ke Arduino saat standby. `qr_secret` disimpan berizin `0600`; waktu dari RTC/NTP; bila `time_source=unsynced`, tampilkan status alih-alih QR. | Should |
+| FR-E19 | Delta sync kartu (`GET /cards`) dengan *tombstone* dan penerapan ke tabel `member_cards`. | Must |
 
 ### 10.2 Firmware Arduino (`firmware/arduino-display`)
 
@@ -683,6 +754,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-A04 | Baca/tulis RTC DS3231 atas perintah `get_time`/`set_time`. | Must |
 | FR-A05 | Kontrol PWM backlight; redup otomatis saat idle (mis. 60 detik). | Should |
 | FR-A06 | Watchdog: reset mandiri bila loop utama macet > 8 detik. | Should |
+| FR-A07 | Membuat dan menampilkan QR (versi 2, ECC L, skala 7 px + quiet zone) dari perintah `qr` pada layar standby; kembali ke QR ± 3 detik setelah menampilkan hasil presensi; menghapus QR bila tidak ada `qr` baru dalam `ttl` × 2 detik (4.1). Naik ke Must bila uji RAM lulus (AC-52). | Should |
 
 ### 10.3 Server Pusat & Web Admin (`apps/central-server`)
 
@@ -701,6 +773,10 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-S11 | Audit log *append-only*: Spatie Activitylog + pembatasan tingkat DB (user aplikasi tanpa hak `UPDATE`/`DELETE` pada tabel `activity_log`). | Must |
 | FR-S12 | Backup terjadwal database server dan prosedur restore terdokumentasi. | Should |
 | FR-S13 | Kebijakan retensi yang dapat dikonfigurasi (Bagian 12.3). | Should |
+| FR-S14 | Manajemen kartu RFID: daftarkan/cabut UID per anggota di Web Admin (satu UID aktif hanya untuk satu anggota), impor massal CSV opsional, tercatat di audit log; UID dicabut otomatis saat anggota nonaktif. | Must |
+| FR-S15 | Verifikasi QR: `POST /attendance/qr` menghitung ulang kode dari `qr_secret` perangkat untuk window saat ini dan sebelumnya, memeriksa hak anggota pada perangkat (`device_groups`), idempotensi per anggota+perangkat+window, rate limit, lalu membuat `attendance_logs` dengan `method=qr`. Pemanggil adalah aplikasi ponsel terautentikasi (bukan token perangkat; Q11). | Should |
+| FR-S16 | Menerbitkan `qr_secret` per perangkat saat pairing (ditampilkan sekali, disimpan terenkripsi di server) dan merotasinya saat token perangkat dicabut/dirotasi. | Should |
+| FR-S17 | Impor/sinkronisasi anggota dan kelas dari platform SekolahKita agar data siswa tidak dikelola dua kali; format dan arah ditentukan di Q10. | Could |
 
 ### 10.3.1 Arsitektur Laravel (mengikuti AGENTS.md)
 
@@ -714,6 +790,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `Device` | pairing, token, heartbeat, konfigurasi | FR-S05, S06, S08 |
 | `Attendance` | batch masuk, koreksi manual | FR-S06, S10 |
 | `Report` | DTR, ekspor .xlsx/PDF/CSV | FR-S09 |
+| `Credential` | kartu RFID, `qr_secret`, verifikasi QR | FR-S14, S15, S16 |
 
 | Aspek | Keputusan |
 |-------|-----------|
@@ -752,7 +829,8 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 |-------|-------------|
 | `members` | `id` (UUID server), `code`, `name`, `group_name`, `active`, `updated_at` |
 | `templates` | `member_id`, `embedding` (BLOB terenkripsi AES-256-GCM: 12 byte nonce + 512 byte embedding + 16 byte tag = 540 byte), `model_version`, `updated_at` |
-| `attendance` | `id` (UUIDv7), `member_id`, `captured_at` (UTC), `direction` (`in`/`out`), `score`, `liveness_score`, `time_source`, `synced` |
+| `member_cards` | `card_uid`, `member_id`, `active`, `updated_at` (`qr_secret` disimpan di berkas berizin `0600`, bukan di tabel) |
+| `attendance` | `id` (UUIDv7), `member_id`, `captured_at` (UTC), `direction` (`in`/`out`), `method` (`face`/`card`), `score`, `liveness_score` (null untuk `card`), `time_source`, `synced` |
 | `outbox` | `attendance_id`, `attempts`, `next_retry_at`, `status` (`pending`/`sent`/`dead`) |
 | `settings` | `key`, `value` (threshold, cooldown, mode, dsb.) |
 
@@ -761,21 +839,22 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | Tabel | Kolom Utama |
 |-------|-------------|
 | `organizations`, `groups` (divisi/dept/kelas), `branches` | Hirarki dan lokasi |
-| `devices` | `id`, `branch_id`, `name`, `token_hash`, `last_heartbeat_at`, `fw_version`, `model_version`, `status` |
+| `devices` | `id`, `branch_id`, `name`, `token_hash`, `qr_secret` (terenkripsi), `last_heartbeat_at`, `fw_version`, `model_version`, `status` |
 | `members` | `id` (UUID), `organization_id`, `group_id`, `code`, `name`, `active` |
 | `face_templates` | `member_id`, `embedding` (terenkripsi), `model_version`, `version_cursor`, `deleted_at` |
 | `consents` | `member_id`, `given_at`, `withdrawn_at`, `text_version`, `recorded_by`, `guardian_name` |
-| `attendance_logs` | `id` (UUID dari edge, unik), `member_id`, `device_id`, `captured_at`, `direction`, `score`, `liveness_score`, `time_source`, `received_at` |
+| `attendance_logs` | `id` (UUID dari edge, unik; untuk `method=qr` dibuat server), `member_id`, `device_id`, `captured_at`, `direction`, `method` (`face`/`card`/`qr`), `score`, `liveness_score` (null untuk `card`/`qr`), `time_source`, `received_at` |
 | `audit_logs` | `id`, `actor`, `action`, `subject`, `meta` (JSON), `created_at` (append-only; diimplementasikan dengan tabel `activity_log` Spatie) |
 | `device_groups` | `device_id`, `group_id` — kelas yang berhak dikenali per perangkat (FR-E06, FR-S07) |
 | `pairing_codes` | `code_hash`, `branch_id`, `expires_at` (15 menit), `used_at` |
 | `attendance_corrections` | `attendance_log_id`, `corrected_by`, `reason`, nilai baru; data asli tidak ditimpa (FR-S10) |
 | `device_logs` | `device_id`, `level`, `message`, `created_at` (retensi 7 hari, 12.3) |
+| `member_cards` | `id`, `member_id`, `card_uid` (unik di antara kartu aktif), `active`, `registered_by`, `version_cursor`, `deleted_at` — UID bukan data biometrik tetapi tetap data pribadi (FR-S14) |
 | `users`, `roles` | Akun admin dan peran |
 
-**Skema CSV mentah**: `attendance_id, captured_at_utc, captured_at_local, member_code, member_name, kelas, gedung, device, direction, score, time_source`.
+**Skema CSV mentah**: `attendance_id, captured_at_utc, captured_at_local, member_code, member_name, kelas, gedung, device, direction, method, score, time_source`.
 
-### 11.2 REST API (`/api/v1`, JSON, HTTPS, header `Authorization: Bearer <device_token>`, kecuali `POST /devices/pair` yang memakai kode pairing)
+### 11.2 REST API (`/api/v1`, JSON, HTTPS, header `Authorization: Bearer <device_token>`, kecuali `POST /devices/pair` yang memakai kode pairing dan `POST /attendance/qr` yang memakai token aplikasi ponsel)
 
 | Method & Path | Fungsi | Catatan |
 |---------------|--------|---------|
@@ -785,6 +864,8 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `GET /templates?cursor=&limit=200` | Delta templet (termasuk tombstone) | Mengembalikan `next_cursor` |
 | `GET /config` | Konfigurasi perangkat (threshold, cooldown, mode) | Dilengkapi `etag` |
 | `POST /logs` | Kirim log error perangkat | Opsional, batas ukuran |
+| `GET /cards?cursor=&limit=200` | Delta kartu RFID per perangkat (termasuk tombstone) | Hanya kartu anggota yang berhak pada perangkat; mengembalikan `next_cursor` |
+| `POST /attendance/qr` | Verifikasi kode QR hasil pindai ponsel | **Bukan token perangkat**: memakai token anggota/aplikasi ponsel (Q11); rate limit per anggota |
 
 **Contoh `POST /devices/pair`**
 
@@ -792,7 +873,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 { "code": "K7M2-9QXA", "device_name": "Gerbang Utama", "fw_version": "1.0.0", "model_version": "3d9f1f77896fb3d1/1" }
 ```
 
-Respons `201`: `{ "device_id": "dev-0007", "token": "<ditampilkan sekali>", "branch_id": "..." }`. Kode tidak valid/kedaluwarsa -> `422`; percobaan berulang dibatasi (`429`).
+Respons `201`: `{ "device_id": "dev-0007", "token": "<ditampilkan sekali>", "branch_id": "...", "qr_secret": "<ditampilkan sekali>" }`. Kode tidak valid/kedaluwarsa -> `422`; percobaan berulang dibatasi (`429`).
 
 **Contoh `POST /attendance/batch`**
 
@@ -805,6 +886,7 @@ Respons `201`: `{ "device_id": "dev-0007", "token": "<ditampilkan sekali>", "bra
       "member_id": "b6a1c3f2-8f6e-4a49-a5f5-0d5b1b3a9c11",
       "captured_at": "2026-09-30T00:30:15Z",
       "direction": "in",
+      "method": "face",
       "score": 0.62,
       "liveness_score": 0.97,
       "time_source": "ntp"
@@ -824,6 +906,28 @@ Respons `201`: `{ "device_id": "dev-0007", "token": "<ditampilkan sekali>", "bra
 ```
 
 Status per record: `created`, `duplicate` (dianggap sukses oleh edge), `rejected` (dengan `reason`; edge memindahkan ke `dead` dan melaporkan lewat log).
+
+Nilai `method`: edge hanya mengirim `face` dan `card` (`score`/`liveness_score` bernilai `null` untuk `card`); record `qr` dibuat server lewat `POST /attendance/qr`.
+
+**Contoh `POST /attendance/qr`**
+
+```json
+{ "payload": "SA1.dev-0007.48213977" }
+```
+
+Respons `201`: `{ "status": "created", "attendance_id": "...", "device": "Gerbang Utama" }`; kode sama dalam window sama -> `200` `duplicate`; kode kedaluwarsa/salah -> `422`; anggota tidak berhak pada perangkat -> `403`; percobaan berulang -> `429`.
+
+**Contoh `GET /cards`**
+
+```json
+{
+  "items": [
+    { "member_id": "b6a1c3f2-...", "card_uid": "04A1B2C3", "op": "upsert", "updated_at": "2026-10-06T01:00:00Z" },
+    { "member_id": "c91d0e7a-...", "card_uid": "04D4E5F6", "op": "delete", "updated_at": "2026-10-06T01:02:00Z" }
+  ],
+  "next_cursor": "120"
+}
+```
 
 **Contoh `GET /templates`**
 
@@ -855,6 +959,8 @@ Status per record: `created`, `duplicate` (dianggap sukses oleh edge), `rejected
 | Data at rest (server) | Embedding terenkripsi di level aplikasi; backup terenkripsi |
 | Foto wajah | Tidak disimpan. Foto enrollment hanya di memori/berkas sementara dan dihapus segera setelah embedding dibuat |
 | Serial | Antarmuka lokal (USB); tidak dianggap saluran tepercaya untuk data sensitif — Arduino hanya menerima perintah tampil |
+| Kartu RFID | Hanya UID yang dibaca; UID tidak mengotentikasi (dapat digandakan/dipinjamkan, R28). Kartu hilang dicabut dari Web Admin (FR-S14) dan berlaku di perangkat < 15 menit (AC-51). Setiap record menyimpan `method=card` |
+| QR dinamis | Kode berasal dari `qr_secret` per perangkat (HMAC, langkah 10 detik) dan **diverifikasi di server**, bukan di terminal; berlaku ≤ 20 detik; `qr_secret` ditampilkan sekali saat pairing, disimpan terenkripsi di server dan berizin `0600` di edge, dirotasi saat token dicabut. **Risiko sisa**: kode dapat diteruskan ke orang yang tidak hadir (R27); QR adalah metode cadangan, bukan pengganti wajah |
 | Update | Paket bertanda tangan/dengan checksum SHA-256; model diverifikasi checksum saat boot |
 
 ### 12.2 Privasi & Persetujuan
@@ -866,6 +972,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 - Hak penarikan persetujuan dan penghapusan: dijalankan lewat FR-S04, tersebar ke seluruh perangkat (AC-37).
 - Penilaian dampak pelindungan data (DPIA) dan penunjukan penanggung jawab data.
 - Prosedur insiden: UU PDP mensyaratkan pemberitahuan kegagalan pelindungan data paling lambat 3x24 jam.
+- Kartu RFID (UID) dan catatan presensi QR bukan data biometrik, tetapi tetap data pribadi anggota; tujuan pemrosesan (absensi) dan masa retensi mengikuti 12.3 dan dicantumkan pada pemberitahuan privasi (konfirmasikan dengan penasihat hukum).
 
 ### 12.3 Retensi Data
 
@@ -875,6 +982,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | Riwayat absensi | Disimpan di server sesuai kebijakan sekolah (default: tanpa batas waktu, dengan opsi anonimisasi/penghapusan periodik) |
 | Audit log | Minimal 1 tahun; append-only |
 | Log perangkat | 7 hari di server |
+| UID kartu RFID | Dicabut saat anggota nonaktif/berhenti atau kartu hilang; dihapus dari semua perangkat lewat *tombstone* |
 
 ---
 
@@ -890,6 +998,8 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | A4 | Jaringan WiFi 802.11 tersedia di lokasi; Ethernet opsional. |
 | A5 | Kondisi pencahayaan terkendali (≥ 300 lux) dan wajah relatif frontal. |
 | A6 | Aplikasi desktop Electron seperti Facenox tidak dibangun; digantikan Web Admin. *(Ubah bila desktop app memang dibutuhkan.)* |
+| A7 | Modul RC522 sudah dimiliki; kartu/tag 13,56 MHz diasumsikan tersedia (jenis dan jumlah belum dikonfirmasi); header SPI Orange Pi Lite 2 dan overlay SPI pada image Buster tersedia (belum diverifikasi, R24). |
+| A8 | Siswa yang memakai QR memiliki ponsel dengan aplikasi terautentikasi dan koneksi internet; siswa tanpa ponsel memakai kartu atau wajah. |
 
 ### 13.2 Pertanyaan Terbuka
 
@@ -904,6 +1014,9 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | Q7 | Strategi lisensi: open source (AGPL) atau proprietary (implementasi independen)? | Lisensi seluruh monorepo |
 | Q8 | Perlu integrasi langsung ke HRMS/Payroll atau cukup ekspor CSV? | Cakupan API |
 | Q9 | Jika spike M0 gagal pada 1 GB RAM / Cortex-A53, apakah boleh beralih ke SBC dengan RAM/CPU lebih besar? | Anggaran, BOM, desain V2 |
+| Q10 | Apakah Server Pusat Laravel berdiri sendiri dan menyinkronkan data siswa/kelas/absensi dengan platform SekolahKita, atau menjadi bagian darinya? | Skema data, FR-S17, hosting, alur login |
+| Q11 | Siapa yang menambahkan pemindai QR pada aplikasi ponsel SekolahKita, dan token apa yang dipakai memanggil `POST /attendance/qr`? | FR-S15, jadwal M5, keamanan |
+| Q12 | Halaman publik SekolahKita menyebut sidik jari dan telapak tangan, di luar lingkup V1: teks disesuaikan, ditandai "segera", atau modul pihak ketiga ditambahkan? | Ekspektasi pelanggan, BOM, dukungan |
 
 ---
 
@@ -913,13 +1026,13 @@ Urutan berikut memindahkan risiko terbesar (R16) ke awal. Milestone berikutnya d
 
 | Milestone | Isi | Gate (kriteria lulus) |
 |-----------|-----|-----------------------|
-| M0 Spike kelayakan | Jalankan YuNet + Mini-FASNet + SFace di Orange Pi Lite 2 dengan kamera UVC; ukur FPS, latensi, RSS, suhu | FPS ≥ 10, keputusan < 3 s, RSS < 150 MB, suhu ≤ 75 °C. Gagal -> Q9 |
-| M1 Server inti | Skeleton Laravel 13, modul Organization/Member/Device, Sanctum + pairing, API `/api/v1` dasar (FR-S01, S02, S04, S05, S06) | Feature test pairing dan otorisasi lulus (AC-41, 43) |
+| M0 Spike kelayakan | Jalankan YuNet + Mini-FASNet + SFace di Orange Pi Lite 2 dengan kamera UVC; ukur FPS, latensi, RSS, suhu; cek `/dev/spidev*` dan baca RC522 | FPS ≥ 10, keputusan < 3 s, RSS < 150 MB, suhu ≤ 75 °C, dan AC-48 lulus. Gagal performa -> Q9; gagal SPI -> R24 |
+| M1 Server inti | Skeleton Laravel 13, modul Organization/Member/Device, Sanctum + pairing, API `/api/v1` dasar (FR-S01, S02, S04, S05, S06, S14, S16) | Feature test pairing dan otorisasi lulus (AC-41, 43) |
 | M2 Enrollment & templet | Job `face-embed`, hapus foto, delta sync + tombstone (FR-S03, S07) | AC-36, AC-37, AC-42, AC-44 |
-| M3 Edge end-to-end | Engine C++ tanpa Arduino (log/CLI), SQLite + outbox + sync (FR-E01..E12) | AC-10, 20..26, 31, 32, 35 |
-| M4 Hardware V1 | Rakit perangkat, firmware Arduino, bridge serial (FR-E13, FR-A01..A04) | AC-01..19 |
-| M5 Laporan & dashboard | Dashboard perangkat, DTR .xlsx/PDF/CSV, audit log (FR-S08, S09, S11) | AC-38, 39, 40 |
-| M6 Hardening | Uji 8 jam, uji anti-spoofing, uji jarak, RTC, restore backup | AC-27..30, 33, 34, 45..47 |
+| M3 Edge end-to-end | Engine C++ tanpa Arduino (log/CLI), SQLite + outbox + sync (FR-E01..E12, E17, E19) | AC-10, 20..26, 31, 32, 35, 51 |
+| M4 Hardware V1 | Rakit perangkat, firmware Arduino, bridge serial (FR-E13, E18, FR-A01..A04, A07) | AC-01..19, 49, 50, 52 |
+| M5 Laporan & dashboard | Dashboard perangkat, DTR .xlsx/PDF/CSV, audit log, verifikasi QR (FR-S08, S09, S11, S15) | AC-38, 39, 40, 53, 55, 56 |
+| M6 Hardening | Uji 8 jam, uji anti-spoofing, uji jarak, RTC, restore backup | AC-27..30, 33, 34, 45..47, 54 |
 
 Hardware V2 (Bagian 8) dimulai setelah M6.
 
@@ -935,6 +1048,7 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | 2.0.0 | 2026-09-29 | Draft untuk implementasi V2 | Tim Smart Absensi |
 | 2.1.0 | 2026-09-30 | Revisi teknis & kelengkapan: melengkapi Bagian 1–2 (diagram, package, alur komunikasi); memperbaiki penomoran, blok kode, dan nama service; koreksi spesifikasi Orange Pi Lite 2 (2 port USB host, header 26-pin, WiFi 802.11ac); koreksi rangkaian PCF8574 (LED/buzzer aktif-LOW), TFT (modul SPI, driver backlight), power budget dan runtime baterai, adaptor 5V/4A; konsistensi kapasitas wajah, resolusi kamera, dan target latensi; menambah RTC, protokol serial dua arah, Acceptance Criteria H–J, Bagian 10–13 (requirement software, model data & API, keamanan/privasi, asumsi) | Tim Smart Absensi |
 | 2.2.0 | 2026-09-30 | Perbaikan konsistensi dan kelengkapan: alur embedding per-track (FR-E05), rangkaian backlight TFT (PNP high-side), catatan pull-up I2C dan pengisi CR2032 pada DS3231, ukuran BLOB terenkripsi (540 byte), input daya SBC, batas arus UPS, FPS AC-31 = NFR-01, interval worker outbox (AC-26); menambah 7.3 risiko software (R16–R20), 10.3.1 arsitektur Laravel sesuai AGENTS.md, tabel `device_groups`/`pairing_codes`/`attendance_corrections`/`device_logs`, contoh `POST /devices/pair`, format galat seragam, AC-44..47, Q9, dan Bagian 14 (milestone dengan gate M0) | Tim Smart Absensi |
+| 2.2.1 | 2026-10-06 | Menambah metode presensi cadangan **kartu RFID (RC522)** dan **QR dinamis di TFT** tanpa mengubah struktur dokumen: konteks SekolahKita, lingkup dan perbandingan (1.1–1.4), package dan jalur komunikasi (2), BOM No 18 dan header SBC (3), perintah serial `qr` dan bagian 4.8 (RC522, pin belum ditetapkan), power budget (5.1), risiko R24–R28, AC-48..56 (grup L), FR-E17..E19, FR-A07, FR-S14..S17, model data dan API (`member_cards`, `method`, `qr_secret`, `GET /cards`, `POST /attendance/qr`), keamanan/privasi/retensi, asumsi A7–A8, pertanyaan Q10–Q12, dan penyesuaian milestone M0–M6. Sidik jari dan telapak tangan dinyatakan di luar lingkup V1 | Tim Smart Absensi |
 
 ### B. Referensi
 
@@ -952,6 +1066,10 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | Facenox — open source face recognition (AGPL-3.0) | https://github.com/facenox/facenox |
 | UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi | Basis data peraturan (JDIH) pemerintah RI |
 | Laravel 13 (PHP 8.3 minimum) | https://laravel-news.com/laravel-13-released |
+| NXP MFRC522 (RC522) Datasheet | https://www.nxp.com/docs/en/data-sheet/MFRC522.pdf |
+| RFC 6238 — TOTP | https://datatracker.ietf.org/doc/html/rfc6238 |
+| Fingerspot.io DT-12MQ (pembanding) | https://fingerspot.io/detail-product/rekomendasi-absensi-wajah-iot-akses-kontrol-fingerspot-io-dt-12-mq |
+| SekolahKita — Mesin Presensi Terintegrasi | https://sekolahkita.net/ekosistem/mesin-presensi-wajah-terintegrasi-sekolah |
 
 ### C. Glosarium
 
@@ -969,6 +1087,10 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | RTC | Real-Time Clock (DS3231) |
 | Track | Identitas sementara satu wajah yang diikuti antar-frame oleh tracker |
 | Tombstone | Penanda penghapusan templet yang disinkronkan ke perangkat |
+| UID | Nomor identitas kartu RFID yang dibaca RC522; mengidentifikasi, bukan mengotentikasi |
+| RC522 | Modul pembaca RFID 13,56 MHz berbasis chip MFRC522 (SPI, 3,3 V) |
+| QR dinamis | Kode QR di TFT yang berganti tiap 10 detik, dihitung dari `qr_secret` perangkat dan waktu (gaya TOTP) |
+| `method` | Cara presensi tercatat: `face`, `card`, atau `qr` |
 
 ---
 

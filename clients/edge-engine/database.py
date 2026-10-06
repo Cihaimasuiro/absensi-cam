@@ -5,8 +5,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+from config.settings import DEFAULT_MODEL_VERSION
+
 class DatabaseManager:
-    def __init__(self, key_b64: str = None, db_path="local_edge.db", model_version: str = "3d9f1f77896fb3d1"):
+    def __init__(self, key_b64: str = None, db_path="local_edge.db", model_version: str = DEFAULT_MODEL_VERSION):
         self.db_path = os.path.join(os.path.dirname(__file__), db_path)
         import base64
         self.key = base64.b64decode(key_b64) if key_b64 else None

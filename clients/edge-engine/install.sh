@@ -49,10 +49,10 @@ mkdir -p "$INSTALL_DIR/models"
 
 # Copy current directory contents to INSTALL_DIR if we are not already there
 CURRENT_DIR=$(pwd)
+MODELS_SRC=${MODELS_SRC:-"$CURRENT_DIR/../../packages/models"}
 if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     log_info "Copying files from $CURRENT_DIR to $INSTALL_DIR..."
     rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$INSTALL_DIR/"
-    MODELS_SRC=${MODELS_SRC:-"$CURRENT_DIR/../../packages/models"}
     if [ -d "$MODELS_SRC" ]; then
         log_info "Copying models from $MODELS_SRC..."
         rsync -L -a "$MODELS_SRC/" "$INSTALL_DIR/models/"

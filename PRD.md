@@ -769,7 +769,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | FR-S07 | Distribusi templet ke perangkat berdasarkan kelas/gedung yang berhak (delta + tombstone). **Aturan Gate Device:** Gedung yang tidak memiliki kelas yang ditugaskan akan menerima *semua* templet dari satu sekolah. | Must |
 | FR-S08 | Dashboard perangkat (status, suhu, versi, antrean) dan absensi hari ini. | Must |
 | FR-S09 | Laporan DTR harian/bulanan (jam masuk pertama, jam keluar terakhir, terlambat, durasi kerja) — ekspor **.xlsx**, **PDF**, dan **CSV** mentah. | Must |
-| FR-S10 | Koreksi absensi manual (dengan alasan, tercatat di audit log; data asli tidak ditimpa). | Should |
+| FR-S10 | Koreksi absensi manual (dengan alasan, tercatat di audit log; data absensi asli disimpan di tabel corrections). | Should |
 | FR-S11 | Audit log *append-only*: Spatie Activitylog + pembatasan tingkat DB (user aplikasi tanpa hak `UPDATE`/`DELETE` pada tabel `activity_log`). | Must |
 | FR-S12 | Backup terjadwal database server dan prosedur restore terdokumentasi. | Should |
 | FR-S13 | Kebijakan retensi yang dapat dikonfigurasi (Bagian 12.3). | Should |

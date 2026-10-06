@@ -35,12 +35,17 @@ class DeviceController extends Controller
         $plain = strtoupper(Str::random(4).'-'.Str::random(4));
         $hash  = hash('sha256', $plain);
 
-        PairingCode::create([
+        $codeRecord = PairingCode::create([
             'building_id'  => $validated['building_id'],
             'code_hash'  => $hash,
             'expires_at' => now()->addMinutes(15),
             'created_by' => auth()->id(),
         ]);
+
+        activity('device')
+            ->performedOn($codeRecord)
+            ->causedBy(auth()->user())
+            ->log('Pairing code generated');
 
         return back()->with('pairing_code', $plain)->with('success', 'Kode pairing berhasil dibuat (berlaku 15 menit).');
     }
@@ -50,6 +55,11 @@ class DeviceController extends Controller
     {
         $device->tokens()->delete();
         $device->update(['status' => 'offline', 'token_hash' => null]);
+
+        activity('device')
+            ->performedOn($device)
+            ->causedBy(auth()->user())
+            ->log('Device revoked');
 
         return back()->with('success', "Token perangkat {$device->name} dicabut.");
     }

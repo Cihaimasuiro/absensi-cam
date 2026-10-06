@@ -85,12 +85,14 @@ class StudentWebController extends Controller
                 'text_version' => 'v1.0',
                 'recorded_by'  => auth()->id(),
             ]);
+            activity('student')->performedOn($student)->causedBy(auth()->user())->log('Consent given');
         } elseif (!$request->boolean('has_consent') && $student->hasActiveConsent()) {
             $student->activeConsent()->update(['withdrawn_at' => now()]);
             // Also delete face template if consent is withdrawn
             if ($student->faceTemplate) {
                 $student->faceTemplate->delete();
             }
+            activity('student')->performedOn($student)->causedBy(auth()->user())->log('Consent withdrawn');
         }
 
         return redirect()->route('students.index')->with('success', 'Anggota berhasil diperbarui.');
@@ -99,6 +101,11 @@ class StudentWebController extends Controller
     public function destroy(Student $student)
     {
         $student->delete(); // soft-delete triggers tombstone sync
+        
+        activity('student')
+            ->performedOn($student)
+            ->causedBy(auth()->user())
+            ->log('Student deleted');
 
         return redirect()->route('students.index')->with('success', 'Anggota dihapus dan akan dikeluarkan dari perangkat.');
     }

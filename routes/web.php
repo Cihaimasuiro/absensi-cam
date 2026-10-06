@@ -31,8 +31,12 @@ Route::middleware('auth')->group(function () {
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/',    [ReportController::class, 'index'])->name('index');
-        Route::get('/csv', [ReportController::class, 'exportCsv'])->middleware('role:super_admin|admin')->name('export.csv');
-        Route::post('/logs/{log}/correct', [AttendanceCorrectionController::class, 'store'])->middleware('role:super_admin|admin')->name('logs.correct');
+        Route::middleware('role:super_admin|admin')->group(function () {
+            Route::get('/csv', [ReportController::class, 'exportCsv'])->name('export.csv');
+            Route::get('/dtr/xlsx', [ReportController::class, 'exportDtr'])->name('export.dtr.xlsx');
+            Route::get('/dtr/pdf', [ReportController::class, 'exportDtrPdf'])->name('export.dtr.pdf');
+            Route::post('/logs/{log}/correct', [AttendanceCorrectionController::class, 'store'])->name('logs.correct');
+        });
     });
 
     // Devices / Pairing

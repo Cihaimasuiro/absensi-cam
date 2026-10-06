@@ -77,6 +77,74 @@ class ReportController extends Controller
             fclose($out);
         };
 
+        activity('report')
+            ->causedBy(auth()->user())
+            ->withProperties(['start' => $start, 'end' => $end, 'classroom_id' => $groupId])
+            ->log('Exported CSV report');
+
         return response()->stream($callback, 200, $headers);
+    }
+
+    public function exportDtr(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
+    {
+        $start   = $request->input('start', today()->toDateString());
+        $end     = $request->input('end',   today()->toDateString());
+        $groupId = $request->input('classroom_id');
+
+        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
+        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
+
+        $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
+            ->when($groupId, fn ($q) =>
+                $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
+            )
+            ->orderBy('captured_at')
+            ->get();
+
+        $dtrRecords = $dtrService->generateDtr($logs);
+
+        activity('report')
+            ->causedBy(auth()->user())
+            ->withProperties(['start' => $start, 'end' => $end, 'classroom_id' => $groupId])
+            ->log('Exported DTR Excel');
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Domain\Report\Exports\DtrExport($dtrRecords),
+            "dtr_{$start}_{$end}.xlsx"
+        );
+    }
+
+    public function exportDtrPdf(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
+    {
+        $start   = $request->input('start', today()->toDateString());
+        $end     = $request->input('end',   today()->toDateString());
+        $groupId = $request->input('classroom_id');
+
+        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
+        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
+
+        $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
+            ->when($groupId, fn ($q) =>
+                $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
+            )
+            ->orderBy('captured_at')
+            ->get();
+
+        $dtrRecords = $dtrService->generateDtr($logs);
+
+        activity('report')
+            ->causedBy(auth()->user())
+            ->withProperties(['start' => $start, 'end' => $end, 'classroom_id' => $groupId])
+            ->log('Exported DTR PDF');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.dtr_pdf', [
+            'records' => $dtrRecords,
+            'start' => $start,
+            'end' => $end,
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download("dtr_{$start}_{$end}.pdf");
     }
 }

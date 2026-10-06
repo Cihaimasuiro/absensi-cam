@@ -83,5 +83,13 @@ class AttendanceCorrectionTest extends TestCase
         $this->assertEquals('2026-10-02 01:00:00', $rawCorrection->corrected_captured_at);
         $this->assertEquals('in', $rawCorrection->original_direction);
         $this->assertEquals('out', $rawCorrection->corrected_direction);
+
+        // A second correction should be blocked with 422
+        $response2 = $this->post(route('reports.logs.correct', $log->id), [
+            'reason'                => 'Double correction',
+            'corrected_captured_at' => $correctedLocal,
+            'corrected_direction'   => 'in',
+        ]);
+        $response2->assertStatus(422);
     }
 }

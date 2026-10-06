@@ -21,10 +21,23 @@
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input pl-9 w-full">
             </div>
         </div>
-        <div>
+        <div class="flex gap-2">
             <button type="submit" class="btn btn-utility flex items-center gap-xs">
                 <i data-lucide="filter" class="w-4 h-4"></i> Filter
             </button>
+            @role('super_admin|admin')
+            <div class="flex gap-1 ml-4 border-l pl-4 border-surface-border">
+                <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
+                    <i data-lucide="download" class="w-4 h-4"></i> Raw CSV
+                </a>
+                <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-primary flex items-center gap-xs text-[12px]">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> DTR XLSX
+                </a>
+                <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-danger flex items-center gap-xs text-[12px]">
+                    <i data-lucide="file-text" class="w-4 h-4"></i> DTR PDF
+                </a>
+            </div>
+            @endrole
         </div>
     </form>
 </div>

@@ -73,8 +73,8 @@ class GenerateFaceEmbedding implements ShouldQueue
             
             $stdout = base64_decode($output['embedding_b64']);
 
-            if (strlen($stdout) !== 2048) {
-                throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes, got " . strlen($stdout));
+            if (strlen($stdout) !== 512) {
+                throw new \RuntimeException("Invalid embedding size. Expected 512 bytes (128d), got " . strlen($stdout));
             }
             
             // Apply AES-256-GCM encryption
@@ -91,15 +91,10 @@ class GenerateFaceEmbedding implements ShouldQueue
             $hash = hash('sha256', $stdout);
 
             DB::transaction(function () use ($encryptedBlob, $hash) {
-                // Get next cursor
-                $result = DB::selectOne('SELECT COALESCE(MAX(version_cursor), 0) + 1 AS next FROM face_templates');
-                $nextCursor = $result->next;
-
                 $data = [
                     'embedding_enc' => base64_encode($encryptedBlob),
                     'key_id' => 'default_key', // This should match edge engine's configured key
                     'model_version' => $this->modelVersion,
-                    'version_cursor' => $nextCursor,
                     'embedding_hash' => $hash,
                     'deleted_at' => null
                 ];

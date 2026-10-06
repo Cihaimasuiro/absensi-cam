@@ -39,7 +39,7 @@ class DeviceController extends Controller
             'building_id'  => $validated['building_id'],
             'code_hash'  => $hash,
             'expires_at' => now()->addMinutes(15),
-            'created_by' => auth()->id() ?? 1, // fallback; real auth wired in Step 4
+            'created_by' => auth()->id(),
         ]);
 
         return back()->with('pairing_code', $plain)->with('success', 'Kode pairing berhasil dibuat (berlaku 15 menit).');

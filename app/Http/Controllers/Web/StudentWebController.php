@@ -56,7 +56,7 @@ class StudentWebController extends Controller
             $student->consents()->create([
                 'given_at'     => now(),
                 'text_version' => 'v1.0',
-                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+                'recorded_by'  => auth()->id(),
             ]);
         }
 
@@ -83,7 +83,7 @@ class StudentWebController extends Controller
             $student->consents()->create([
                 'given_at'     => now(),
                 'text_version' => 'v1.0',
-                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+                'recorded_by'  => auth()->id(),
             ]);
         } elseif (!$request->boolean('has_consent') && $student->hasActiveConsent()) {
             $student->activeConsent()->update(['withdrawn_at' => now()]);
@@ -141,6 +141,15 @@ class StudentWebController extends Controller
             $zip = new \ZipArchive;
             $res = $zip->open($request->file('zip_file')->path());
             if ($res === true) {
+                // Pre-flight check for Zip Slip
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $stat = $zip->statIndex($i);
+                    if (str_contains($stat['name'], '../') || str_contains($stat['name'], '..\\')) {
+                        $zip->close();
+                        return redirect()->route('students.index')->with('error', 'ZIP file contains invalid paths (Zip Slip detected).');
+                    }
+                }
+
                 // Extract to temp folder
                 $extractPath = storage_path('app/tmp/bulk_enroll_' . \Illuminate\Support\Str::uuid());
                 if (!\Illuminate\Support\Facades\File::exists($extractPath)) {
@@ -154,12 +163,17 @@ class StudentWebController extends Controller
                 $files = \Illuminate\Support\Facades\File::allFiles($extractPath);
                 $successCount = 0;
                 $skippedCount = 0;
+                $errors = [];
 
                 foreach ($files as $file) {
-                    // Skip hidden files like .DS_Store
-                    if (str_starts_with($file->getFilename(), '.')) continue;
+                    $filename = $file->getFilename();
+                    
+                    // Skip hidden files and non-images
+                    if (str_starts_with($filename, '.')) continue;
+                    $ext = strtolower($file->getExtension());
+                    if (!in_array($ext, ['jpg', 'jpeg', 'png'])) continue;
 
-                    $code = pathinfo($file->getFilename(), PATHINFO_FILENAME);
+                    $code = pathinfo($filename, PATHINFO_FILENAME);
                     
                     $student = Student::where('code', $code)->first();
                     if ($student) {
@@ -168,7 +182,7 @@ class StudentWebController extends Controller
                             $student->consents()->create([
                                 'given_at'     => now(),
                                 'text_version' => 'v1.0 (bulk)',
-                                'recorded_by'  => auth()->id() ?? \App\Domain\User\Models\User::first()?->id ?? 1,
+                                'recorded_by'  => auth()->id(),
                             ]);
                         }
                         
@@ -185,10 +199,18 @@ class StudentWebController extends Controller
                         $successCount++;
                     } else {
                         $skippedCount++;
+                        $errors[] = "File: {$filename} - unknown_student (Kode: {$code})";
                     }
                 }
 
-                return redirect()->route('students.index')->with('success', "Proses pendaftaran massal dijadwalkan: $successCount siswa berhasil, $skippedCount tidak ditemukan/dilewati.");
+                $msg = "Proses pendaftaran massal dijadwalkan: $successCount siswa berhasil, $skippedCount tidak ditemukan/dilewati.";
+                if (count($errors) > 0) {
+                    return redirect()->route('students.index')
+                        ->with('success', $msg)
+                        ->with('bulk_errors', $errors);
+                }
+
+                return redirect()->route('students.index')->with('success', $msg);
             } else {
                 return redirect()->route('students.index')->with('error', 'Gagal membuka berkas ZIP.');
             }

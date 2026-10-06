@@ -54,11 +54,16 @@ class ReportController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, ['ID', 'Nama', 'Kode', 'Perangkat', 'Waktu', 'Arah', 'Skor', 'Dikoreksi']);
             foreach ($logs as $log) {
+                // Prevent CSV injection
+                $sanitize = function($val) {
+                    return preg_match('/^[=\-+\@]/', (string)$val) ? "'" . $val : $val;
+                };
+                
                 fputcsv($out, [
                     $log->id,
-                    $log->student?->name ?? '-',
-                    $log->student?->code ?? '-',
-                    $log->device?->name ?? '-',
+                    $sanitize($log->student?->name ?? '-'),
+                    $sanitize($log->student?->code ?? '-'),
+                    $sanitize($log->device?->name ?? '-'),
                     $log->captured_at->toDateTimeString(),
                     $log->direction,
                     number_format($log->score, 4),

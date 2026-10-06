@@ -26,9 +26,16 @@ class TemplateController extends Controller
         $limit  = min((int) $request->query('limit', 200), 200);
 
         // Fetch active templates + soft-deleted tombstones
-        // TODO: In production with many classrooms, re-enable device group filtering (FR-E06)
+        // Limited per school (gedung) as requested
+        $schoolId = $device->building?->school_id;
+
         $templates = FaceTemplate::withTrashed()
-            ->with('student:id,name')
+            ->with('student:id,name,school_id')
+            ->whereHas('student', function ($query) use ($schoolId) {
+                if ($schoolId) {
+                    $query->where('school_id', $schoolId);
+                }
+            })
             ->where('version_cursor', '>', $cursor)
             ->orderBy('version_cursor')
             ->limit($limit)

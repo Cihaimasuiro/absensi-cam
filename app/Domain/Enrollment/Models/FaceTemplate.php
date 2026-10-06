@@ -36,5 +36,26 @@ class FaceTemplate extends Model
     {
         return $this->model_version === $deviceModelVersion;
     }
+
+    protected static function booted()
+    {
+        $assignCursor = function ($template) {
+            \Illuminate\Support\Facades\Cache::lock('face_templates_cursor_lock', 10)->block(5, function () use ($template) {
+                // If it's already set in this exact request/job, don't overwrite unless we want to force it
+                // Actually, we ALWAYS want a new cursor on every save/delete so the edge pulls it.
+                $next = \Illuminate\Support\Facades\DB::table('face_templates')->max('version_cursor') + 1;
+                $template->version_cursor = $next;
+            });
+        };
+
+        static::saving($assignCursor);
+        static::deleting(function ($template) use ($assignCursor) {
+            $assignCursor($template);
+            // Must save quietly so we don't trigger saving again, but we just want to update the DB before it's deleted (soft delete)
+            \Illuminate\Support\Facades\DB::table('face_templates')
+                ->where('id', $template->id)
+                ->update(['version_cursor' => $template->version_cursor]);
+        });
+    }
 }
 

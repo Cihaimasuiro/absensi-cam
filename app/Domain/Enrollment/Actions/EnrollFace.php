@@ -15,18 +15,13 @@ final class EnrollFace
             throw new \InvalidArgumentException('Biometric consent is required before face enrollment.');
         }
 
-        // Store permanent original photo (required for future model re-extraction)
-        $permFilename = "photo_{$student->id}_" . Str::uuid() . ".{$photo->extension()}";
-        $photo->storeAs('enrollments/photos', $permFilename, 'local');
-        $permPath = \Illuminate\Support\Facades\Storage::disk('local')->path("enrollments/photos/{$permFilename}");
-
-        // Also create a tmp copy for the binary to process (so it doesn't accidentally lock or corrupt the permanent one)
+        // Create a tmp copy for the binary to process
         $tmpFilename = "enroll_{$student->id}_" . Str::uuid() . ".{$photo->extension()}";
-        \Illuminate\Support\Facades\Storage::disk('local')->copy("enrollments/photos/{$permFilename}", "tmp/{$tmpFilename}");
+        $photo->storeAs('tmp', $tmpFilename, 'local');
         $tmpPath = \Illuminate\Support\Facades\Storage::disk('local')->path("tmp/{$tmpFilename}");
 
-        // Dispatch job: pass both paths, and tell it to delete the tmpPath after processing
-        GenerateFaceEmbedding::dispatch($student->id, $tmpPath, "enrollments/photos/{$permFilename}", true)
+        // Dispatch job: pass only tmpPath, and tell it to delete the tmpPath after processing
+        GenerateFaceEmbedding::dispatch($student->id, $tmpPath, null, true)
             ->onQueue('enrollments');
 
         return $tmpPath;

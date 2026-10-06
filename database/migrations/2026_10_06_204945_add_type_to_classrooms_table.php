@@ -10,14 +10,13 @@ return new class extends Migration
     public function up(): void
     {
         // Copy old timing data to the new columns
-        DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) {
+        $totalConverted = 0;
+        
+        DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) use (&$totalConverted) {
             foreach ($classrooms as $classroom) {
-                // Determine new type. 'department' and 'division' -> 'staff', others keep or fallback to 'class'.
-                // If the name has GURU or STAF, force it to 'staff'.
+                // Determine new type. Only GURU or STAF becomes staff, everything else is a class.
                 $newType = 'class';
                 if (str_contains(strtoupper($classroom->name), 'GURU') || str_contains(strtoupper($classroom->name), 'STAF')) {
-                    $newType = 'staff';
-                } elseif (in_array($classroom->type, ['department', 'division'])) {
                     $newType = 'staff';
                 }
 
@@ -29,8 +28,15 @@ return new class extends Migration
                     'start_time' => $classroom->class_start_time,
                     'late_tolerance_minutes' => $tolerance,
                 ]);
+                $totalConverted++;
             }
         });
+
+        // Log the conversion count
+        if ($totalConverted > 0) {
+            \Illuminate\Support\Facades\Log::info("Migrated {$totalConverted} classrooms to new timing schema.");
+            echo "Migrated {$totalConverted} classrooms to new timing schema.\n";
+        }
 
         // Drop the old duplicated concept columns
         Schema::table('classrooms', function (Blueprint $table) {
@@ -40,10 +46,24 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This is a mostly one-way migration since 'late_threshold_enabled' state is lost (converted to 120 mins).
+        // Rollback just creates the columns back with defaults.
         Schema::table('classrooms', function (Blueprint $table) {
             $table->time('class_start_time')->default('08:00')->comment('Jam masuk resmi');
             $table->boolean('late_threshold_enabled')->default(false);
             $table->unsignedSmallInteger('late_threshold_minutes')->default(15);
+        });
+        
+        // Copy data back best-effort
+        DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) {
+            foreach ($classrooms as $classroom) {
+                $enabled = $classroom->late_tolerance_minutes < 120;
+                DB::table('classrooms')->where('id', $classroom->id)->update([
+                    'class_start_time' => $classroom->start_time,
+                    'late_threshold_minutes' => $classroom->late_tolerance_minutes,
+                    'late_threshold_enabled' => $enabled,
+                ]);
+            }
         });
     }
 };

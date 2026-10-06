@@ -22,16 +22,19 @@ class DeviceConfigController extends Controller
 
         // Config is sourced from the device's building/group settings
         // Send timing per group since a device can serve multiple classrooms/staff
+        $groups = $device->groups()->orderBy('id')->get();
+        $firstGroup = $groups->first();
+        
         $config = [
             'cooldown_seconds'          => 60,
-            'groups'                    => $device->groups->map(fn($g) => [
+            'groups'                    => $groups->map(fn($g) => [
                 'id' => $g->id,
                 'name' => $g->name,
                 'type' => $g->type,
                 'start_time' => $g->start_time,
                 'late_tolerance_minutes' => $g->late_tolerance_minutes,
             ])->toArray(),
-            'track_checkout'            => $device->groups()->first()?->track_checkout ?? false,
+            'track_checkout'            => $firstGroup?->track_checkout ?? false,
             'confidence_threshold'      => 0.363, // SFace default (AC-22)
             'liveness_enabled'          => true,
             'max_faces_per_frame'       => 5,

@@ -53,6 +53,8 @@ Route::middleware('auth')->group(function () {
         Route::put('/{school}',            [SchoolController::class, 'update'])->name('update');
         Route::delete('/{school}',         [SchoolController::class, 'destroy'])->name('destroy');
         Route::post('/classrooms',             [SchoolController::class, 'storeGroup'])->name('classrooms.store');
+        Route::put('/classrooms/{classroom}',  [SchoolController::class, 'updateGroup'])->name('classrooms.update');
+        Route::put('/{school}/classrooms/timing', [SchoolController::class, 'bulkUpdateTiming'])->name('classrooms.bulkUpdateTiming');
         Route::post('/buildings',           [SchoolController::class, 'storeBuilding'])->name('buildings.store');
     });
 });

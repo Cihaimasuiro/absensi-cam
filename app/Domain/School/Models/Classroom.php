@@ -18,19 +18,17 @@ class Classroom extends Model
         'code',
         'type',
         'is_active',
-        'class_start_time',
-        'late_threshold_enabled',
-        'late_threshold_minutes',
+        'start_time',
+        'late_tolerance_minutes',
         'track_checkout',
         'biometric_consent_certified',
     ];
 
     protected $casts = [
         'is_active'                    => 'boolean',
-        'late_threshold_enabled'       => 'boolean',
         'track_checkout'               => 'boolean',
         'biometric_consent_certified'  => 'boolean',
-        'late_threshold_minutes'       => 'integer',
+        'late_tolerance_minutes'       => 'integer',
     ];
 
     public function school(): BelongsTo

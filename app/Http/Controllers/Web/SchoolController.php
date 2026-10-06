@@ -12,7 +12,7 @@ class SchoolController extends Controller
 {
     public function index()
     {
-        $schools = School::withCount(['students', 'classrooms', 'buildings'])
+        $schools = School::with(['classrooms'])->withCount(['students', 'classrooms', 'buildings'])
             ->orderBy('name')
             ->get();
 
@@ -38,13 +38,71 @@ class SchoolController extends Controller
             'school_id'  => ['required', 'exists:schools,id'],
             'name'             => ['required', 'string', 'max:150'],
             'code'             => ['nullable', 'string', 'max:50'],
-            'type'             => ['required', 'in:department,class,division'],
-            'class_start_time' => ['nullable', 'date_format:H:i'],
+            'type'             => ['required', 'in:class,staff'],
+            'start_time'       => ['required', 'date_format:H:i'],
+            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
         ]);
 
         Classroom::create(array_merge($validated, ['is_active' => true]));
 
         return back()->with('success', 'Grup berhasil ditambahkan.');
+    }
+
+    public function updateGroup(Request $request, Classroom $classroom)
+    {
+        $validated = $request->validate([
+            'name'             => ['required', 'string', 'max:150'],
+            'code'             => ['nullable', 'string', 'max:50'],
+            'type'             => ['required', 'in:class,staff'],
+            'start_time'       => ['required', 'date_format:H:i'],
+            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+        ]);
+
+        $oldData = $classroom->only(['start_time', 'late_tolerance_minutes', 'type']);
+        $classroom->update($validated);
+        
+        if ($classroom->wasChanged(['start_time', 'late_tolerance_minutes', 'type'])) {
+            activity()
+                ->performedOn($classroom)
+                ->withProperties([
+                    'old' => $oldData,
+                    'new' => $classroom->only(['start_time', 'late_tolerance_minutes', 'type'])
+                ])
+                ->log('Updated classroom timing/type');
+        }
+
+        return back()->with('success', 'Pengaturan kelas berhasil diperbarui.');
+    }
+
+    public function bulkUpdateTiming(Request $request, School $school)
+    {
+        $validated = $request->validate([
+            'start_time'       => ['required', 'date_format:H:i'],
+            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+            'confirm_retroactive' => ['accepted'],
+        ]);
+
+        $classrooms = $school->classrooms;
+        
+        foreach ($classrooms as $classroom) {
+            $oldData = $classroom->only(['start_time', 'late_tolerance_minutes']);
+            $classroom->update([
+                'start_time' => $validated['start_time'],
+                'late_tolerance_minutes' => $validated['late_tolerance_minutes'],
+            ]);
+            
+            if ($classroom->wasChanged(['start_time', 'late_tolerance_minutes'])) {
+                activity()
+                    ->performedOn($classroom)
+                    ->withProperties([
+                        'old' => $oldData,
+                        'new' => $classroom->only(['start_time', 'late_tolerance_minutes'])
+                    ])
+                    ->log('Bulk updated classroom timings');
+            }
+        }
+
+        return back()->with('success', 'Waktu massal berhasil diterapkan untuk semua kelas di sekolah ini.');
     }
 
     public function storeBuilding(Request $request)

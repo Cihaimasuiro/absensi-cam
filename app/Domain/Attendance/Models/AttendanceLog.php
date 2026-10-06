@@ -53,9 +53,9 @@ class AttendanceLog extends Model
 
     public function scopeToday($query)
     {
-        $startUtc = today()->copy()->startOfDay()->setTimezone('UTC');
-        $endUtc = today()->copy()->endOfDay()->setTimezone('UTC');
-        return $query->whereBetween('captured_at', [$startUtc, $endUtc]);
+        $start = today()->copy()->startOfDay();
+        $end = today()->copy()->endOfDay();
+        return $query->whereBetween('captured_at', [$start, $end]);
     }
 
     public function scopeByDevice($query, int $deviceId)

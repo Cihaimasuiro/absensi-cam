@@ -78,7 +78,7 @@ class GenerateFaceEmbedding implements ShouldQueue
 
             $hash = hash('sha256', $stdout);
 
-            DB::transaction(function () use ($encryptedBlob, $hash) {
+            DB::transaction(function () use ($encryptedBlob, $hash, $usedModelVersion) {
                 $data = [
                     'embedding_enc' => base64_encode($encryptedBlob),
                     'key_id' => 'default_key', // This should match edge engine's configured key

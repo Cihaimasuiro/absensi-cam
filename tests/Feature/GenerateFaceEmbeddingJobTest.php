@@ -50,6 +50,42 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         $this->assertFalse(file_exists($tmpPath)); // Should delete the file
     }
     
+    public function test_job_uses_config_model_version_when_null()
+    {
+        config(['app.model_version' => 'custom-version-123']);
+        
+        $school = School::factory()->create();
+        $student = Student::factory()->create(['school_id' => $school->id]);
+        
+        $tmpPath = sys_get_temp_dir() . '/test_photo3.jpg';
+        file_put_contents($tmpPath, 'dummy image data');
+
+        $fakeEmbedding = base64_encode(str_repeat('b', 2048));
+        
+        Process::fake([
+            '*extract.py*' => Process::result(json_encode([
+                'success' => true,
+                'embedding_b64' => $fakeEmbedding
+            ])),
+        ]);
+
+        $job = new GenerateFaceEmbedding(
+            studentId: $student->id,
+            tmpPath: $tmpPath,
+            deleteAfter: true,
+            modelVersion: null
+        );
+        
+        $job->handle();
+
+        $this->assertDatabaseHas('face_templates', [
+            'student_id' => $student->id,
+            'model_version' => 'custom-version-123'
+        ]);
+        
+        @unlink($tmpPath);
+    }
+    
     public function test_job_fails_when_output_is_invalid()
     {
         $school = School::factory()->create();

@@ -200,20 +200,26 @@ class DtrTest extends TestCase
 
         $createLogs(2);
 
+        // Warm up auth/session queries
+        $this->get(route('reports.export.dtr.xlsx', [
+            'start' => Carbon::now()->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+
         \Illuminate\Support\Facades\DB::enableQueryLog();
         \Maatwebsite\Excel\Facades\Excel::fake();
         
+        \Illuminate\Support\Facades\DB::flushQueryLog();
         $responseXlsx = $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->toDateString(),
             'end' => Carbon::now()->toDateString()
         ]));
         $responseXlsx->assertStatus(200);
         $queries2 = count(\Illuminate\Support\Facades\DB::getQueryLog());
-        \Illuminate\Support\Facades\DB::flushQueryLog();
-
-        $createLogs(3); // Now we have 5 students/logs
-        \Illuminate\Support\Facades\DB::flushQueryLog();
         
+        $createLogs(3); // Now we have 5 students/logs
+        
+        \Illuminate\Support\Facades\DB::flushQueryLog();
         $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->toDateString(),
             'end' => Carbon::now()->toDateString()
@@ -223,7 +229,7 @@ class DtrTest extends TestCase
         // Due to lazy(1000) pulling in chunks of 1000, 
         // the number of queries should be bounded and not linearly scale per record (N+1)
 
-        $this->assertLessThanOrEqual(5, $queries5, "Query count should not grow linearly with logs when under the chunk size.");
+        $this->assertEquals($queries2, $queries5, "Query count should not grow linearly with logs when under the chunk size.");
 
         // test pdf 200 without crashing dompdf
         \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')->andReturnSelf();
@@ -250,11 +256,57 @@ class DtrTest extends TestCase
         ]));
         $response->assertSessionHasErrors('end');
 
-        // test range > 31 days
-        $response = $this->get(route('reports.export.dtr.pdf', [
-            'start' => Carbon::now()->subDays(35)->toDateString(),
+        // test 30 days diff (31 days inclusive) -> PASS
+        $responsePass = $this->get(route('reports.export.dtr.pdf', [
+            'start' => Carbon::now()->subDays(30)->toDateString(),
             'end' => Carbon::now()->toDateString()
         ]));
-        $response->assertSessionHasErrors('end');
+        $responsePass->assertStatus(200);
+
+        // test 31 days diff (32 days inclusive) -> FAIL
+        $responseFail = $this->get(route('reports.export.dtr.pdf', [
+            'start' => Carbon::now()->subDays(31)->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $responseFail->assertSessionHasErrors('end');
+    }
+
+    public function test_dtr_export_formatting_and_pdf_rendering()
+    {
+        // 1. Test DtrExport map() mitigation for CSV injection
+        $dtrRecords = collect([
+            'test_key' => [
+                'date' => '2026-10-06',
+                'name' => '=SUM(1)',
+                'code' => '+12345',
+                'group' => '-Class',
+                'first_in' => '@malicious',
+                'last_out' => '15:00',
+                'is_corrected' => true,
+                'start_time' => '07:00:00',
+                'late_tolerance_minutes' => 15,
+                'minutes_late' => 0,
+                'duration_minutes' => 0,
+                'status' => 'Hadir',
+            ]
+        ]);
+
+        $export = new \App\Domain\Report\Exports\DtrExport($dtrRecords);
+        $mapped = $export->map($dtrRecords->first());
+        
+        $this->assertEquals("'=SUM(1)", $mapped[1]); // name
+        $this->assertEquals("'+12345", $mapped[2]); // code
+        $this->assertEquals("'-Class", $mapped[3]); // group
+        $this->assertEquals("@malicious", $mapped[4]); // first_in (not user-provided, not sanitized)
+
+        // 2. Test rendering the actual PDF view without crashing
+        $html = view('reports.dtr_pdf', [
+            'records' => $dtrRecords,
+            'start' => '2026-10-06',
+            'end' => '2026-10-06'
+        ])->render();
+
+        $this->assertStringContainsString('2026-10-06', $html);
+        $this->assertStringContainsString('=SUM(1)', $html); // PDF view doesn't sanitize CSV injection, just HTML escaping
     }
 }

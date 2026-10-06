@@ -147,6 +147,15 @@ sudo ./install.sh
 # Skrip akan menginstal dependencies ke /opt/smart-absensi/edge-engine dan mengaktifkan smart-absensi.service
 ```
 
+## Database Requirements & Audit Logging
+
+The `activity_log` table is protected by **append-only SQL triggers** (`prevent_activity_log_update` and `prevent_activity_log_delete`) to guarantee tamper-proof audit trails for administrative and attendance actions. 
+
+When deploying or migrating:
+- **Binary Logging:** If MySQL binary logging is enabled on your production server, creating these triggers requires the `SUPER` privilege OR you must set `log_bin_trust_function_creators = 1` in your MySQL configuration.
+- **Log Cleanup:** Because deletions are blocked at the database level, standard Laravel commands like `php artisan activitylog:clean` will **fail** with a PDOException. Archiving or truncating the log table requires dropping the triggers first, performing the cleanup as a database administrator, and recreating them.
+- **Application User Grants:** For true immutability, ensure the MySQL user configured in your `.env` (used by the Laravel application) is **revoked** of `UPDATE` and `DELETE` privileges on the `activity_log` table, complementing the trigger protections.
+
 ## Development Guidelines
 
 This repository enforces strict, enterprise-grade engineering standards for both AI coding agents and human developers. 

@@ -99,7 +99,7 @@ class ReportController extends Controller
         $startC = \Carbon\Carbon::parse($start);
         $endC   = \Carbon\Carbon::parse($end);
 
-        if ($startC->diffInDays($endC) > 31) {
+        if ($startC->diffInDays($endC) >= 31) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'end' => ['Rentang tanggal maksimal 31 hari.'],
             ]);

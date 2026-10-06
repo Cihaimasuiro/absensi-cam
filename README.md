@@ -156,6 +156,9 @@ When deploying or migrating:
 - **Log Cleanup:** Because deletions are blocked at the database level, standard Laravel commands like `php artisan activitylog:clean` will **fail** with a PDOException. Archiving or truncating the log table requires dropping the triggers first, performing the cleanup as a database administrator, and recreating them.
 - **Application User Grants:** For true immutability, ensure the MySQL user configured in your `.env` (used by the Laravel application) is **revoked** of `UPDATE` and `DELETE` privileges on the `activity_log` table, complementing the trigger protections.
 
+## Classroom Timings & Tolerance
+In version 2.3+, the old `late_threshold_enabled` boolean has been replaced by a single `late_tolerance_minutes` integer. Any classroom previously configured with "late tracking off" (`late_threshold_enabled = false`) has been migrated to the maximum tolerance of `120` minutes. Consequently, DTR will now flag arrivals later than 2 hours as "Late" where previously they were never flagged. Additionally, Edge devices receive timings per group under a `groups` JSON array on the `/api/v1/config` endpoint instead of flat values.
+
 ## Development Guidelines
 
 This repository enforces strict, enterprise-grade engineering standards for both AI coding agents and human developers. 

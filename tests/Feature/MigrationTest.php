@@ -17,7 +17,9 @@ class MigrationTest extends TestCase
         // To test migration, we'd have to roll back that specific migration, insert data, and migrate again.
         
         // Setup: rollback the target migration
-        $this->artisan('migrate:rollback', ['--step' => 1]); // rolls back add_type_to_classrooms_table
+        $this->artisan('migrate:rollback', [
+            '--path' => 'database/migrations/2026_10_06_204945_add_type_to_classrooms_table.php'
+        ]);
         
         // Insert old data
         $schoolId = DB::table('schools')->insertGetId([

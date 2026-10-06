@@ -132,14 +132,58 @@ class ClassroomTimingTest extends TestCase
     {
         $user = User::factory()->create();
         
-        $response = $this->actingAs($user)->post(route('schools.classrooms.store'), [
+        $responseStore = $this->actingAs($user)->post(route('schools.classrooms.store'), [
             'school_id' => $this->school->id,
             'name' => '10A',
             'type' => 'class',
             'start_time' => '07:30',
             'late_tolerance_minutes' => 10,
         ]);
+        $responseStore->assertStatus(403);
 
-        $response->assertStatus(403);
+        $classroom = Classroom::create(['school_id' => $this->school->id, 'name' => '10B', 'type' => 'class', 'start_time' => '07:00:00', 'late_tolerance_minutes' => 15]);
+        $responseUpdate = $this->actingAs($user)->put(route('schools.classrooms.update', $classroom), [
+            'name' => '10B', 'type' => 'class', 'start_time' => '08:00', 'late_tolerance_minutes' => 30,
+        ]);
+        $responseUpdate->assertStatus(403);
+
+        $responseBulk = $this->actingAs($user)->put(route('schools.classrooms.bulkUpdateTiming', $this->school), [
+            'start_time' => '06:45', 'late_tolerance_minutes' => 5, 'type_filter' => 'all', 'confirm_retroactive' => '1',
+        ]);
+        $responseBulk->assertStatus(403);
+    }
+
+    public function test_can_bulk_update_staff_only()
+    {
+        $class1 = Classroom::create(['name' => 'C1', 'school_id' => $this->school->id, 'start_time' => '07:00:00', 'type' => 'class']);
+        $staff1 = Classroom::create(['name' => 'S1', 'school_id' => $this->school->id, 'start_time' => '06:00:00', 'type' => 'staff']);
+
+        $response = $this->actingAs($this->admin)->put(route('schools.classrooms.bulkUpdateTiming', $this->school), [
+            'start_time' => '05:45',
+            'late_tolerance_minutes' => 0,
+            'type_filter' => 'staff',
+            'confirm_retroactive' => '1',
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('classrooms', ['id' => $staff1->id, 'start_time' => '05:45', 'late_tolerance_minutes' => 0]);
+        $this->assertDatabaseHas('classrooms', ['id' => $class1->id, 'start_time' => '07:00:00']); // untouched
+    }
+
+    public function test_can_bulk_update_all()
+    {
+        $class1 = Classroom::create(['name' => 'C1', 'school_id' => $this->school->id, 'start_time' => '07:00:00', 'type' => 'class']);
+        $staff1 = Classroom::create(['name' => 'S1', 'school_id' => $this->school->id, 'start_time' => '06:00:00', 'type' => 'staff']);
+
+        $response = $this->actingAs($this->admin)->put(route('schools.classrooms.bulkUpdateTiming', $this->school), [
+            'start_time' => '08:00',
+            'late_tolerance_minutes' => 30,
+            'type_filter' => 'all',
+            'confirm_retroactive' => '1',
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('classrooms', ['id' => $staff1->id, 'start_time' => '08:00', 'late_tolerance_minutes' => 30]);
+        $this->assertDatabaseHas('classrooms', ['id' => $class1->id, 'start_time' => '08:00', 'late_tolerance_minutes' => 30]);
     }
 }

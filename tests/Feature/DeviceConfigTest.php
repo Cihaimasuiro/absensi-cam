@@ -60,4 +60,18 @@ class DeviceConfigTest extends TestCase
         $this->assertEquals('06:30:00', $data['groups'][1]['start_time']);
         $this->assertEquals(30, $data['groups'][1]['late_tolerance_minutes']);
     }
+
+    public function test_device_config_without_groups()
+    {
+        $device = Device::factory()->create();
+
+        \Laravel\Sanctum\Sanctum::actingAs($device, ['device']);
+        $response = $this->getJson('/api/v1/config');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        
+        $this->assertEmpty($data['groups']);
+        $this->assertFalse($data['track_checkout']);
+    }
 }

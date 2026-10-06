@@ -11,13 +11,15 @@ return new class extends Migration
     {
         // Copy old timing data to the new columns
         $totalConverted = 0;
+        $staffNames = [];
         
-        DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) use (&$totalConverted) {
+        DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) use (&$totalConverted, &$staffNames) {
             foreach ($classrooms as $classroom) {
                 // Determine new type. Only GURU or STAF becomes staff, everything else is a class.
                 $newType = 'class';
                 if (str_contains(strtoupper($classroom->name), 'GURU') || str_contains(strtoupper($classroom->name), 'STAF')) {
                     $newType = 'staff';
+                    $staffNames[] = $classroom->name;
                 }
 
                 // late_threshold_enabled=false means they didn't care about late. We map this to the max tolerance (120 mins).
@@ -34,8 +36,9 @@ return new class extends Migration
 
         // Log the conversion count
         if ($totalConverted > 0) {
-            \Illuminate\Support\Facades\Log::info("Migrated {$totalConverted} classrooms to new timing schema.");
-            echo "Migrated {$totalConverted} classrooms to new timing schema.\n";
+            \Illuminate\Support\Facades\Log::info("Migrated {$totalConverted} classrooms to new timing schema.", [
+                'staff_rows' => $staffNames
+            ]);
         }
 
         // Drop the old duplicated concept columns
@@ -46,8 +49,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        // This is a mostly one-way migration since 'late_threshold_enabled' state is lost (converted to 120 mins).
-        // Rollback just creates the columns back with defaults.
+        // Recreate the old columns (nullable temporarily)
+        // Data is copied back as best effort (since tolerance < 120 determines if it was enabled).
         Schema::table('classrooms', function (Blueprint $table) {
             $table->time('class_start_time')->default('08:00')->comment('Jam masuk resmi');
             $table->boolean('late_threshold_enabled')->default(false);

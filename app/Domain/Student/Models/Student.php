@@ -76,5 +76,15 @@ class Student extends Model
     {
         return $query->whereHas('faceTemplate');
     }
+
+    protected static function booted()
+    {
+        static::deleting(function (Student $student) {
+            // Cascade soft delete to faceTemplate so tombstone is sent to edge
+            if ($student->faceTemplate) {
+                $student->faceTemplate->delete();
+            }
+        });
+    }
 }
 

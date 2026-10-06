@@ -33,7 +33,7 @@ class DevicePairDev extends Command
             'device_code' => strtoupper(Str::random(8)),
             'status' => 'offline',
             'api_version' => '1.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $token = $device->createToken('edge-engine', ['device'])->plainTextToken;

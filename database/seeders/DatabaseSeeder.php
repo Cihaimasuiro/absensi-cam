@@ -17,13 +17,15 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::firstOrCreate(
-            ['email' => 'admin@smartabsen.local'],
-            [
-                'name'     => 'Admin Smart Absen',
-                'password' => 'password',
-            ]
-        );
+        if (!app()->environment('production')) {
+            User::firstOrCreate(
+                ['email' => 'admin@smartabsen.local'],
+                [
+                    'name'     => 'Admin Smart Absen',
+                    'password' => 'password',
+                ]
+            );
+        }
 
         $this->call(RoleSeeder::class);
         $this->call(SchoolSeeder::class);

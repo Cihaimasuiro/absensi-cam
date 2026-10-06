@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 // Auth Routes
 Route::get('login', [AuthController::class, 'showLoginForm'])->name('login');
-Route::post('login', [AuthController::class, 'login'])->name('login.post');
+Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.post');
 Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware('auth')->group(function () {
@@ -30,14 +30,14 @@ Route::middleware('auth')->group(function () {
     });
 
     // Devices / Pairing
-    Route::prefix('devices')->name('devices.')->group(function () {
+    Route::prefix('devices')->name('devices.')->middleware('role:super_admin|admin')->group(function () {
         Route::get('/', [DeviceController::class, 'index'])->name('index');
         Route::post('/pairing-code', [DeviceController::class, 'generatePairingCode'])->name('pair.code');
         Route::delete('/{device}/revoke', [DeviceController::class, 'revoke'])->name('revoke');
     });
 
     // Schools, Classrooms, Buildings
-    Route::prefix('schools')->name('schools.')->group(function () {
+    Route::prefix('schools')->name('schools.')->middleware('role:super_admin|admin')->group(function () {
         Route::get('/',                    [SchoolController::class, 'index'])->name('index');
         Route::post('/',                   [SchoolController::class, 'store'])->name('store');
         Route::put('/{school}',            [SchoolController::class, 'update'])->name('update');

@@ -38,7 +38,7 @@ class DevicePairingTest extends TestCase
             'code'          => $plain,
             'device_name'   => 'Kamera Gerbang Depan',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(201)
@@ -56,7 +56,7 @@ class DevicePairingTest extends TestCase
             'code'          => 'XXXX-9999',
             'device_name'   => 'Fake Device',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(422)
@@ -80,7 +80,7 @@ class DevicePairingTest extends TestCase
             'code'          => $plain,
             'device_name'   => 'Late Device',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(422)
@@ -105,7 +105,7 @@ class DevicePairingTest extends TestCase
             'code'          => $plain,
             'device_name'   => 'Replay Device',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(422);
@@ -127,7 +127,7 @@ class DevicePairingTest extends TestCase
             'code'          => 'ABCD-1234',
             'device_name'   => 'Test HTTP Device',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(403);
@@ -153,7 +153,7 @@ class DevicePairingTest extends TestCase
             'code'          => $plain,
             'device_name'   => 'Test HTTPS Device',
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
         ]);
 
         $response->assertStatus(201);
@@ -168,7 +168,7 @@ class DevicePairingTest extends TestCase
 
         $response = $this->postJson('/api/v1/devices/heartbeat', [
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
             'cpu_temp'      => 52.4,
             'ram_free_mb'   => 400,
             'disk_free_mb'  => 5000,
@@ -190,7 +190,7 @@ class DevicePairingTest extends TestCase
     {
         $response = $this->postJson('/api/v1/devices/heartbeat', [
             'fw_version'    => '1.0.0',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
             'cpu_temp'      => 52.4,
             'ram_free_mb'   => 400,
             'disk_free_mb'  => 5000,

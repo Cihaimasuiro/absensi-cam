@@ -18,7 +18,7 @@ class DeviceFactory extends Factory
             'name'              => 'Kamera ' . $this->faker->word(),
             'device_code'       => 'dev-' . str_pad($this->faker->unique()->numberBetween(1, 9999), 4, '0', STR_PAD_LEFT),
             'fw_version'        => '1.0.0',
-            'model_version'     => 'sface-2021dec',
+            'model_version'     => 'arcface-512',
             'status'            => 'offline',
             'last_heartbeat_at' => null,
         ];

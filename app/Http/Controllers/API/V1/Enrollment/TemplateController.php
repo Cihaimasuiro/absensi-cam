@@ -32,6 +32,7 @@ class TemplateController extends Controller
         $templates = FaceTemplate::withTrashed()
             ->with('student:id,name,school_id')
             ->whereHas('student', function ($query) use ($schoolId) {
+                $query->withTrashed();
                 if ($schoolId) {
                     $query->where('school_id', $schoolId);
                 }

@@ -216,6 +216,10 @@ class StudentWebController extends Controller
             }
         } catch (\Exception $e) {
             return redirect()->route('students.index')->with('error', 'Gagal memproses ZIP: ' . $e->getMessage());
+        } finally {
+            if (isset($extractPath) && \Illuminate\Support\Facades\File::exists($extractPath)) {
+                \Illuminate\Support\Facades\File::deleteDirectory($extractPath);
+            }
         }
     }
 }

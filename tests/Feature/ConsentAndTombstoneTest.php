@@ -27,7 +27,7 @@ class ConsentAndTombstoneTest extends TestCase
         $template = FaceTemplate::create([
             'student_id' => $student->id,
             'embedding_enc' => 'enc123',
-            'model_version' => 'sface-2021dec',
+            'model_version' => 'arcface-512',
             'embedding_hash' => 'hash123',
         ]);
         

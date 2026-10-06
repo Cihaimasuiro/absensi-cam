@@ -23,7 +23,7 @@ class GenerateFaceEmbedding implements ShouldQueue
         public string $tmpPath,
         public ?string $photoPath = null,
         public bool $deleteAfter = true,
-        public string $modelVersion = 'sface-2021dec'
+        public string $modelVersion = 'arcface-512'
     ) {
         $this->onQueue('enrollments');
     }
@@ -73,8 +73,8 @@ class GenerateFaceEmbedding implements ShouldQueue
             
             $stdout = base64_decode($output['embedding_b64']);
 
-            if (strlen($stdout) !== 512) {
-                throw new \RuntimeException("Invalid embedding size. Expected 512 bytes (128d), got " . strlen($stdout));
+            if (strlen($stdout) !== 2048) {
+                throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes (512d), got " . strlen($stdout));
             }
             
             // Apply AES-256-GCM encryption

@@ -95,7 +95,7 @@ flowchart LR
 4. **Init Camera**: Kamera UVC (`/dev/video0`) diinisialisasi pada 640x480 @ 30 FPS format MJPEG (resolusi dapat dinaikkan ke 720p, lihat 10.1).
 5. **Deteksi & Tracking Multi-Wajah**: YuNet mendeteksi wajah hingga jarak 3 m; tracker memberi ID stabil pada tiap wajah.
 6. **Liveness & Anti-Spoofing**: Setiap track diverifikasi model Mini-FASNet ONNX. Keputusan diambil dari **beberapa frame** (mis. ≥ 3 dari 5 frame lolos) untuk mengurangi kesalahan tunggal-frame. Track yang gagal ditandai `SPOOF`.
-7. **Feature Matching & Logging**: Track yang lolos liveness diekstrak embedding SFace (512-d) pada frame terpilih (maks. 5 per track) lalu dicocokkan ke templet di memori (dimuat dari SQLite; **kapasitas ≥ 2000 wajah**). Identitas dikonfirmasi bila skor melewati threshold pada ≥ 3 frame berturut-turut. Hasil ditulis ke tabel `attendance` dan `outbox` dalam satu transaksi.
+7. **Feature Matching & Logging**: Track yang lolos liveness diekstrak embedding SFace (2048-d) pada frame terpilih (maks. 5 per track) lalu dicocokkan ke templet di memori (dimuat dari SQLite; **kapasitas ≥ 2000 wajah**). Identitas dikonfirmasi bila skor melewati threshold pada ≥ 3 frame berturut-turut. Hasil ditulis ke tabel `attendance` dan `outbox` dalam satu transaksi.
 8. **Feedback Output**: Perintah JSON dikirim ke Arduino Uno via USB Serial untuk TFT, LED, dan buzzer.
 9. **REST API Sync**: Worker terpisah mengirim isi `outbox` ke Server Pusat secara asynchronous (batch, idempotent, retry dengan backoff). Server Pusat menyimpan riwayat dan menyediakan laporan terpusat. Perubahan templet wajah ditarik oleh edge secara berkala (delta sync).
 
@@ -104,7 +104,7 @@ flowchart LR
 | Fitur Utama | Deskripsi Spesifikasi Teknikal | Target Objektif |
 |-------------|--------------------------------|-----------------|
 | **Web Admin Panel (Laravel 13)** | Manajemen anggota, enrollment wajah, sekolah, perangkat, laporan, dan backup melalui browser (menggantikan aplikasi desktop Electron). | Kontrol penuh dari PC admin tanpa instal aplikasi |
-| **Kapasitas ≥ 2000 Wajah** | Templet SFace 128-d (float32 = 512 byte/wajah; 2000 wajah � 1 MB) dimuat ke RAM; pencarian *brute-force cosine*. Penyimpanan persisten di SQLite. | Lookup < 50 ms untuk 2000 wajah (AC-32) |
+| **Kapasitas ≥ 2000 Wajah** | Templet ArcFace 512-d (float32 = 2048 byte/wajah; 2000 wajah � 1 MB) dimuat ke RAM; pencarian *brute-force cosine*. Penyimpanan persisten di SQLite. | Lookup < 50 ms untuk 2000 wajah (AC-32) |
 | **Connected Devices** | Heartbeat tiap 60 detik (suhu SoC, RAM, disk, FPS, versi firmware, panjang antrean outbox). Perangkat dianggap *offline* bila tidak ada heartbeat > 3 menit. | Monitoring status perangkat hampir real-time |
 | **Custom Branches / Locations** | Perangkat dikelompokkan berdasarkan gedung/gedung/pintu (mis. Gerbang Utama, Pintu Utara, Gedung Bandung). | Manajemen lokasi absensi multi-titik |
 | **Custom Organizations** | Hirarki sekolah -> divisi/departemen/kelas -> anggota. | Pengelompokan data pengguna fleksibel |
@@ -789,7 +789,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 **Contoh `POST /devices/pair`**
 
 ```json
-{ "code": "K7M2-9QXA", "device_name": "Gerbang Utama", "fw_version": "1.0.0", "model_version": "sface-2021dec/1" }
+{ "code": "K7M2-9QXA", "device_name": "Gerbang Utama", "fw_version": "1.0.0", "model_version": "arcface-512/1" }
 ```
 
 Respons `201`: `{ "device_id": "dev-0007", "token": "<ditampilkan sekali>", "branch_id": "..." }`. Kode tidak valid/kedaluwarsa -> `422`; percobaan berulang dibatasi (`429`).
@@ -829,7 +829,7 @@ Status per record: `created`, `duplicate` (dianggap sukses oleh edge), `rejected
 
 ```json
 {
-  "model_version": "sface-2021dec/1",
+  "model_version": "arcface-512/1",
   "items": [
     { "member_id": "b6a1c3f2-...", "embedding_b64": "...", "op": "upsert", "updated_at": "2026-09-30T01:00:00Z" },
     { "member_id": "c91d0e7a-...", "op": "delete", "updated_at": "2026-09-30T01:02:00Z" }

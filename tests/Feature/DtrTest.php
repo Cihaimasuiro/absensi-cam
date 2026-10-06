@@ -156,4 +156,105 @@ class DtrTest extends TestCase
         $response->assertStatus(403);
         
     }
+    
+    public function test_admin_can_export_dtr_and_query_count_is_bounded()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $this->actingAs($admin);
+
+        $school = \App\Domain\School\Models\School::create(['name' => 'Test School']);
+        $classroom = Classroom::create([
+            'school_id' => $school->id,
+            'name' => 'Test Class',
+            'start_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+        ]);
+        
+        $device = \App\Domain\Device\Models\Device::create([
+            'name' => 'Test Device',
+            'device_code' => 'TEST01',
+        ]);
+
+        $createLogs = function ($count) use ($school, $classroom, $device) {
+            $start = Student::count();
+            for ($i = $start; $i < $start + $count; $i++) {
+                $student = Student::create([
+                    'school_id' => $school->id,
+                    'classroom_id' => $classroom->id,
+                    'name' => 'Test Student ' . $i,
+                    'code' => 'TEST-' . $i
+                ]);
+
+                AttendanceLog::create([
+                    'student_id' => $student->id,
+                    'device_id' => $device->id,
+                    'captured_at' => Carbon::now()->setTimezone('UTC')->toDateTimeString(),
+                    'direction' => 'in',
+                    'method' => 'face',
+                    'score' => 0.99,
+                    'is_corrected' => false,
+                ]);
+            }
+        };
+
+        $createLogs(2);
+
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        \Maatwebsite\Excel\Facades\Excel::fake();
+        
+        $responseXlsx = $this->get(route('reports.export.dtr.xlsx', [
+            'start' => Carbon::now()->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $responseXlsx->assertStatus(200);
+        $queries2 = count(\Illuminate\Support\Facades\DB::getQueryLog());
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+
+        $createLogs(3); // Now we have 5 students/logs
+        \Illuminate\Support\Facades\DB::flushQueryLog();
+        
+        $this->get(route('reports.export.dtr.xlsx', [
+            'start' => Carbon::now()->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $queries5 = count(\Illuminate\Support\Facades\DB::getQueryLog());
+        
+        // Due to lazy(1000) pulling in chunks of 1000, 
+        // the number of queries should be bounded and not linearly scale per record (N+1)
+
+        $this->assertLessThanOrEqual(5, $queries5, "Query count should not grow linearly with logs when under the chunk size.");
+
+        // test pdf 200 without crashing dompdf
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')->andReturnSelf();
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('setPaper')->andReturnSelf();
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('download')->andReturn(response('pdf', 200));
+
+        $responsePdf = $this->get(route('reports.export.dtr.pdf', [
+            'start' => Carbon::now()->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $responsePdf->assertStatus(200);
+    }
+
+    public function test_dtr_export_date_validation()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $this->actingAs($admin);
+
+        // test start > end
+        $response = $this->get(route('reports.export.dtr.xlsx', [
+            'start' => Carbon::now()->addDays(5)->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $response->assertSessionHasErrors('end');
+
+        // test range > 31 days
+        $response = $this->get(route('reports.export.dtr.pdf', [
+            'start' => Carbon::now()->subDays(35)->toDateString(),
+            'end' => Carbon::now()->toDateString()
+        ]));
+        $response->assertSessionHasErrors('end');
+    }
 }

@@ -87,22 +87,35 @@ class ReportController extends Controller
 
     private function getDtrRecords(Request $request, \App\Domain\Report\Services\DtrService $dtrService, &$start, &$end, &$groupId)
     {
+        $request->validate([
+            'start' => ['nullable', 'date'],
+            'end'   => ['nullable', 'date', 'after_or_equal:start'],
+        ]);
+
         $start   = $request->input('start', today()->toDateString());
         $end     = $request->input('end',   today()->toDateString());
         $groupId = $request->input('classroom_id');
 
-        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
-        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
+        $startC = \Carbon\Carbon::parse($start);
+        $endC   = \Carbon\Carbon::parse($end);
 
-        $logsCursor = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
+        if ($startC->diffInDays($endC) > 31) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'end' => ['Rentang tanggal maksimal 31 hari.'],
+            ]);
+        }
+
+        $startUtc = $startC->startOfDay()->setTimezone('UTC');
+        $endUtc   = $endC->endOfDay()->setTimezone('UTC');
+
+        $logsLazy = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
-            ->orderBy('captured_at')
-            ->cursor();
+            ->lazyById(1000);
 
-        return $dtrService->generateDtr($logsCursor);
+        return $dtrService->generateDtr($logsLazy);
     }
 
     public function exportDtr(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
@@ -123,13 +136,6 @@ class ReportController extends Controller
     public function exportDtrPdf(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
     {
         $dtrRecords = $this->getDtrRecords($request, $dtrService, $start, $end, $groupId);
-
-        $startC = \Carbon\Carbon::parse($start);
-        $endC = \Carbon\Carbon::parse($end);
-        
-        if ($startC->diffInDays($endC) > 31) {
-            return back()->with('error', 'Rentang tanggal PDF maksimal 31 hari.');
-        }
 
         activity('report')
             ->causedBy(auth()->user())

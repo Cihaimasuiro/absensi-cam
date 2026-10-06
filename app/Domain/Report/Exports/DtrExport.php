@@ -19,7 +19,7 @@ class DtrExport implements FromCollection, WithHeadings, WithMapping, ShouldAuto
         $this->dtrRecords = $dtrRecords;
     }
 
-    public function collection()
+    public function collection(): \Illuminate\Support\Collection
     {
         return $this->dtrRecords;
     }
@@ -60,7 +60,7 @@ class DtrExport implements FromCollection, WithHeadings, WithMapping, ShouldAuto
         ];
     }
 
-    public function styles(Worksheet $sheet)
+    public function styles(Worksheet $sheet): ?array
     {
         return [
             1 => ['font' => ['bold' => true]],

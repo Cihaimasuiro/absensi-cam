@@ -16,9 +16,11 @@ class ReportController extends Controller
         $end     = $request->input('end',   today()->toDateString());
         $groupId = $request->input('classroom_id');
 
+        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
+        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
+
         $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name', 'device:id,name'])
-            ->whereDate('captured_at', '>=', $start)
-            ->whereDate('captured_at', '<=', $end)
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
@@ -38,9 +40,11 @@ class ReportController extends Controller
         $end     = $request->input('end',   today()->toDateString());
         $groupId = $request->input('classroom_id');
 
+        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
+        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
+
         $logs = AttendanceLog::with(['student:id,name,code', 'device:id,name'])
-            ->whereDate('captured_at', '>=', $start)
-            ->whereDate('captured_at', '<=', $end)
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )

@@ -67,7 +67,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
@@ -128,5 +128,9 @@ return [
     'enrollment_embed_key' => env('ENROLLMENT_EMBED_KEY', ''),
 
     'trusted_proxies' => env('TRUSTED_PROXIES', '127.0.0.1'),
+    
+    'python_bin' => env('PYTHON_BIN', 'python'),
+    
+    'model_version' => env('MODEL_VERSION', '3d9f1f77896fb3d1'),
 
 ];

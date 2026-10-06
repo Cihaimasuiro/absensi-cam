@@ -10,6 +10,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
 
 class GenerateFaceEmbedding implements ShouldQueue
 {
@@ -36,28 +37,28 @@ class GenerateFaceEmbedding implements ShouldQueue
         }
 
         try {
-            $pythonBin = env('PYTHON_BIN', base_path('clients/edge-engine/venv/Scripts/python.exe'));
+            $pythonBin = config('app.python_bin');
             $script = base_path('packages/face_core/extract.py');
-            $detectorModel = base_path('clients/edge-engine/assets/models/detector.onnx');
-            $recognizerModel = base_path('clients/edge-engine/assets/models/recognizer.onnx');
+            $detectorModel = base_path('packages/models/detector.onnx');
+            $recognizerModel = base_path('packages/models/recognizer.onnx');
             
 
 
-            $process = new \Symfony\Component\Process\Process([
-                $pythonBin,
-                $script,
-                $detectorModel,
-                $recognizerModel,
-                $this->tmpPath
-            ], base_path(), ['PYTHONPATH' => base_path('packages')]);
+            $result = Process::path(base_path())
+                ->env(['PYTHONPATH' => base_path('packages')])
+                ->run([
+                    $pythonBin,
+                    $script,
+                    $detectorModel,
+                    $recognizerModel,
+                    $this->tmpPath
+                ]);
             
-            $process->run();
-            
-            if (!$process->isSuccessful()) {
-                throw new \RuntimeException("Python extraction failed: " . $process->getErrorOutput());
+            if (!$result->successful()) {
+                throw new \RuntimeException("Python extraction failed: " . $result->errorOutput());
             }
 
-            $output = json_decode($process->getOutput(), true);
+            $output = json_decode($result->output(), true);
             if (!$output || !isset($output['success']) || !$output['success']) {
                 $err = $output['error'] ?? 'Unknown error';
                 throw new \RuntimeException("Python extraction error: $err");

@@ -56,7 +56,8 @@ class EdgeEngine:
 
         # ── Persistence & Sync ────────────────────────────────────────
         key_b64 = config.get("ENROLLMENT_EMBED_KEY")
-        self.db = DatabaseManager(key_b64=key_b64)
+        model_version = config.get("MODEL_VERSION", "3d9f1f77896fb3d1")
+        self.db = DatabaseManager(key_b64=key_b64, model_version=model_version)
         self.sync_worker = SyncWorker(
             self.db,
             config["SMART_ABSENSI_URL"],

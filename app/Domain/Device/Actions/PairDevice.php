@@ -29,9 +29,9 @@ class PairDevice
                 ->lockForUpdate()
                 ->first();
 
-            if (! $pairingCode) {
+            if (! $pairingCode || ! $pairingCode->building_id) {
                 throw ValidationException::withMessages([
-                    'code' => ['Invalid or expired pairing code.'],
+                    'code' => ['Invalid or expired pairing code, or building was removed.'],
                 ]);
             }
 
@@ -43,8 +43,8 @@ class PairDevice
                 'building_id'     => $pairingCode->building_id,
                 'name'          => $data['device_name'],
                 'device_code'   => strtolower((string) Str::ulid()),
-                'fw_version'    => $data['fw_version'],
-                'model_version' => $data['model_version'],
+                'fw_version'    => $data['fw_version'] ?? '1.0.0',
+                'model_version' => config('app.model_version'),
                 'status'        => 'online',
                 'last_heartbeat_at' => now(),
             ]);
@@ -61,6 +61,7 @@ class PairDevice
                 'token'     => $token->plainTextToken, // shown once
                 'building_id' => $device->building_id,
                 'embed_key' => config('app.enrollment_embed_key', ''),
+                'model_version' => config('app.model_version'),
             ];
         });
     }

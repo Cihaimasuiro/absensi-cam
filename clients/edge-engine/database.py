@@ -6,10 +6,11 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    def __init__(self, key_b64: str = None, db_path="local_edge.db"):
+    def __init__(self, key_b64: str = None, db_path="local_edge.db", model_version: str = "3d9f1f77896fb3d1"):
         self.db_path = os.path.join(os.path.dirname(__file__), db_path)
         import base64
         self.key = base64.b64decode(key_b64) if key_b64 else None
+        self.model_version = model_version
         self._template_cache = None
         self._cache_version_cursor = -1
         self._init_db()
@@ -199,7 +200,7 @@ class DatabaseManager:
         for row in rows:
             student_id = row["student_id"]
             name = row["name"] if ("name" in row.keys() and row["name"]) else "Anggota"
-            model_version = "3d9f1f77896fb3d1" # Can be saved in DB if needed, hardcoded for now or we can extract it
+            model_version = self.model_version
             dec_bytes = self.decrypt_embedding(row["embedding"], student_id, model_version)
             if dec_bytes:
                 decrypted_templates.append({

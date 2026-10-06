@@ -59,11 +59,7 @@ class Classroom extends Model
             if ($classroom->wasChanged('building_id')) {
                 // If a classroom moves to another building, we must bump the version_cursor 
                 // of all its enrolled students so that devices pull the sync (either as upsert or delete).
-                // Mass update will not fire eloquent events, but FaceTemplate handles version_cursor directly on update
-                // if we use a DB query. Wait, FaceTemplate observer manages version_cursor?
-                // The `version_cursor` is updated automatically in a database trigger or saving event.
-                // In FaceTemplate.php, it's a `saving` event. But a mass update doesn't trigger `saving`.
-                // Let's just retrieve and touch them.
+                // We retrieve and touch them individually to trigger the saving event which handles the cursor.
                 $classroom->students()->whereHas('faceTemplate')->with('faceTemplate')->get()->each(function ($student) {
                     $student->faceTemplate->touch();
                 });

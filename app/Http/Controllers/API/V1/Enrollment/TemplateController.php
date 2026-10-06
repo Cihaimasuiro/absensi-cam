@@ -33,7 +33,15 @@ class TemplateController extends Controller
         // If it has classrooms, only templates for students in those classrooms are 'in-scope'.
         // If it has NO classrooms (gate device), ALL templates for the school are 'in-scope'.
         $buildingId = $device->building_id;
-        $buildingHasClassrooms = $buildingId ? \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists() : false;
+        if (!$buildingId) {
+            return response()->json([
+                'model_version' => $device->model_version,
+                'items'         => [],
+                'next_cursor'   => $cursor,
+            ]);
+        }
+        
+        $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
 
         $templates = FaceTemplate::withTrashed()
             ->with('student:id,name,school_id,classroom_id')
@@ -66,7 +74,7 @@ class TemplateController extends Controller
 
             return [
                 'student_id'     => $t->student_id,
-                'name'           => $student?->name ?? 'Anggota',
+                'name'           => $op === 'delete' ? null : ($student?->name ?? 'Anggota'),
                 'embedding_b64'  => $op === 'delete' ? null : $t->embedding_enc,
                 'model_version'  => $t->model_version,
                 'version_cursor' => $t->version_cursor,

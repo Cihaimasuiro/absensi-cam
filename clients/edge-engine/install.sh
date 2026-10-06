@@ -132,7 +132,8 @@ echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV
 if ls "$INSTALL_DIR/models"/*.onnx 1> /dev/null 2>&1; then
     echo "3. Models are placed in '$INSTALL_DIR/models'."
 else
-    echo -e "${RED}3. WARNING: No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models there.${NC}"
+    echo -e "${RED}ERROR: No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models there.${NC}"
+    exit 1
 fi
 echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
 echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"

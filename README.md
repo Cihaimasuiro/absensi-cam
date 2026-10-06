@@ -78,6 +78,9 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate --seed
+
+# Start the queue worker in production (using Supervisor is recommended):
+# php artisan queue:work --queue=enrollments,default --timeout=120
 ```
 
 ### 2. Edge Engine — setup venv (sekali saja)

@@ -29,12 +29,19 @@ class AttendanceLog extends Model
     ];
 
     protected $casts = [
-        'captured_at'  => 'datetime',
         'received_at'  => 'datetime',
         'score'        => 'float',
         'liveness_score' => 'float',
         'is_corrected' => 'boolean',
     ];
+
+    protected function capturedAt(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->setTimezone(config('app.timezone')) : null,
+            set: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value)->setTimezone('UTC')->format('Y-m-d H:i:s') : null,
+        );
+    }
 
     public function student(): BelongsTo
     {
@@ -53,9 +60,9 @@ class AttendanceLog extends Model
 
     public function scopeToday($query)
     {
-        $start = today()->copy()->startOfDay();
-        $end = today()->copy()->endOfDay();
-        return $query->whereBetween('captured_at', [$start, $end]);
+        $startUtc = today()->copy()->startOfDay()->setTimezone('UTC');
+        $endUtc = today()->copy()->endOfDay()->setTimezone('UTC');
+        return $query->whereBetween('captured_at', [$startUtc, $endUtc]);
     }
 
     public function scopeByDevice($query, int $deviceId)

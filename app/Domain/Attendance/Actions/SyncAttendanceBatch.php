@@ -35,7 +35,7 @@ class SyncAttendanceBatch
                         'student_id'      => $record['student_id'],
                         'device_id'      => $device->id,
                         'captured_at'    => \Illuminate\Support\Carbon::parse($record['captured_at'])
-                                                ->setTimezone(config('app.timezone'))
+                                                ->setTimezone('UTC')
                                                 ->format('Y-m-d H:i:s'),
                         'direction'      => $record['direction'],
                         'score'          => $record['score'],

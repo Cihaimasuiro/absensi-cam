@@ -13,9 +13,13 @@ class AttendanceCorrectionController extends Controller
 {
     public function store(Request $request, $id)
     {
+        $log = AttendanceLog::findOrFail($id);
+        
+        $minDate = $log->captured_at->copy()->subDays(14)->startOfDay()->format('Y-m-d\TH:i');
+        
         $validated = $request->validate([
             'reason'                => ['required', 'string', 'max:255'],
-            'corrected_captured_at' => ['required', 'date', 'after_or_equal:' . now()->subDays(14)->toDateString()],
+            'corrected_captured_at' => ['required', 'date', 'after_or_equal:' . $minDate, 'before_or_equal:now'],
             'corrected_direction'   => ['required', 'in:in,out'],
         ]);
 

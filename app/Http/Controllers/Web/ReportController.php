@@ -85,7 +85,7 @@ class ReportController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    public function exportDtr(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
+    private function getDtrRecords(Request $request, \App\Domain\Report\Services\DtrService $dtrService, &$start, &$end, &$groupId)
     {
         $start   = $request->input('start', today()->toDateString());
         $end     = $request->input('end',   today()->toDateString());
@@ -94,15 +94,20 @@ class ReportController extends Controller
         $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
         $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
 
-        $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
+        $logsCursor = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
             ->orderBy('captured_at')
-            ->get();
+            ->cursor();
 
-        $dtrRecords = $dtrService->generateDtr($logs);
+        return $dtrService->generateDtr($logsCursor);
+    }
+
+    public function exportDtr(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
+    {
+        $dtrRecords = $this->getDtrRecords($request, $dtrService, $start, $end, $groupId);
 
         activity('report')
             ->causedBy(auth()->user())
@@ -117,22 +122,14 @@ class ReportController extends Controller
 
     public function exportDtrPdf(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
     {
-        $start   = $request->input('start', today()->toDateString());
-        $end     = $request->input('end',   today()->toDateString());
-        $groupId = $request->input('classroom_id');
+        $dtrRecords = $this->getDtrRecords($request, $dtrService, $start, $end, $groupId);
 
-        $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
-        $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
-
-        $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name,start_time,late_tolerance_minutes'])
-            ->whereBetween('captured_at', [$startUtc, $endUtc])
-            ->when($groupId, fn ($q) =>
-                $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
-            )
-            ->orderBy('captured_at')
-            ->get();
-
-        $dtrRecords = $dtrService->generateDtr($logs);
+        $startC = \Carbon\Carbon::parse($start);
+        $endC = \Carbon\Carbon::parse($end);
+        
+        if ($startC->diffInDays($endC) > 31) {
+            return back()->with('error', 'Rentang tanggal PDF maksimal 31 hari.');
+        }
 
         activity('report')
             ->causedBy(auth()->user())

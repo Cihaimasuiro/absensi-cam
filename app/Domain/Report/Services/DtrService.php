@@ -7,7 +7,7 @@ use Carbon\Carbon;
 
 class DtrService
 {
-    public function generateDtr(Collection $logs): Collection
+    public function generateDtr(iterable $logs): Collection
     {
         // $logs already have captures_at casted to app timezone by accessor
         
@@ -62,7 +62,7 @@ class DtrService
             if ($firstIn && $lastOut) {
                 $inTime = Carbon::parse($record['date'] . ' ' . $firstIn);
                 $outTime = Carbon::parse($record['date'] . ' ' . $lastOut);
-                $durationMins = $inTime->diffInMinutes($outTime);
+                $durationMins = (int) $inTime->diffInMinutes($outTime, true);
             }
             
             $minutesLate = 0;
@@ -73,7 +73,7 @@ class DtrService
                 $actualIn = Carbon::parse($record['date'] . ' ' . $firstIn);
                 
                 if ($actualIn->greaterThan($expectedStart)) {
-                    $diff = $actualIn->diffInMinutes($expectedStart);
+                    $diff = (int) $expectedStart->diffInMinutes($actualIn, true);
                     if ($diff > $record['late_tolerance_minutes']) {
                         $minutesLate = $diff;
                         $status = 'Terlambat';

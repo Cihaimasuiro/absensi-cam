@@ -56,6 +56,10 @@ class PairDevice
             // Store hash of token for revocation lookup (Sanctum stores its own hash too)
             $device->update(['token_hash' => hash('sha256', $token->plainTextToken)]);
 
+            activity('device')
+                ->performedOn($device)
+                ->log('Device paired successfully');
+
             return [
                 'device_id' => $device->device_code,
                 'token'     => $token->plainTextToken, // shown once

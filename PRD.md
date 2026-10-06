@@ -847,7 +847,7 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `audit_logs` | `id`, `actor`, `action`, `subject`, `meta` (JSON), `created_at` (append-only; diimplementasikan dengan tabel `activity_log` Spatie) |
 | `device_groups` | `device_id`, `group_id` — kelas yang berhak dikenali per perangkat (FR-E06, FR-S07) |
 | `pairing_codes` | `code_hash`, `branch_id`, `expires_at` (15 menit), `used_at` |
-| `attendance_corrections` | `attendance_log_id`, `corrected_by`, `reason`, nilai baru; data asli tidak ditimpa (FR-S10) |
+| `attendance_corrections` | `attendance_log_id`, `corrected_by`, `reason`, `original_captured_at`, `corrected_captured_at`, `original_direction`, `corrected_direction`; data asli log ditimpa namun rekamannya disimpan di tabel ini (FR-S10) |
 | `device_logs` | `device_id`, `level`, `message`, `created_at` (retensi 7 hari, 12.3) |
 | `member_cards` | `id`, `member_id`, `card_uid` (unik di antara kartu aktif), `active`, `registered_by`, `version_cursor`, `deleted_at` — UID bukan data biometrik tetapi tetap data pribadi (FR-S14) |
 | `users`, `roles` | Akun admin dan peran |

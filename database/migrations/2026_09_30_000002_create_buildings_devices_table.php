@@ -30,7 +30,7 @@ return new class extends Migration
             $table->string('token_hash', 64)->nullable()->comment('SHA-256 hash Sanctum token; null = belum dipasangkan');
             $table->string('ip_address', 45)->nullable();
             $table->string('fw_version', 30)->nullable()->comment('Versi firmware edge-engine');
-            $table->string('model_version', 60)->nullable()->comment('mis. arcface-512/1');
+            $table->string('model_version', 60)->nullable()->comment('mis. 3d9f1f77896fb3d1/1');
             $table->timestamp('last_heartbeat_at')->nullable();
             $table->float('last_cpu_temp')->nullable()->comment('°C dari heartbeat terakhir');
             $table->unsignedSmallInteger('last_outbox_len')->nullable()->comment('Panjang outbox terakhir');

@@ -17,7 +17,7 @@ return new class extends Migration
             // Encrypted embedding: AES-256-GCM (12 byte nonce + N byte payload + 16 byte tag)
             // SFace 128-d float32 = 512 bytes → encrypted = 540 bytes, stored as base64 string
             $table->text('embedding_enc')->comment('AES-256-GCM ciphertext base64; nonce prepended');
-            $table->string('model_version', 60)->comment('mis. arcface-512/1 — versi harus cocok dengan edge');
+            $table->string('model_version', 60)->comment('mis. 3d9f1f77896fb3d1/1 — versi harus cocok dengan edge');
             // version_cursor untuk delta sync: edge meminta GET /templates?cursor=<N>
             $table->unsignedBigInteger('version_cursor')->default(0)->index()
                 ->comment('Monotonically increasing; digunakan edge untuk delta pull');

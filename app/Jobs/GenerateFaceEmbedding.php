@@ -23,7 +23,7 @@ class GenerateFaceEmbedding implements ShouldQueue
         public string $tmpPath,
         public ?string $photoPath = null,
         public bool $deleteAfter = true,
-        public string $modelVersion = 'arcface-512'
+        public string $modelVersion = '3d9f1f77896fb3d1'
     ) {
         $this->onQueue('enrollments');
     }

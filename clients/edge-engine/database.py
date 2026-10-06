@@ -199,7 +199,7 @@ class DatabaseManager:
         for row in rows:
             student_id = row["student_id"]
             name = row["name"] if ("name" in row.keys() and row["name"]) else "Anggota"
-            model_version = "arcface-512" # Can be saved in DB if needed, hardcoded for now or we can extract it
+            model_version = "3d9f1f77896fb3d1" # Can be saved in DB if needed, hardcoded for now or we can extract it
             dec_bytes = self.decrypt_embedding(row["embedding"], student_id, model_version)
             if dec_bytes:
                 decrypted_templates.append({

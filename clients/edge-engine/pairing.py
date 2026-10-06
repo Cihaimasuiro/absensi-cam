@@ -23,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 FW_VERSION = "1.0.0"
-MODEL_VERSION = "arcface-512"
+MODEL_VERSION = "3d9f1f77896fb3d1"
 
 
 def get_device_name() -> str:

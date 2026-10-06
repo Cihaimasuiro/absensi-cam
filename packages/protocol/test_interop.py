@@ -19,7 +19,7 @@ def decrypt_blob(b64_blob, key_str, aad_str):
 
 if __name__ == '__main__':
     b64_input = sys.stdin.read().strip()
-    plaintext = decrypt_blob(b64_input, 'A' * 32, 'user123_arcface-512')
+    plaintext = decrypt_blob(b64_input, 'A' * 32, 'user123_3d9f1f77896fb3d1')
     if plaintext == b'\x00' * 2048:
         print("SUCCESS: Python decrypted PHP AES-256-GCM blob perfectly!")
     else:

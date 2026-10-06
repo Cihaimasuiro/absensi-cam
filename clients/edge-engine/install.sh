@@ -61,6 +61,11 @@ if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     fi
 fi
 
+if ! ls "$INSTALL_DIR/models"/*.onnx 1> /dev/null 2>&1; then
+    log_error "No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models to $MODELS_SRC or set MODELS_SRC."
+    exit 1
+fi
+
 cd "$INSTALL_DIR"
 
 # 3. Install Miniforge for Modern Python (3.11) on AARCH64
@@ -128,13 +133,7 @@ echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Configure your API URL in $INSTALL_DIR/.env if needed."
 echo "2. Run the pairing script to connect to the Laravel backend:"
 echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
-# Check if .onnx files exist
-if ls "$INSTALL_DIR/models"/*.onnx 1> /dev/null 2>&1; then
-    echo "3. Models are placed in '$INSTALL_DIR/models'."
-else
-    echo -e "${RED}ERROR: No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models there.${NC}"
-    exit 1
-fi
+echo "3. Models are placed in '$INSTALL_DIR/models'."
 echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
 echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"
 echo "============================================================================"

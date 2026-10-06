@@ -78,9 +78,26 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate --seed
+```
 
-# Start the queue worker in production (using Supervisor is recommended):
-# php artisan queue:work --queue=enrollments,default --timeout=120
+**Production Queue Worker (Supervisor):**
+Create `/etc/supervisor/conf.d/absensi-cam-worker.conf`:
+```ini
+[program:absensi-cam-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /path/to/absensi-cam/artisan queue:work --queue=enrollments,default --timeout=120
+autostart=true
+autorestart=true
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/path/to/absensi-cam/storage/logs/worker.log
+```
+
+**Production Cron (Scheduler):**
+Add to your server's crontab (`crontab -e`):
+```bash
+* * * * * cd /path/to/absensi-cam && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 ### 2. Edge Engine — setup venv (sekali saja)

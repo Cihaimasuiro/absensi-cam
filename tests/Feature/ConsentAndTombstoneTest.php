@@ -14,7 +14,10 @@ class ConsentAndTombstoneTest extends TestCase
 
     public function test_withdrawing_consent_soft_deletes_template_and_increments_cursor(): void
     {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
         $user = User::factory()->create();
+        $user->assignRole('admin');
+        
         $student = Student::factory()->create();
 
         // 1. Give consent and create a template

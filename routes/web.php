@@ -6,6 +6,7 @@ use App\Http\Controllers\Web\DeviceController;
 use App\Http\Controllers\Web\StudentWebController;
 use App\Http\Controllers\Web\SchoolController;
 use App\Http\Controllers\Web\ReportController;
+use App\Http\Controllers\Web\AttendanceCorrectionController;
 use Illuminate\Support\Facades\Route;
 
 // Auth Routes
@@ -18,18 +19,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Students — full CRUD + enrollment
+    // Students
     Route::middleware('role:super_admin|admin')->group(function () {
         Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
         Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
-        Route::delete('students/{student}', [StudentWebController::class, 'destroy'])->name('students.destroy');
+        Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
+        Route::resource('students', StudentWebController::class)->except(['index', 'show']);
     });
-    Route::resource('students', StudentWebController::class)->except(['destroy']);
-    Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
+    Route::resource('students', StudentWebController::class)->only(['index', 'show']);
 
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/',    [ReportController::class, 'index'])->name('index');
         Route::get('/csv', [ReportController::class, 'exportCsv'])->middleware('role:super_admin|admin')->name('export.csv');
+        Route::post('/logs/{log}/correct', [AttendanceCorrectionController::class, 'store'])->middleware('role:super_admin|admin')->name('logs.correct');
     });
 
     // Devices / Pairing

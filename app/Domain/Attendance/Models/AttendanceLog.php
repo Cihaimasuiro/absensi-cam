@@ -39,7 +39,9 @@ class AttendanceLog extends Model
     {
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->setTimezone(config('app.timezone')) : null,
-            set: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value)->setTimezone('UTC')->format('Y-m-d H:i:s') : null,
+            set: fn ($value) => $value instanceof \Carbon\CarbonInterface 
+                ? $value->copy()->setTimezone('UTC')->format('Y-m-d H:i:s') 
+                : ($value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->format('Y-m-d H:i:s') : null),
         );
     }
 

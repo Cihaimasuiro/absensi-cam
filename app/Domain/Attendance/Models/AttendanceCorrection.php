@@ -20,10 +20,27 @@ class AttendanceCorrection extends Model
         'corrected_direction',
     ];
 
-    protected $casts = [
-        'original_captured_at'   => 'datetime',
-        'corrected_captured_at'  => 'datetime',
-    ];
+    protected $casts = [];
+
+    protected function originalCapturedAt(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->setTimezone(config('app.timezone')) : null,
+            set: fn ($value) => $value instanceof \Carbon\CarbonInterface 
+                ? $value->copy()->setTimezone('UTC')->format('Y-m-d H:i:s') 
+                : ($value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->format('Y-m-d H:i:s') : null),
+        );
+    }
+
+    protected function correctedCapturedAt(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->setTimezone(config('app.timezone')) : null,
+            set: fn ($value) => $value instanceof \Carbon\CarbonInterface 
+                ? $value->copy()->setTimezone('UTC')->format('Y-m-d H:i:s') 
+                : ($value ? \Illuminate\Support\Carbon::parse($value, 'UTC')->format('Y-m-d H:i:s') : null),
+        );
+    }
 
     public function attendanceLog(): BelongsTo
     {

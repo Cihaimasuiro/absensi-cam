@@ -40,22 +40,37 @@
                 <th>Waktu</th>
                 <th>Status</th>
                 <th>Keyakinan</th>
+                @role('super_admin|admin')
+                <th>Aksi</th>
+                @endrole
             </tr>
         </thead>
         <tbody>
             @forelse($logs ?? [] as $log)
                 <tr>
-                    <td class="font-medium text-ink">{{ $log->student->name ?? '-' }}</td>
+                    <td class="font-medium text-ink flex items-center gap-2">
+                        {{ $log->student->name ?? '-' }}
+                        @if($log->is_corrected)
+                            <span class="badge badge-warning text-[10px]" title="Dikoreksi Manual">Edited</span>
+                        @endif
+                    </td>
                     <td class="font-mono text-[12px]">{{ $log->student->code ?? '-' }}</td>
                     <td>{{ $log->student->school->name ?? '-' }}</td>
-                    <td>{{ $log->scanned_at->format('Y-m-d H:i:s') }}</td>
+                    <td>{{ $log->captured_at->format('Y-m-d H:i:s') }}</td>
                     <td>
                         <span class="badge {{ $log->direction === 'in' ? 'badge-success' : 'badge-muted' }} inline-flex items-center gap-1">
                             <i data-lucide="{{ $log->direction === 'in' ? 'log-in' : 'log-out' }}" class="w-3 h-3"></i>
                             {{ $log->direction === 'in' ? 'Masuk' : 'Keluar' }}
                         </span>
                     </td>
-                    <td>{{ number_format($log->confidence_score, 3) }}</td>
+                    <td>{{ $log->score ? number_format($log->score, 3) : '-' }}</td>
+                    @role('super_admin|admin')
+                    <td>
+                        <button type="button" class="btn btn-utility text-xs py-1 px-2" onclick="openCorrectionModal({{ $log->id }}, '{{ $log->captured_at->format('Y-m-d\TH:i') }}', '{{ $log->direction }}')">
+                            Koreksi
+                        </button>
+                    </td>
+                    @endrole
                 </tr>
             @empty
                 <tr>
@@ -76,4 +91,51 @@
         </div>
     @endif
 </div>
+
+@role('super_admin|admin')
+<div id="correctionModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-canvas rounded-lg w-full max-w-md shadow-lg overflow-hidden">
+        <div class="px-md py-sm border-b border-hairline flex justify-between items-center">
+            <h3 class="font-bold text-ink">Koreksi Absensi</h3>
+            <button type="button" onclick="closeCorrectionModal()" class="text-ink-faint hover:text-ink">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <form id="correctionForm" method="POST" action="" class="p-md flex flex-col gap-md">
+            @csrf
+            <div>
+                <label class="form-label">Waktu Sebenarnya (Lokal)</label>
+                <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full">
+            </div>
+            <div>
+                <label class="form-label">Status Absensi</label>
+                <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required>
+                    <option value="in">Masuk</option>
+                    <option value="out">Keluar</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Alasan Koreksi</label>
+                <textarea name="reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
+            </div>
+            <div class="flex justify-end gap-sm mt-sm">
+                <button type="button" onclick="closeCorrectionModal()" class="btn btn-utility">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openCorrectionModal(id, datetime, direction) {
+        document.getElementById('correctionForm').action = `/reports/logs/${id}/correct`;
+        document.getElementById('corrected_captured_at').value = datetime;
+        document.getElementById('corrected_direction').value = direction;
+        document.getElementById('correctionModal').classList.remove('hidden');
+    }
+    function closeCorrectionModal() {
+        document.getElementById('correctionModal').classList.add('hidden');
+    }
+</script>
+@endrole
 @endsection

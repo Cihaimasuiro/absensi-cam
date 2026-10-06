@@ -32,7 +32,7 @@ class PruneAttendanceLogs extends Command
             return self::SUCCESS;
         }
 
-        $cutoff = now()->subDays($days);
+        $cutoff = now('UTC')->subDays($days);
         $query  = AttendanceLog::where('captured_at', '<', $cutoff);
 
         if ($this->option('dry-run')) {

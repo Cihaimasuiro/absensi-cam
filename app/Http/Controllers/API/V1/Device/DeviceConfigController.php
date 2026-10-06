@@ -21,14 +21,16 @@ class DeviceConfigController extends Controller
         $device = $request->user();
 
         // Config is sourced from the device's building/group settings
-        // ponytail: flat config array for now; per-device config table if needed later
+        // Send timing per group since a device can serve multiple classrooms/staff
         $config = [
             'cooldown_seconds'          => 60,
-            'late_threshold_minutes'    => $device->building?->devices?->first()?->id
-                ? ($device->groups()->first()?->late_threshold_minutes ?? 15)
-                : 15,
-            'late_threshold_enabled'    => $device->groups()->first()?->late_threshold_enabled ?? false,
-            'class_start_time'          => $device->groups()->first()?->class_start_time ?? '08:00',
+            'groups'                    => $device->groups->map(fn($g) => [
+                'id' => $g->id,
+                'name' => $g->name,
+                'type' => $g->type,
+                'start_time' => $g->start_time,
+                'late_tolerance_minutes' => $g->late_tolerance_minutes,
+            ])->toArray(),
             'track_checkout'            => $device->groups()->first()?->track_checkout ?? false,
             'confidence_threshold'      => 0.363, // SFace default (AC-22)
             'liveness_enabled'          => true,

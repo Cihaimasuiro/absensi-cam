@@ -79,10 +79,15 @@ class SchoolController extends Controller
         $validated = $request->validate([
             'start_time'       => ['required', 'date_format:H:i'],
             'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+            'type_filter'      => ['required', 'in:class,staff,all'],
             'confirm_retroactive' => ['accepted'],
         ]);
 
-        $classrooms = $school->classrooms;
+        $query = $school->classrooms();
+        if ($validated['type_filter'] !== 'all') {
+            $query->where('type', $validated['type_filter']);
+        }
+        $classrooms = $query->get();
         
         foreach ($classrooms as $classroom) {
             $oldData = $classroom->only(['start_time', 'late_tolerance_minutes']);

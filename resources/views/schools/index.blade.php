@@ -285,8 +285,17 @@
         @method('PUT')
         
         <p class="text-sm text-ink-muted mb-md">
-            Pengaturan ini akan diterapkan ke <strong>semua kelas/grup</strong> di organisasi ini.
+            Pengaturan ini akan diterapkan ke kelas/grup sesuai filter di organisasi ini.
         </p>
+
+        <div class="mb-sm">
+            <label class="form-label">Terapkan pada</label>
+            <select name="type_filter" required class="form-select">
+                <option value="class">Hanya Kelas Siswa</option>
+                <option value="staff">Hanya Guru/Staf</option>
+                <option value="all">Semua Tipe Grup</option>
+            </select>
+        </div>
 
         <div class="grid grid-cols-2 gap-sm mb-md">
             <div>

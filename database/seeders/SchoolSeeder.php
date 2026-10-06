@@ -27,11 +27,10 @@ class SchoolSeeder extends Seeder
             [
                 'name' => 'Kelas X IPA 1',
                 'building_id' => $building->id,
-                'type' => 'classroom',
+                'type' => 'class',
                 'is_active' => true,
-                'class_start_time' => '07:00',
-                'late_threshold_enabled' => true,
-                'late_threshold_minutes' => 15,
+                'start_time' => '07:00',
+                'late_tolerance_minutes' => 15,
                 'track_checkout' => true,
                 'biometric_consent_certified' => true,
             ]
@@ -42,11 +41,10 @@ class SchoolSeeder extends Seeder
             [
                 'name' => 'Kelas XI IPA 1',
                 'building_id' => $building->id,
-                'type' => 'classroom',
+                'type' => 'class',
                 'is_active' => true,
-                'class_start_time' => '07:00',
-                'late_threshold_enabled' => true,
-                'late_threshold_minutes' => 15,
+                'start_time' => '07:00',
+                'late_tolerance_minutes' => 15,
                 'track_checkout' => true,
                 'biometric_consent_certified' => true,
             ]
@@ -57,11 +55,10 @@ class SchoolSeeder extends Seeder
             [
                 'name' => 'Guru & Staf',
                 'building_id' => $building->id,
-                'type' => 'department',
+                'type' => 'staff',
                 'is_active' => true,
-                'class_start_time' => '06:30',
-                'late_threshold_enabled' => true,
-                'late_threshold_minutes' => 30,
+                'start_time' => '06:30',
+                'late_tolerance_minutes' => 30,
                 'track_checkout' => true,
                 'biometric_consent_certified' => true,
             ]

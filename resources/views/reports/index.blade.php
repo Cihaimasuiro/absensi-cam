@@ -2,6 +2,7 @@
 @section('title', 'Laporan Presensi')
 
 @section('content')
+<div x-data>
 
 {{-- Filter bar --}}
 <div class="card p-md mb-md">
@@ -79,7 +80,7 @@
                     <td>{{ $log->score ? number_format($log->score, 3) : '-' }}</td>
                     @role('super_admin|admin')
                     <td>
-                        <button type="button" class="btn btn-utility text-xs py-1 px-2" onclick="openCorrectionModal({{ $log->id }}, '{{ $log->captured_at->format('Y-m-d\TH:i') }}', '{{ $log->direction }}')">
+                        <button type="button" class="btn btn-utility text-xs py-1 px-2" @click="openCorrectionModal({{ $log->id }}, '{{ $log->captured_at->format('Y-m-d\TH:i') }}', '{{ $log->direction }}')">
                             Koreksi
                         </button>
                     </td>
@@ -110,7 +111,7 @@
     <div class="bg-canvas rounded-lg w-full max-w-md shadow-lg overflow-hidden">
         <div class="px-md py-sm border-b border-hairline flex justify-between items-center">
             <h3 class="font-bold text-ink">Koreksi Absensi</h3>
-            <button type="button" onclick="closeCorrectionModal()" class="text-ink-faint hover:text-ink">
+            <button type="button" @click="closeCorrectionModal()" class="text-ink-faint hover:text-ink">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
@@ -132,14 +133,14 @@
                 <textarea name="reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
             </div>
             <div class="flex justify-end gap-sm mt-sm">
-                <button type="button" onclick="closeCorrectionModal()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="closeCorrectionModal()" class="btn btn-utility">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
             </div>
         </form>
     </div>
 </div>
 
-<script>
+<script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
     function openCorrectionModal(id, datetime, direction) {
         document.getElementById('correctionForm').action = `/reports/logs/${id}/correct`;
         document.getElementById('corrected_captured_at').value = datetime;
@@ -151,4 +152,5 @@
     }
 </script>
 @endrole
+</div>
 @endsection

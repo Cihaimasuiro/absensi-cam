@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — Smart Absensi</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen flex items-center justify-center p-md">
 
@@ -47,8 +46,5 @@
         </form>
     </div>
 
-    <script>
-      lucide.createIcons();
-    </script>
 </body>
 </html>

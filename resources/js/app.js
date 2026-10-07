@@ -1,4 +1,4 @@
-import Alpine from 'alpinejs'
+import Alpine from '@alpinejs/csp'
 import { createIcons } from 'lucide'
 
 window.Alpine = Alpine

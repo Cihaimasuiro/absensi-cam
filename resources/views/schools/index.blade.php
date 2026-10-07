@@ -2,7 +2,7 @@
 @section('title', 'Manajemen Organisasi')
 
 @section('header-actions')
-    <button @click="$refs.createModal.showModal()" aria-label="Tambah Organisasi" class="btn btn-primary">
+    <button x-data @click="$dispatch('open-create-modal')" aria-label="Tambah Organisasi" class="btn btn-primary">
         <i data-lucide="plus" class="w-4 h-4"></i> Tambah Organisasi
     </button>
 @endsection
@@ -22,7 +22,7 @@
     createClassroomSchoolId: null,
     bulkEditSchoolId: null,
     confirmRetroactive: false
-}">
+}" @open-create-modal.window="$refs.createModal.showModal()">
     <div class="card p-0 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="data-table">
@@ -44,7 +44,7 @@
                                 <button @click="editSchoolData = @js($school); $refs.editModal.showModal(); $refs.editForm.action = '/schools/' + editSchoolData.id" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
-                                <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" onsubmit="return confirm('Hapus organisasi ini?')">
+                                <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="if(!confirm('Hapus organisasi ini?')) $event.preventDefault()">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" aria-label="Hapus Organisasi" class="btn-danger hover:underline inline-flex items-center gap-[4px] mr-sm">

@@ -1,38 +1,29 @@
 # Third-Party Licenses
 
-Absensi-Cam combines several open-source frameworks, libraries, and AI models across its Backend (Laravel) and Edge Engine (Python).
+This document lists the third-party dependencies and AI models used in this project, along with their licenses.
 
-## Core Frameworks and Runtimes
+## Software Dependencies (Edge Engine)
 
-| Component | License | Upstream |
-| --- | --- | --- |
-| Laravel | MIT | https://github.com/laravel/laravel |
-| PHP | PHP License | https://github.com/php/php-src |
-| Python | PSF | https://github.com/python/cpython |
-| Flask | BSD-3-Clause | https://github.com/pallets/flask |
-| ONNX Runtime | MIT | https://github.com/microsoft/onnxruntime |
-| OpenCV | Apache-2.0 | https://github.com/opencv/opencv |
-| Cryptography | Apache-2.0 / BSD | https://github.com/pyca/cryptography |
+| Component | Description | License | Source |
+| :--- | :--- | :--- | :--- |
+| `cryptography` | Cryptographic recipes and primitives for Python | Dual: Apache 2.0 or BSD | https://cryptography.io/ |
+| `ByteTrack` | Multi-Object Tracking algorithm (adapted logic) | MIT License | https://github.com/ifzhang/ByteTrack |
+| `OpenCV` | Computer Vision Library (`opencv-python-headless`) | Apache 2.0 | https://opencv.org/ |
+| `NumPy` | Scientific Computing Library | BSD | https://numpy.org/ |
 
-## Bundled Model Components
+## AI Models
 
-The Edge Engine uses `.onnx` models for Face Detection and Face Recognition. These models are derived from upstream open-source research.
+> [!WARNING]
+> **Important Note on InsightFace Models:** The InsightFace published weights are strictly for **non-commercial research purposes only**. If this system is deployed commercially, you must train your own models, acquire a commercial license from InsightFace, or replace the models with permissively licensed alternatives (e.g., from MobileFaceNet community forks with Apache/MIT licenses).
 
-### Face Detection (YuNet)
+| Model File | Purpose | Source / Architecture | License | Commercial Use? |
+| :--- | :--- | :--- | :--- | :--- |
+| `detector.onnx` | Face Detection | InsightFace (SCRFD) | **Non-Commercial** (CC BY-NC-SA 4.0) | ❌ No |
+| `recognizer.onnx` | Face Recognition (512d) | InsightFace (ArcFace) | **Non-Commercial** (CC BY-NC-SA 4.0) | ❌ No |
+| `liveness.onnx` | Liveness / Anti-Spoofing | Silent-Face-Anti-Spoofing | MIT / Apache 2.0 (Check source) | ⚠️ Unknown (Needs verification) |
 
-- **Description:** Absensi-Cam uses YuNet as its primary face detector on the edge device due to its high efficiency on CPU-bound ARM devices.
-- **Upstream Project:** [OpenCV Zoo - YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
-- **License:** MIT License
-- **Copyright:** Copyright (c) 2020 Shiqi Yu <shiqi.yu@gmail.com>
+## Facenox Derived Code Status
 
-> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software...
+*(To be updated after rewrite)*
 
-### Face Recognition (SFace / MobileFaceNet)
-
-- **Description:** Absensi-Cam uses SFace (or MobileFaceNet variants) for generating 128-D or 512-D face embeddings.
-- **Upstream Project:** [OpenCV Zoo - SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
-- **License:** MIT / Apache-2.0 (Depending on exact weights used).
-
-### Open-Source Compliance
-
-Absensi-Cam acknowledges the incredible work of the open-source community. If you believe a license is missing or improperly attributed, please open an issue so we can rectify it immediately.
+Currently, several components (Cipher, Tracker, Liveness wrappers) were originally derived from Facenox. A rewrite is planned to implement these strictly from behavior specifications using permissive libraries to ensure no GPL/AGPL contamination.

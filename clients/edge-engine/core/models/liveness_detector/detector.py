@@ -1,63 +1,16 @@
-"""
-Implementation of Face Liveness Detector.
-"""
-
-import cv2
+﻿import cv2
 import numpy as np
-import onnxruntime as ort
-
-class TrackLivenessMemory:
-    def __init__(self, required_real_frames: int):
-        self.history = {}
-        self.required_real_frames = required_real_frames
-
-    def stabilize(self, track_id, current_liveness, frame_counter, namespace=None, person_id=None):
-        if track_id <= 0:
-            return current_liveness
-            
-        key = (namespace or "__global__", track_id)
-        if key not in self.history:
-            self.history[key] = {"real_count": 0, "last_frame": frame_counter}
-            
-        rec = self.history[key]
-        rec["last_frame"] = frame_counter
-        
-        if current_liveness.get("is_real"):
-            rec["real_count"] += 1
-        else:
-            rec["real_count"] = max(0, rec["real_count"] - 1)
-            
-        stable_real = rec["real_count"] >= self.required_real_frames
-        
-        result = current_liveness.copy()
-        if stable_real:
-            result["is_real"] = True
-            result["status"] = "real"
-            result["message"] = "Liveness Verified"
-            result["active_verified"] = True
-        return result
-
-    def is_stable_real(self, track_id, namespace=None):
-        if track_id <= 0:
-            return False
-        key = (namespace or "__global__", track_id)
-        rec = self.history.get(key)
-        if not rec:
-            return False
-        return rec["real_count"] >= self.required_real_frames
-
-    def cleanup_stale_tracks(self, frame_counter, namespace=None):
-        ns = namespace or "__global__"
-        stale = [k for k, v in self.history.items() if k[0] == ns and frame_counter - v["last_frame"] > 30]
-        for k in stale:
-            del self.history[k]
-        return stale
-
-    def clear_namespace(self, namespace=None):
-        ns = namespace or "__global__"
-        keys = [k for k in self.history.keys() if k[0] == ns]
-        for k in keys:
-            del self.history[k]
+from collections import defaultdict
+from typing import List, Dict, Optional
+from .session_utils import init_onnx_session
+from .preprocess import extract_face_crops_from_detections
+from .postprocess import (
+    validate_detection,
+    run_batch_inference,
+    assemble_liveness_results,
+)
+from .track_memory import TrackLivenessMemory
+from .active_controller import ActiveLivenessController
 
 
 class LivenessDetector:
@@ -70,106 +23,161 @@ class LivenessDetector:
         model_img_size: int = 256,
     ):
         self.model_img_size = model_img_size
-        self.pass_margin = pass_margin
-        self.spoof_margin = spoof_margin
-        self.ort_session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
-        self.track_memory = TrackLivenessMemory(required_real_frames)
+        self.pass_margin = float(pass_margin)
+        self.spoof_margin = float(spoof_margin)
+
+        self.required_real_frames = required_real_frames
+        self.ort_session, _ = init_onnx_session(model_path)
+        self.track_memory = TrackLivenessMemory(
+            required_real_frames=required_real_frames
+        )
+        self.active_controllers: Dict[tuple, ActiveLivenessController] = defaultdict(
+            lambda: ActiveLivenessController(required_passive_frames=1)
+        )
+
         self.frame_counter = 0
 
-    def clear_namespace(self, namespace: str | None = None):
-        self.track_memory.clear_namespace(namespace)
-
-    def update_face_identity(self, track_id: int, person_id: str, current_liveness: dict, namespace: str | None = None) -> dict:
-        return self.track_memory.stabilize(track_id, current_liveness, self.frame_counter, namespace, person_id)
-
-    def detect_faces(self, image: np.ndarray, face_detections: list[dict], tracking_namespace: str | None = None) -> list[dict]:
+    def detect_faces(
+        self,
+        image: np.ndarray,
+        face_detections: List[Dict],
+        tracking_namespace: Optional[str] = None,
+    ) -> List[Dict]:
         if not face_detections:
             return []
-            
+
         self.frame_counter += 1
+
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        h, w = rgb_image.shape[:2]
-        
+
         results = []
-        for det in face_detections:
-            bbox = det.get("bbox", {})
-            bx, by, bw, bh = bbox.get("x", 0), bbox.get("y", 0), bbox.get("width", 0), bbox.get("height", 0)
-            
-            # MiniFASNet requires a larger context scale (typically 2.7x or 4.0x) to see screen bezels.
-            scale = 2.7
-            cx = bx + bw / 2.0
-            cy = by + bh / 2.0
-            new_w = bw * scale
-            new_h = bh * scale
-            
-            x1 = max(0, int(cx - new_w / 2.0))
-            y1 = max(0, int(cy - new_h / 2.0))
-            x2 = min(w, int(cx + new_w / 2.0))
-            y2 = min(h, int(cy + new_h / 2.0))
-            
-            if x2 <= x1 or y2 <= y1:
-                det["liveness"] = self._error_liveness()
-                results.append(det)
+        valid_detections_for_cropping = []
+
+        for detection in face_detections:
+            is_valid, liveness_status = validate_detection(detection)
+
+            if not is_valid:
+                if liveness_status:
+                    detection["liveness"] = liveness_status
+                results.append(detection)
                 continue
-                
-            crop = rgb_image[y1:y2, x1:x2]
-            crop = cv2.resize(crop, (self.model_img_size, self.model_img_size))
-            
-            # Normalize depending on model, assuming standard mean/std or 0-1
-            # Usually Insightface liveness is just simple transpose
-            blob = np.transpose(crop, (2, 0, 1)).astype(np.float32)
-            blob = np.expand_dims(blob, axis=0)
-            
-            try:
-                inputs = {self.ort_session.get_inputs()[0].name: blob}
-                logits = self.ort_session.run(None, inputs)[0][0]
-                
-                # Assume 2 classes: 0 = spoof, 1 = real (or vice versa, adjust if needed)
-                # Typically logits[1] is real, logits[0] is spoof in standard models
-                # We'll calculate a logit difference
-                # Actually, some models return spoof at 0, real at 1
-                spoof_logit, real_logit = float(logits[0]), float(logits[1])
-                logit_diff = real_logit - spoof_logit
-                
-                is_real = logit_diff > self.pass_margin
-                is_spoof = logit_diff < self.spoof_margin
-                
-                liveness = {
-                    "is_real": is_real,
-                    "is_confirmed_spoof": is_spoof,
-                    "status": "real" if is_real else ("spoof" if is_spoof else "analyzing"),
-                    "logit_diff": logit_diff,
-                    "real_logit": real_logit,
-                    "spoof_logit": spoof_logit,
-                    "confidence": float(1 / (1 + np.exp(-logit_diff)))
+
+            valid_detections_for_cropping.append(detection)
+
+        face_crops, valid_detections, skipped_results = (
+            extract_face_crops_from_detections(
+                rgb_image,
+                valid_detections_for_cropping,
+            )
+        )
+
+        for skipped in skipped_results:
+            if "liveness" not in skipped:
+                skipped["liveness"] = {
+                    "is_real": False,
+                    "status": "error",
+                    "logit_diff": 0.0,
+                    "real_logit": 0.0,
+                    "spoof_logit": 0.0,
+                    "confidence": 0.0,
                 }
-                
-                track_id = det.get("track_id", -1)
-                stabilized = self.track_memory.stabilize(
-                    track_id, 
-                    liveness, 
-                    self.frame_counter, 
-                    namespace=tracking_namespace,
-                    person_id=det.get("recognition", {}).get("person_id")
-                )
-                
-                det["liveness"] = stabilized
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning("Liveness detection error: %s", str(e))
-                det["liveness"] = self._error_liveness()
-                
-            results.append(det)
-            
-        self.track_memory.cleanup_stale_tracks(self.frame_counter, namespace=tracking_namespace)
+        results.extend(skipped_results)
+
+        if not face_crops:
+            return results
+
+        raw_logits = run_batch_inference(
+            face_crops,
+            self.ort_session,
+            self.model_img_size,
+        )
+
+        results = assemble_liveness_results(
+            valid_detections,
+            raw_logits,
+            self.pass_margin,
+            results,
+            spoof_margin=self.spoof_margin,
+        )
+
+        for detection in results:
+            track_id = detection.get("track_id")
+            liveness = detection.get("liveness")
+            if not isinstance(liveness, dict) or track_id is None:
+                continue
+
+            passive_is_spoof = (
+                bool(liveness.get("is_confirmed_spoof"))
+                and float(liveness.get("logit_diff", 0.0)) < -1.5
+            )
+
+            if track_id > 0:
+                if (
+                    self.track_memory.is_stable_real(
+                        track_id, namespace=tracking_namespace
+                    )
+                    and not passive_is_spoof
+                ):
+                    liveness["is_real"] = True
+                    liveness["status"] = "real"
+                    liveness["active_verified"] = True
+                    liveness["message"] = "Liveness Verified"
+                else:
+                    controller_key = (tracking_namespace or "__global__", track_id)
+                    controller = self.active_controllers[controller_key]
+                    landmarks = detection.get("landmarks_5")
+                    landmarks_arr = (
+                        np.array(landmarks, dtype=np.float32) if landmarks else None
+                    )
+                    liveness = controller.evaluate(landmarks_arr, liveness)
+
+            was_stable_real = self.track_memory.is_stable_real(
+                track_id, namespace=tracking_namespace
+            )
+
+            stabilized_liveness = self.track_memory.stabilize(
+                track_id,
+                liveness,
+                self.frame_counter,
+                namespace=tracking_namespace,
+                person_id=detection.get("recognition", {}).get("person_id"),
+            )
+            detection["liveness"] = stabilized_liveness
+
+            if was_stable_real and not self.track_memory.is_stable_real(
+                track_id, namespace=tracking_namespace
+            ):
+                controller_key = (tracking_namespace or "__global__", track_id)
+                if controller_key in self.active_controllers:
+                    self.active_controllers[controller_key].reset()
+
+        pruned_tracks = self.track_memory.cleanup_stale_tracks(
+            namespace=tracking_namespace
+        )
+        for track_key in pruned_tracks:
+            self.active_controllers.pop(track_key, None)
+
         return results
 
-    def _error_liveness(self):
-        return {
-            "is_real": False,
-            "status": "error",
-            "logit_diff": 0.0,
-            "real_logit": 0.0,
-            "spoof_logit": 0.0,
-            "confidence": 0.0
-        }
+    def clear_namespace(self, namespace: Optional[str]):
+        self.track_memory.clear_namespace(namespace)
+        ns_key = namespace or "__global__"
+        keys_to_remove = [k for k in self.active_controllers if k[0] == ns_key]
+        for k in keys_to_remove:
+            del self.active_controllers[k]
+
+    def update_face_identity(
+        self,
+        track_id: int,
+        person_id: str,
+        current_liveness: Dict,
+        namespace: Optional[str] = None,
+    ) -> Dict:
+        """Updates identity tracking state."""
+        return self.track_memory.stabilize(
+            track_id,
+            current_liveness,
+            self.frame_counter,
+            namespace=namespace,
+            person_id=person_id,
+        )

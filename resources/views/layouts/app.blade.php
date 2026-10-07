@@ -7,7 +7,7 @@
     <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body x-data="{ sidebarOpen: false }" class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
+<body x-data="layoutData" class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
 
 {{-- WowDash Sidebar --}}
 <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 w-[260px] bg-canvas border-r border-hairline flex flex-col transition-all duration-300 z-50 shadow-sm md:translate-x-0 -translate-x-full">

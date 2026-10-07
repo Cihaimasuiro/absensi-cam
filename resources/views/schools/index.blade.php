@@ -8,21 +8,7 @@
 @endsection
 
 @section('content')
-<div x-data="{
-    openRows: [],
-    toggleRow(id) {
-        if (this.openRows.includes(id)) {
-            this.openRows = this.openRows.filter(r => r !== id);
-        } else {
-            this.openRows.push(id);
-        }
-    },
-    editSchoolData: {},
-    editClassroomData: {},
-    createClassroomSchoolId: null,
-    bulkEditSchoolId: null,
-    confirmRetroactive: false
-}" @open-create-modal.window="$refs.createModal.showModal()">
+<div x-data="schoolsData" @open-create-modal.window="$refs.createModal.showModal()">
     <div class="card p-0 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="data-table">

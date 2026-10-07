@@ -24,4 +24,10 @@ This document lists the third-party dependencies and AI models used in this proj
 
 ## Facenox Derived Code Status
 
-All Facenox-derived code (Cipher, Tracker, Liveness wrappers) has been completely removed and rewritten from scratch using standard permissive libraries (`lap`, `numpy`, `cryptography`). No AGPL-3.0 code remains in the repository.
+The original Facenox codebase (AGPL-3.0) heavily influenced this system. Currently:
+
+* **Removed/Replaced**: `clients/edge-engine/core/cipher.py` has been completely deleted.
+* **Retained Structure/Strings**: The general architecture and strings in `hooks/face_processing.py`, `detection_pipeline.py`, `lifespan.py`, and `packages/face_core` still carry Facenox-derived structures.
+* **Modified**: `detector.py` and `tracker.py` have been modified to remove Facenox dependencies and rely on standard `numpy`/`lap` logic, but they still originated from the same baseline.
+
+A complete architectural rewrite to remove all structural similarities is still under evaluation.

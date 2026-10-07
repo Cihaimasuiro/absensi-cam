@@ -74,7 +74,7 @@ class DtrService
                 
                 if ($actualIn->greaterThan($expectedStart)) {
                     $diff = (int) $expectedStart->diffInMinutes($actualIn, true);
-                    if ($diff > $record['late_tolerance_minutes']) {
+                    if ($record['late_tolerance_minutes'] !== null && $diff > $record['late_tolerance_minutes']) {
                         $minutesLate = $diff;
                         $status = 'Terlambat';
                     }

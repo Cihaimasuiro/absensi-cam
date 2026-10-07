@@ -6,12 +6,11 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
+<body x-data="{ sidebarOpen: false }" class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
 
 {{-- WowDash Sidebar --}}
-<aside class="fixed inset-y-0 left-0 w-[260px] bg-canvas border-r border-hairline flex flex-col transition-all duration-300 z-50 shadow-sm">
+<aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 w-[260px] bg-canvas border-r border-hairline flex flex-col transition-all duration-300 z-50 shadow-sm md:translate-x-0 -translate-x-full">
     <div class="h-[72px] flex items-center px-xl border-b border-hairline shrink-0">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-sm">
             <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
@@ -31,7 +30,7 @@
             </li>
 
             <li class="mt-md mb-xs px-md">
-                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Application</span>
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Aplikasi</span>
             </li>
             
             <li>
@@ -48,7 +47,7 @@
             </li>
 
             <li class="mt-md mb-xs px-md">
-                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Management</span>
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Manajemen</span>
             </li>
 
             <li>
@@ -68,36 +67,31 @@
 </aside>
 
 {{-- WowDash Main Content --}}
-<main class="ml-[260px] min-h-screen flex flex-col transition-all duration-300 relative">
+<main class="md:ml-[260px] min-h-screen flex flex-col transition-all duration-300 relative">
     
     {{-- WowDash Navbar Header --}}
     <div class="h-[72px] px-xl bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div class="flex items-center gap-md">
-            <button class="text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface">
+            <button @click="sidebarOpen = !sidebarOpen" aria-label="Toggle Menu" class="md:hidden text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface">
                 <i data-lucide="menu" class="w-6 h-6"></i>
             </button>
-            <form class="relative hidden md:block">
-                <i data-lucide="search" class="w-4 h-4 absolute left-md top-1/2 -translate-y-1/2 text-ink-faint"></i>
-                <input type="text" placeholder="Search..." class="pl-[40px] pr-md py-[8px] rounded-full border border-hairline bg-canvas-soft text-[14px] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-[320px] transition-all">
-            </form>
         </div>
         
         <div class="flex items-center gap-md">
-            <button class="w-10 h-10 rounded-full flex items-center justify-center bg-canvas-soft border border-hairline text-ink-muted hover:text-primary transition-colors">
-                <i data-lucide="moon" class="w-5 h-5"></i>
-            </button>
-            <button class="w-10 h-10 rounded-full flex items-center justify-center bg-canvas-soft border border-hairline text-ink-muted hover:text-primary transition-colors relative">
-                <i data-lucide="bell" class="w-5 h-5"></i>
-                <span class="absolute top-2 right-2 w-2 h-2 bg-accent-orange rounded-full border border-canvas"></span>
-            </button>
             <div class="flex items-center gap-sm cursor-pointer ml-xs pl-md border-l border-hairline">
-                <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shrink-0">
-                    <img src="https://ui-avatars.com/api/?name=Admin+User&background=0075de&color=fff" class="w-full h-full rounded-full" alt="Profile">
+                <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shrink-0 text-primary font-bold">
+                    {{ substr(Auth::user()->name ?? 'A', 0, 1) }}
                 </div>
-                <div class="hidden md:block text-left">
-                    <p class="text-[14px] font-semibold text-ink leading-tight">Admin User</p>
-                    <p class="text-[12px] text-ink-muted">Admin</p>
+                <div class="hidden md:block text-left mr-sm">
+                    <p class="text-[14px] font-semibold text-ink leading-tight">{{ Auth::user()->name ?? 'Admin User' }}</p>
+                    <p class="text-[12px] text-ink-muted">{{ Auth::user()->role ?? 'Admin' }}</p>
                 </div>
+                <form method="POST" action="{{ route('logout') }}" class="m-0">
+                    @csrf
+                    <button type="submit" class="text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-8 h-8 rounded-full hover:bg-surface" aria-label="Logout">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -129,12 +123,12 @@
         @if(session('success') || session('error'))
             <div class="mb-lg">
                 @if(session('success'))
-                    <div class="alert alert-success flex items-center gap-xs">
+                    <div class="alert alert-success flex items-center gap-xs" role="alert">
                         <i data-lucide="check-circle" class="w-4 h-4"></i> {{ session('success') }}
                     </div>
                 @endif
                 @if(session('error'))
-                    <div class="alert alert-error flex items-center gap-xs">
+                    <div class="alert alert-error flex items-center gap-xs" role="alert">
                         <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
                     </div>
                 @endif
@@ -147,8 +141,5 @@
 
 </main>
 
-<script>
-  lucide.createIcons();
-</script>
 </body>
 </html>

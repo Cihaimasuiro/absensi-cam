@@ -40,7 +40,7 @@ class SchoolController extends Controller
             'code'             => ['nullable', 'string', 'max:50'],
             'type'             => ['required', 'in:class,staff'],
             'start_time'       => ['required', 'date_format:H:i'],
-            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+            'late_tolerance_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
         ]);
 
         Classroom::create(array_merge($validated, ['is_active' => true]));
@@ -55,7 +55,7 @@ class SchoolController extends Controller
             'code'             => ['nullable', 'string', 'max:50'],
             'type'             => ['required', 'in:class,staff'],
             'start_time'       => ['required', 'date_format:H:i'],
-            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+            'late_tolerance_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
         ]);
 
         $oldData = $classroom->only(['start_time', 'late_tolerance_minutes', 'type']);
@@ -78,7 +78,7 @@ class SchoolController extends Controller
     {
         $validated = $request->validate([
             'start_time'       => ['required', 'date_format:H:i'],
-            'late_tolerance_minutes' => ['required', 'integer', 'min:0', 'max:120'],
+            'late_tolerance_minutes' => ['nullable', 'integer', 'min:0', 'max:120'],
             'type_filter'      => ['required', 'in:class,staff,all'],
             'confirm_retroactive' => ['accepted'],
         ]);

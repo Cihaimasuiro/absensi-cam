@@ -140,6 +140,33 @@ class DtrTest extends TestCase
         $this->assertEquals('06:30:00', $dtr['2026-10-06']['first_in']);
         $this->assertEquals('18:00:00', $dtr['2026-10-06']['last_out']);
         $this->assertEquals('Hadir', $dtr['2026-10-06']['status']);
+        
+        // Test null late_tolerance_minutes (late tracking off)
+        $classroomNoLimit = Classroom::create([
+            'school_id' => $school->id,
+            'name' => 'No Limit Class',
+            'start_time' => '07:00:00',
+            'late_tolerance_minutes' => null,
+        ]);
+        $studentNoLimit = Student::create([
+            'school_id' => $school->id,
+            'classroom_id' => $classroomNoLimit->id,
+            'name' => 'Student No Limit',
+            'code' => 'TEST-02'
+        ]);
+        AttendanceLog::create([
+            'student_id' => $studentNoLimit->id,
+            'device_id' => $device->id,
+            'captured_at' => Carbon::parse('2026-10-06 09:00:00', 'Asia/Jakarta')->setTimezone('UTC')->toDateTimeString(),
+            'direction' => 'in',
+            'method' => 'face',
+            'score' => 0.99,
+            'is_corrected' => false,
+        ]);
+        $queryLogsNoLimit = AttendanceLog::with(['student.group'])->where('student_id', $studentNoLimit->id)->get();
+        $dtrNoLimit = $service->generateDtr($queryLogsNoLimit)->first();
+        $this->assertEquals('Hadir', $dtrNoLimit['status']);
+        $this->assertEquals(0, $dtrNoLimit['minutes_late']);
     }
     
     public function test_dtr_export_roles()

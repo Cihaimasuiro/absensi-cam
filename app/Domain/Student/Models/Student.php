@@ -39,7 +39,7 @@ class Student extends Model
 
     public function group(): BelongsTo
     {
-        return $this->belongsTo(Classroom::class);
+        return $this->belongsTo(Classroom::class, 'classroom_id');
     }
 
     public function consents(): HasMany

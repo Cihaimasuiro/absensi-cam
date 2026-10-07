@@ -46,6 +46,14 @@ class DatabaseManager:
             except sqlite3.OperationalError:
                 pass
 
+            # Tabel Metadata untuk melacak cursor sync terakhir (walaupun isinya hanya delete)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
+
             # Tabel Outbox untuk menyimpan log absensi yang belum terkirim ke Laravel
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS outbox_attendance (
@@ -108,17 +116,28 @@ class DatabaseManager:
             )
             conn.commit()
 
-    def get_last_template_sync_time(self):
+    def get_last_template_sync_time(self) -> int:
         with self.get_connection() as conn:
+            try:
+                cur = conn.execute("SELECT value FROM metadata WHERE key = 'last_sync'")
+                row = cur.fetchone()
+                if row:
+                    return int(row["value"])
+            except sqlite3.OperationalError:
+                pass
+
             cur = conn.execute("SELECT MAX(CAST(version AS INTEGER)) as last_sync FROM templates")
             row = cur.fetchone()
-            return row["last_sync"] if row and row["last_sync"] else 0
+            return int(row["last_sync"]) if row and row["last_sync"] else 0
 
-    def save_templates(self, templates_data: list):
-        if not templates_data:
-            return
-
+    def save_templates(self, templates_data: list, next_cursor: int = None):
         with self.get_connection() as conn:
+            if next_cursor is not None:
+                conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_sync', ?)", (str(next_cursor),))
+
+            if not templates_data:
+                conn.commit()
+                return
             for t in templates_data:
                 op = t.get("op", "upsert")
                 student_id = t["student_id"]

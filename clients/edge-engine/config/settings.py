@@ -42,7 +42,7 @@ ARDUINO_PORT = "/dev/ttyACM0"
 ARDUINO_BAUD = 115200
 
 # Cooldown setelah pengenalan berhasil (detik) — cegah bombardir absen
-RECOGNITION_COOLDOWN_SEC = 2
+RECOGNITION_COOLDOWN_SEC = 60
 
 
 def load_env() -> dict:

@@ -154,12 +154,15 @@ class SyncWorker:
             if response.status_code == 200:
                 data = response.json()
                 templates = data.get("items", [])
-                if templates:
-                    logger.info(
-                        f"Mengunduh {len(templates)} pembaruan wajah dari server..."
-                    )
-                    self.db.save_templates(templates)
-                    logger.info("Pembaruan data wajah berhasil disimpan.")
+                next_cursor = data.get("next_cursor")
+                if templates or next_cursor is not None:
+                    if templates:
+                        logger.info(
+                            f"Mengunduh {len(templates)} pembaruan wajah dari server..."
+                        )
+                    self.db.save_templates(templates, next_cursor=next_cursor)
+                    if templates:
+                        logger.info("Pembaruan data wajah berhasil disimpan.")
             elif response.status_code == 304:
                 # No changes
                 pass

@@ -8,7 +8,7 @@
 @endsection
 
 @section('content')
-<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-lg">
+<div x-data="{ streamIp: '{{ $streamIp }}' }" class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-lg">
 
     {{-- Live Camera --}}
     <div class="card p-md flex flex-col">
@@ -19,7 +19,16 @@
             </span>
             <span class="text-eyebrow text-ink-faint flex items-center gap-xs">
                 <i data-lucide="wifi" class="w-[12px] h-[12px]"></i>
-                {{ $streamName }} · {{ $streamIp }}
+                <select x-model="streamIp" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer">
+                    @if($devices->isEmpty())
+                        <option value="{{ $streamIp }}">Local Edge Engine ({{ $streamIp }})</option>
+                    @else
+                        @foreach($devices as $device)
+                            <option value="{{ $device->ip_address }}">{{ $device->name }} ({{ $device->ip_address ?: 'Belum diset IP' }})</option>
+                        @endforeach
+                        <option value="127.0.0.1">Localhost (127.0.0.1)</option>
+                    @endif
+                </select>
             </span>
         </div>
         <div class="bg-black aspect-video relative rounded-sm overflow-hidden flex items-center justify-center group">
@@ -27,10 +36,11 @@
                 <i data-lucide="video-off" class="w-8 h-8 opacity-50"></i>
                 <span class="text-[13px]">Stream Offline / Loading...</span>
             </div>
-            <img src="http://{{ $streamIp }}:5000/video_feed"
+            <img :src="'http://' + streamIp + ':5000/video_feed'"
                  alt="Live Stream"
                  class="relative z-5 w-full h-full object-contain"
-                 onerror="this.style.display='none'">
+                 onerror="this.style.display='none'"
+                 onload="this.style.display='block'">
         </div>
     </div>
 

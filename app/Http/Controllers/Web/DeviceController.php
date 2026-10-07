@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Web;
 
 use App\Domain\Device\Models\Device;
-use App\Domain\Device\Models\PairingCode;
 use App\Domain\School\Models\Building;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -24,30 +23,41 @@ class DeviceController extends Controller
         return view('devices.index', compact('devices', 'buildings'));
     }
 
-    /** Generate a one-time pairing code for a building */
-    public function generatePairingCode(Request $request)
+    /** Create a device and generate an API token instantly */
+    public function store(Request $request)
     {
         $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
             'building_id' => ['required', 'exists:buildings,id'],
         ]);
 
-        // Plain 8-char alphanumeric code split K7M2-9QXA style
-        $plain = strtoupper(Str::random(4).'-'.Str::random(4));
-        $hash  = hash('sha256', $plain);
+        $deviceCount = Device::count() + 1;
+        $deviceCode = 'dev-' . str_pad($deviceCount, 4, '0', STR_PAD_LEFT);
 
-        $codeRecord = PairingCode::create([
-            'building_id'  => $validated['building_id'],
-            'code_hash'  => $hash,
-            'expires_at' => now()->addMinutes(15),
-            'created_by' => auth()->id(),
+        $device = Device::create([
+            'id' => \Illuminate\Support\Str::uuid(),
+            'name' => $validated['name'],
+            'device_code' => $deviceCode,
+            'building_id' => $validated['building_id'],
+            'status' => 'offline',
         ]);
 
-        activity('device')
-            ->performedOn($codeRecord)
-            ->causedBy(auth()->user())
-            ->log('Pairing code generated');
+        // Generate Sanctum token
+        $token = $device->createToken('edge-token', ['device'])->plainTextToken;
 
-        return back()->with('pairing_code', $plain)->with('success', 'Kode pairing berhasil dibuat (berlaku 15 menit).');
+        activity('device')
+            ->performedOn($device)
+            ->causedBy(auth()->user())
+            ->log('Device created and token generated');
+
+        $envContent = <<<ENV
+SMART_ABSENSI_URL=http://{$request->getHost()}:8000
+SMART_ABSENSI_TOKEN={$token}
+SMART_ABSENSI_DEVICE_ID={$deviceCode}
+ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
+ENV;
+
+        return back()->with('new_device_env', $envContent)->with('success', 'Perangkat berhasil ditambahkan.');
     }
 
     /** Mark device offline / revoke Sanctum token */
@@ -62,5 +72,60 @@ class DeviceController extends Controller
             ->log('Device revoked');
 
         return back()->with('success', "Token perangkat {$device->name} dicabut.");
+    }
+
+    /** Reset token and show configuration again */
+    public function resetToken(Request $request, Device $device)
+    {
+        $device->tokens()->delete();
+        $token = $device->createToken('edge-token', ['device'])->plainTextToken;
+        
+        $device->update(['status' => 'offline']);
+
+        activity('device')
+            ->performedOn($device)
+            ->causedBy(auth()->user())
+            ->log('Device token reset');
+
+        $envContent = <<<ENV
+SMART_ABSENSI_URL={$request->getSchemeAndHttpHost()}
+SMART_ABSENSI_TOKEN={$token}
+SMART_ABSENSI_DEVICE_ID={$device->device_code}
+ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
+ENV;
+
+        return back()->with('new_device_env', $envContent)->with('success', "Token untuk perangkat {$device->name} berhasil di-reset.");
+    }
+
+    /** Permanently delete the device */
+    public function destroy(Device $device)
+    {
+        $name = $device->name;
+        $device->delete();
+
+        activity('device')
+            ->causedBy(auth()->user())
+            ->log("Device {$name} deleted");
+
+        return back()->with('success', "Perangkat {$name} berhasil dihapus.");
+    }
+
+    /** Update device details */
+    public function update(Request $request, Device $device)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'building_id' => ['required', 'exists:buildings,id'],
+            'ip_address' => ['nullable', 'string', 'max:45'],
+        ]);
+
+        $device->update($validated);
+
+        activity('device')
+            ->performedOn($device)
+            ->causedBy(auth()->user())
+            ->log('Device updated');
+
+        return back()->with('success', "Perangkat {$device->name} berhasil diperbarui.");
     }
 }

@@ -18,7 +18,8 @@ class SecurityHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $response->headers->set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'nonce-$nonce'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'");
+        // Removed strict Content-Security-Policy to allow Vite (IPv6 [::1]) and local MJPEG streams
+        // $response->headers->set('Content-Security-Policy', ...);
 
         return $response;
     }

@@ -3,13 +3,13 @@
 
 @section('header-actions')
     <div x-data class="flex gap-xs">
-        <button @click="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility">
+        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility">
             <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
         </button>
-        <button @click="document.getElementById('importModal').showModal()" class="btn btn-utility">
+        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility">
             <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
         </button>
-        <button @click="document.getElementById('createModal').showModal()" class="btn btn-primary">
+        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
         </button>
     </div>
@@ -57,12 +57,12 @@
                         @endif
                     </td>
                     <td class="text-right">
-                        @if($student->has_active_consent ?? true) {{-- Since we didn't eager load consents, let's assume if it shows up they can enroll. Wait, better to just allow the button and let the backend enforce. Oh wait, I will add consent logic. Let's just render the button --}}
-                        <button @click='openEnrollModal(@json($student))' class="text-[13px] text-accent font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
+                        @if($student->has_active_consent ?? true)
+                        <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="text-[13px] text-accent font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                             <i data-lucide="camera" class="w-3 h-3"></i> Wajah
                         </button>
                         @endif
-                        <button @click='editStudent(@json($student))' class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
+                        <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                             <i data-lucide="edit" class="w-3 h-3"></i> Edit
                         </button>
                         <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
@@ -100,7 +100,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota
         </h3>
-        <button @click="document.getElementById('createModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="document.getElementById('createModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -128,7 +128,7 @@
             <label for="createConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" @click="document.getElementById('createModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('createModal').close()" class="btn btn-utility">Batal</button>
             <button type="submit" class="btn btn-primary">Simpan</button>
         </div>
     </form>
@@ -140,7 +140,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota
         </h3>
-        <button @click="document.getElementById('editModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="document.getElementById('editModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -176,7 +176,7 @@
             <label for="editConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" @click="document.getElementById('editModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('editModal').close()" class="btn btn-utility">Batal</button>
             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
         </div>
     </form>
@@ -188,7 +188,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="upload" class="w-4 h-4 text-primary"></i> Import Anggota (CSV)
         </h3>
-        <button @click="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -200,7 +200,7 @@
         </div>
         <p class="text-[12px] text-ink-faint mb-md">Format kolom: code, name, email, phone, role. Sistem otomatis mendaftarkan tanpa wajah.</p>
         <div class="flex justify-end gap-xs">
-            <button type="button" @click="document.getElementById('importModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('importModal').close()" class="btn btn-utility">Batal</button>
             <button type="submit" class="btn btn-primary">Import Data</button>
         </div>
     </form>
@@ -212,7 +212,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4 text-accent"></i> Bulk Enroll (via ZIP)
         </h3>
-        <button @click="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -228,7 +228,7 @@
             <label for="bulkConsent" class="text-[12px] text-ink-faint">Saya mengonfirmasi bahwa semua siswa dalam ZIP ini telah menyetujui pemrosesan data wajah.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" @click="document.getElementById('bulkEnrollModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="btn btn-utility">Batal</button>
             <button type="submit" class="btn btn-primary bg-accent hover:bg-accent/90 border-accent text-white">Mulai Proses Massal</button>
         </div>
     </form>
@@ -240,7 +240,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="camera" class="w-4 h-4 text-accent"></i> Daftarkan Wajah
         </h3>
-        <button @click="closeEnrollModal()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="closeEnrollModal()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -249,8 +249,8 @@
         <p class="text-[14px] text-ink-faint mb-sm">Mendaftarkan wajah untuk <strong id="enrollStudentName" class="text-ink"></strong></p>
         
         <div class="flex gap-2 mb-sm border-b border-hairline">
-            <button type="button" id="tabCamera" @click="switchEnrollTab('camera')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer">Kamera Web</button>
-            <button type="button" id="tabUpload" @click="switchEnrollTab('upload')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Upload Berkas</button>
+            <button type="button" id="tabCamera" onclick="switchEnrollTab('camera')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer">Kamera Web</button>
+            <button type="button" id="tabUpload" onclick="switchEnrollTab('upload')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Upload Berkas</button>
         </div>
 
         {{-- Camera View --}}
@@ -274,11 +274,11 @@
     <div id="enrollStatus" class="hidden p-xs text-center text-[13px] rounded mb-sm"></div>
 
     <div class="flex justify-end gap-xs mt-md">
-        <button type="button" @click="closeEnrollModal()" class="btn btn-utility">Batal</button>
-        <button type="button" id="btnCapture" @click="captureAndEnroll()" class="btn btn-primary bg-accent hover:bg-accent/90 border-accent text-white">
+        <button type="button" onclick="closeEnrollModal()" class="btn btn-utility">Batal</button>
+        <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary bg-accent hover:bg-accent/90 border-accent text-white">
             <i data-lucide="camera" class="w-4 h-4"></i> Ambil & Simpan
         </button>
-        <button type="button" id="btnUpload" @click="submitUploadAndEnroll()" class="hidden btn btn-primary">
+        <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary">
             <i data-lucide="upload" class="w-4 h-4"></i> Simpan Wajah
         </button>
     </div>
@@ -286,6 +286,9 @@
 
 
 <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
+    document.addEventListener('open-edit', (e) => editStudent(e.detail));
+    document.addEventListener('open-enroll', (e) => openEnrollModal(e.detail));
+
     function editStudent(student) {
         document.getElementById('editForm').action = '/students/' + student.id;
         document.getElementById('editCode').value = student.code;

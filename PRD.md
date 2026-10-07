@@ -41,7 +41,7 @@ Dokumen ini mendefinisikan:
 - **Bagaimana** komponen saling berkomunikasi (hardware, firmware, engine edge, server pusat),
 - **Bagaimana** sistem divalidasi (Acceptance Criteria pada Bagian 9).
 
-**Pembaca sasaran**: engineer hardware/firmware, developer C++ dan Laravel, penguji QA, serta pemangku kepentingan sekolah/perusahaan.
+**Pembaca sasaran**: engineer hardware/firmware, developer Python dan Laravel, penguji QA, serta pemangku kepentingan sekolah/perusahaan.
 
 **Hubungan dengan Facenox**: [Facenox](https://github.com/facenox/facenox) digunakan sebagai **referensi konsep dan pembanding**, bukan basis kode. Facenox berlisensi **AGPL-3.0**; jika ada kode Facenox yang disalin/diturunkan, seluruh produk turunan wajib mengikuti AGPL-3.0 (lihat Bagian 12.4).
 
@@ -51,7 +51,7 @@ Dokumen ini mendefinisikan:
 
 **Dalam lingkup (In Scope)**
 
-- Terminal absensi edge: kamera UVC, engine C++ (deteksi, tracking, liveness, pengenalan), display TFT, LED/buzzer/tombol, baterai cadangan, pembaca kartu RFID 13,56 MHz (RC522), dan QR dinamis pada TFT sebagai metode presensi cadangan.
+- Terminal absensi edge: kamera UVC, engine Python FastAPI (deteksi, tracking, liveness, pengenalan), display TFT, LED/buzzer/tombol, baterai cadangan, pembaca kartu RFID 13,56 MHz (RC522), dan QR dinamis pada TFT sebagai metode presensi cadangan.
 - Metode presensi V1: **wajah** (utama), **kartu RFID**, dan **QR dinamis** (dipindai dari aplikasi ponsel yang terautentikasi; verifikasi di Server Pusat).
 - Server Pusat Laravel 13: manajemen sekolah/gedung/perangkat/anggota, enrollment wajah, sinkronisasi templet, penyimpanan riwayat absensi, laporan (Excel/PDF/CSV), audit log.
 - Sinkronisasi dua arah edge <-> server via REST API / JSON.
@@ -99,7 +99,7 @@ flowchart LR
 **Narasi Alur:**
 
 1. **Power ON**: Adaptor 5V/4A menyuplai modul UPS 18650 (charger + boost). Modul UPS mendistribusikan 5V ke SBC dan Arduino.
-2. **Boot SBC**: Orange Pi Lite 2 boot dari MicroSD dalam **< 45 detik** hingga service systemd `smart-absensi.service` (Engine C++) berstatus `active (running)`.
+2. **Boot SBC**: Orange Pi Lite 2 boot dari MicroSD dalam **< 45 detik** hingga service systemd `smart-absensi.service` (Engine Python) berstatus `active (running)`.
 3. **Sinkronisasi Waktu**: Engine membaca waktu dari RTC DS3231 (I2C pada SBC, 3,3 V) bila jaringan belum tersedia; NTP mengoreksi setelah jaringan aktif. Setiap record menyimpan `time_source` (`ntp` / `rtc` / `unsynced`).
 4. **Init Camera**: Kamera UVC (`/dev/video0`) diinisialisasi pada 640x480 @ 30 FPS format MJPEG (resolusi dapat dinaikkan ke 720p, lihat 10.1).
 5. **Deteksi & Tracking Multi-Wajah**: YuNet mendeteksi wajah hingga jarak 3 m; tracker memberi ID stabil pada tiap wajah.
@@ -137,13 +137,16 @@ Monorepo dibagi menjadi paket-paket yang dapat dibangun dan diuji terpisah.
 
 ```text
 absensi-cam/
-├── apps/
-│   ├── central-server/      # Laravel 13: Web Admin + REST API + laporan + queue worker + kartu RFID/verifikasi QR
-│   └── edge-engine/         # C++17: pipeline kamera -> deteksi -> liveness -> match, sync worker, serial bridge, pembaca RFID, generator QR
+├── app/                     # Laravel 13 Backend: Web Admin + REST API + Controller
+├── bootstrap/               # Laravel backend
+├── clients/
+│   └── edge-engine/         # Python (FastAPI): pipeline kamera -> deteksi -> liveness -> match, sync worker, pembaca RFID, generator QR
+├── config/                  # Laravel config
+├── database/                # Laravel migrasi & seeder
 ├── firmware/
 │   └── arduino-display/     # Arduino Uno + shield: render TFT (termasuk QR); display saja (tanpa LED/buzzer/tombol/RTC)
 ├── packages/
-│   ├── face-core/           # Pustaka C++ bersama (YuNet, SFace, Mini-FASNet); dibangun untuk ARM64 (edge) dan x86_64/ARM64 (server)
+│   ├── face_core/           # Pustaka Python bersama (YuNet, SFace, Mini-FASNet); berjalan di edge dan server
 │   ├── protocol/            # Skema JSON serial + OpenAPI REST (sumber kebenaran tunggal)
 │   └── models/              # File .onnx + checksum SHA-256 + MODEL_VERSION (Git LFS)
 ├── hardware/                # Skema, KiCad (V2), desain casing
@@ -154,10 +157,10 @@ absensi-cam/
 
 | Package | Bahasa / Stack | Tanggung Jawab | Berjalan Di |
 |---------|----------------|----------------|-------------|
-| `apps/central-server` | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, kartu RFID, verifikasi QR, laporan, audit | Server pusat (PC admin/VPS) |
-| `apps/edge-engine` | C++17, OpenCV, ONNX Runtime/OpenCV DNN, SQLite | Pengenalan wajah real-time, pembaca RFID (SPI), LED/buzzer/tombol (GPIO), RTC (I2C), generator QR, outbox, sync, serial | Orange Pi Lite 2 |
+| `app/` (Laravel Root) | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, kartu RFID, verifikasi QR, laporan, audit | Server pusat (PC admin/VPS) |
+| `clients/edge-engine` | Python 3, OpenCV, ONNX Runtime, SQLite, FastAPI | Pengenalan wajah real-time, pembaca RFID (SPI), LED/buzzer/tombol (GPIO), RTC (I2C), generator QR, outbox, sync, serial | Orange Pi Lite 2 |
 | `firmware/arduino-display` | C++ (Arduino) | Render TFT shield 8-bit paralel (termasuk QR); touch opsional | Arduino Uno |
-| `packages/face-core` | C++17 | Logika model bersama agar embedding identik di edge dan server | Edge + server |
+| `packages/face_core` | Python 3 | Logika model bersama agar embedding identik di edge dan server | Edge + server |
 | `packages/protocol` | JSON Schema / OpenAPI 3 | Kontrak antar-komponen | — |
 | `packages/models` | ONNX | Model + versi | Edge + server |
 
@@ -1037,7 +1040,7 @@ Urutan berikut memindahkan risiko terbesar (R16) ke awal. Milestone berikutnya d
 | M0 Spike kelayakan | Jalankan YuNet + Mini-FASNet + SFace di Orange Pi Lite 2 dengan kamera UVC; ukur FPS, latensi, RSS, suhu; cek `/dev/spidev*`, `/dev/gpiochip*`, `/dev/i2c-*`; baca RC522 dan DS3231 | FPS ≥ 10, keputusan < 3 s, RSS < 150 MB, suhu ≤ 75 °C, AC-48 dan AC-19b lulus. Gagal performa -> Q9; gagal SPI -> R24; gagal GPIO/I2C -> R21 |
 | M1 Server inti | Skeleton Laravel 13, modul Organization/Member/Device, Sanctum + pairing, API `/api/v1` dasar (FR-S01, S02, S04, S05, S06, S14, S16) | Feature test pairing dan otorisasi lulus (AC-41, 43) |
 | M2 Enrollment & templet | Job `face-embed`, hapus foto, delta sync + tombstone (FR-S03, S07) | AC-36, AC-37, AC-42, AC-44 |
-| M3 Edge end-to-end | Engine C++ tanpa Arduino (log/CLI), SQLite + outbox + sync (FR-E01..E12, E17, E19) | AC-10, 20..26, 31, 32, 35, 51 |
+| M3 Edge end-to-end | Engine Python tanpa Arduino (log/CLI), SQLite + outbox + sync (FR-E01..E12, E17, E19) | AC-10, 20..26, 31, 32, 35, 51 |
 | M4 Hardware V1 | Rakit perangkat, firmware Arduino, bridge serial (FR-E13, E18, E20..E22, FR-A01..A07) | AC-01..19, 19a, 19b, 49, 50, 52 |
 | M5 Laporan & dashboard | Dashboard perangkat, DTR .xlsx/PDF/CSV, audit log, verifikasi QR (FR-S08, S09, S11, S15) | AC-38, 39, 40, 53, 55, 56 |
 | M6 Hardening | Uji 8 jam, uji anti-spoofing, uji jarak, RTC, restore backup | AC-27..30, 33, 34, 45..47, 54 |

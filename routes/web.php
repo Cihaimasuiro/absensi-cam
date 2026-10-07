@@ -42,8 +42,11 @@ Route::middleware('auth')->group(function () {
     // Devices / Pairing
     Route::prefix('devices')->name('devices.')->middleware('role:super_admin|admin')->group(function () {
         Route::get('/', [DeviceController::class, 'index'])->name('index');
-        Route::post('/pairing-code', [DeviceController::class, 'generatePairingCode'])->name('pair.code');
+        Route::post('/', [DeviceController::class, 'store'])->name('store');
+        Route::put('/{device}', [DeviceController::class, 'update'])->name('update');
+        Route::post('/{device}/reset-token', [DeviceController::class, 'resetToken'])->name('reset-token');
         Route::delete('/{device}/revoke', [DeviceController::class, 'revoke'])->name('revoke');
+        Route::delete('/{device}', [DeviceController::class, 'destroy'])->name('destroy');
     });
 
     // Schools, Classrooms, Buildings

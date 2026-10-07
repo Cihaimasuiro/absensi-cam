@@ -2,6 +2,7 @@ import logging
 import threading
 import time
 
+import socket
 import requests
 
 from database import DatabaseManager
@@ -34,12 +35,57 @@ class SyncWorker:
     def _loop(self):
         while self.is_running:
             try:
+                self.send_heartbeat()
                 self.push_attendance()
                 self.pull_templates()
             except Exception as e:  # noqa: BLE001
                 logger.error(f"Sync error: {e}")
 
             time.sleep(self.sync_interval)
+
+    def _get_local_ip(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Tidak perlu koneksi internet betulan
+            s.connect(("10.255.255.255", 1))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = "127.0.0.1"
+        finally:
+            s.close()
+        return ip
+
+    def send_heartbeat(self):
+        payload = {
+            "fw_version": "v1.0.0-python",
+            "model_version": "v1.0-yunet",
+            "cpu_temp": 45.0,  # TODO: baca dari sistem
+            "ram_free_mb": 512, # TODO: baca dari sistem
+            "disk_free_mb": 1024,
+            "fps": 20.0,
+            "outbox_len": len(self.db.get_unsynced_attendance(limit=100)),
+            "serial_ok": False,
+            "ip_address": self._get_local_ip(),
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}",
+        }
+        
+        try:
+            res = requests.post(
+                f"{self.api_url}/api/v1/devices/heartbeat",
+                json=payload,
+                headers=headers,
+                timeout=5,
+            )
+            if res.status_code != 200:
+                logger.error(f"Heartbeat gagal: {res.text}")
+        except requests.exceptions.RequestException:
+            pass # Abaikan log agar tidak spam saat offline
+
 
     def push_attendance(self):
         records = self.db.get_unsynced_attendance(limit=50)

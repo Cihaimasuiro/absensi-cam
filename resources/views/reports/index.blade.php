@@ -27,7 +27,7 @@
                 <i data-lucide="filter" class="w-4 h-4"></i> Filter
             </button>
             @role('super_admin|admin')
-            <div class="flex gap-1 ml-4 border-l pl-4 border-surface-border">
+            <div class="flex gap-1 border-surface-border">
                 <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
                     <i data-lucide="download" class="w-4 h-4"></i> Raw CSV
                 </a>

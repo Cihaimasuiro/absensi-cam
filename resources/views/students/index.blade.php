@@ -1,20 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Manajemen Anggota')
 
-@section('header-actions')
-    <div x-data class="flex gap-xs">
-        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility">
-            <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
-        </button>
-        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility">
-            <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
-        </button>
-        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary">
-            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
-        </button>
-    </div>
-@endsection
-
 @section('content')
 <div x-data>
 
@@ -27,6 +13,18 @@
         </div>
         <button type="submit" class="btn btn-utility">Cari</button>
     </form>
+    
+    <div x-data class="flex gap-xs">
+        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility">
+            <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
+        </button>
+        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility">
+            <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
+        </button>
+        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary">
+            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
+        </button>
+    </div>
 </div>
 
 {{-- Table --}}

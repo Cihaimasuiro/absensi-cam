@@ -1,5 +1,5 @@
 """
-Clean room implementation of Face Tracker.
+Implementation of Face Tracker.
 Uses simple IoU matching and lapjv for linear assignment to avoid AGPL code.
 """
 

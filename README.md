@@ -42,6 +42,7 @@ Most face recognition attendance systems rely on cloud inference, which requires
 - **Latent Space Versioning:** Strict `MODEL_VERSION` tagging ensures biometric vectors from different model architectures are never incorrectly compared.
 - **Dynamic Device Pairing:** Securely pair edge devices to the backend using pairing codes and encrypted `.env` provisioning.
 - **Automated Rollbacks:** Edge engine utilizes `systemctl` crash-loop detection to automatically rollback bad OTA updates.
+- **Liveness Detection (Experimental):** Note that anti-spoofing / liveness detection is currently unvalidated (preprocessing has not been verified against the specific ONNX model). It requires testing with real live and spoof samples before enabling. It is currently disabled by default.
 
 ## Architecture
 

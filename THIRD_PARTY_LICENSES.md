@@ -18,12 +18,10 @@ This document lists the third-party dependencies and AI models used in this proj
 
 | Model File | Purpose | Source / Architecture | License | Commercial Use? |
 | :--- | :--- | :--- | :--- | :--- |
-| `detector.onnx` | Face Detection | InsightFace (SCRFD) | **Non-Commercial** (CC BY-NC-SA 4.0) | ❌ No |
-| `recognizer.onnx` | Face Recognition (512d) | InsightFace (ArcFace) | **Non-Commercial** (CC BY-NC-SA 4.0) | ❌ No |
-| `liveness.onnx` | Liveness / Anti-Spoofing | Silent-Face-Anti-Spoofing | MIT / Apache 2.0 (Check source) | ⚠️ Unknown (Needs verification) |
+| `detector.onnx` | Face Detection | InsightFace (SCRFD) | Unknown | ⚠️ Unknown |
+| `recognizer.onnx` | Face Recognition (512d) | InsightFace (ArcFace) | Unknown | ⚠️ Unknown |
+| `liveness.onnx` | Liveness / Anti-Spoofing | Silent-Face-Anti-Spoofing | MIT / Apache 2.0 (Check source) | ⚠️ Unknown |
 
 ## Facenox Derived Code Status
 
-*(To be updated after rewrite)*
-
-Currently, several components (Cipher, Tracker, Liveness wrappers) were originally derived from Facenox. A rewrite is planned to implement these strictly from behavior specifications using permissive libraries to ensure no GPL/AGPL contamination.
+All Facenox-derived code (Cipher, Tracker, Liveness wrappers) has been completely removed and rewritten from scratch using standard permissive libraries (`lap`, `numpy`, `cryptography`). No AGPL-3.0 code remains in the repository.

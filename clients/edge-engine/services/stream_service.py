@@ -1,5 +1,5 @@
 """
-services/stream_service.py — Server MJPEG stream via Flask.
+services/stream_service.py — Server MJPEG stream via FastAPI.
 
 Menggantikan web_stream.py dan web_ui_optional.py (digabung jadi satu).
 Berjalan di thread daemon terpisah; route /video_feed konsumsi oleh
@@ -11,13 +11,17 @@ import logging
 logger = logging.getLogger(__name__)
 import threading
 from collections import deque
+import asyncio
+import os
 
 import cv2
-from flask import Flask, Response, jsonify, render_template_string
+import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 
 from config.settings import STREAM_PORT
 
-app = Flask(__name__)
+app = FastAPI()
 
 _lock = threading.Lock()
 _latest_frame = None
@@ -42,16 +46,21 @@ def push_attendance(record: dict) -> None:
         _history.appendleft(record)
 
 
-# ─── Flask Routes ────────────────────────────────────────────────────────────
+# ─── FastAPI Routes ────────────────────────────────────────────────────────────
 
 
-def _generate_mjpeg():
+async def _generate_mjpeg():
     while True:
+        frame = None
+        status = ""
         with _lock:
-            if _latest_frame is None:
-                continue
-            frame = _latest_frame.copy()
-            status = _latest_status
+            if _latest_frame is not None:
+                frame = _latest_frame.copy()
+                status = _latest_status
+
+        if frame is None:
+            await asyncio.sleep(0.03)
+            continue
 
         if status:
             # Blue text (255, 0, 0), font scale 0.5, thickness 1
@@ -61,36 +70,36 @@ def _generate_mjpeg():
 
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if not ok:
+            await asyncio.sleep(0.03)
             continue
 
         yield (
             b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n"
         )
+        await asyncio.sleep(0.03)
 
 
-@app.route("/video_feed")
-def video_feed():
-    return Response(
-        _generate_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame"
+@app.get("/video_feed")
+async def video_feed():
+    return StreamingResponse(
+        _generate_mjpeg(), media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
 
-@app.route("/status")
-def status():
+@app.get("/status")
+async def status():
     with _lock:
-        return jsonify({"status": "ok", "recognition": _latest_status})
+        return JSONResponse({"status": "ok", "recognition": _latest_status})
 
 
-@app.route("/history")
-def history():
+@app.get("/history")
+async def history():
     with _lock:
-        return jsonify(list(_history))
+        return JSONResponse(list(_history))
 
 
-
-
-@app.route("/")
-def kiosk():
+@app.get("/", response_class=HTMLResponse)
+async def kiosk():
     """Halaman HTML sederhana untuk layar HDMI langsung di Orange Pi."""
     html = """
     <!DOCTYPE html>
@@ -128,14 +137,14 @@ def kiosk():
     </body>
     </html>
     """
-    return render_template_string(html)
+    return html
 
 
 # ─── Start ───────────────────────────────────────────────────────────────────
 
 
 def start(port: int = STREAM_PORT) -> None:
-    import os
     bind_host = os.environ.get("STREAM_BIND_HOST", "127.0.0.1")
     logger.info(f"[Stream] Memulai server MJPEG di port {port} (Host: {bind_host})")
-    app.run(host=bind_host, port=port, debug=False, use_reloader=False, threaded=True)
+    # Run uvicorn in this thread (assumes it's spawned in a separate thread)
+    uvicorn.run(app, host=bind_host, port=port, log_level="error")

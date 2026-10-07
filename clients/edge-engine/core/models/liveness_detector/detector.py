@@ -1,5 +1,5 @@
 """
-Clean room implementation of Face Liveness Detector.
+Implementation of Face Liveness Detector.
 """
 
 import cv2
@@ -151,6 +151,8 @@ class LivenessDetector:
                 
                 det["liveness"] = stabilized
             except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Liveness detection error: %s", str(e))
                 det["liveness"] = self._error_liveness()
                 
             results.append(det)

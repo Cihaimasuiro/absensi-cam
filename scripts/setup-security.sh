@@ -11,8 +11,8 @@ echo "Target: $ROOT_USER@$EDGE_HOST"
 # 1. Generate SSH Key (ed25519) if it doesn't exist
 KEY_PATH="$HOME/.ssh/id_ed25519"
 if [ ! -f "$KEY_PATH" ]; then
-    echo "Generating ed25519 SSH key..."
-    ssh-keygen -t ed25519 -f "$KEY_PATH" -N ""
+    echo "Generating ed25519 SSH key... Please set a strong passphrase."
+    ssh-keygen -t ed25519 -f "$KEY_PATH"
 fi
 
 # 2. Create non-root user and copy key

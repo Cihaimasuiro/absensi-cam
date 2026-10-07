@@ -205,12 +205,12 @@ class DatabaseManager:
 
     def get_all_templates(self) -> list:
         """Ambil seluruh face embeddings dari DB lokal untuk proses pencocokan dengan cache in-memory."""
-        latest_version = self.get_last_template_sync_time()
-        
-        # Return cache if valid
-        if self._template_cache is not None and self._cache_version_cursor == latest_version:
+        # Return cache if valid (save_templates will set _cache_version_cursor to -1 to invalidate)
+        if self._template_cache is not None and self._cache_version_cursor != -1:
             return self._template_cache
             
+        latest_version = self.get_last_template_sync_time()
+        
         with self.get_connection() as conn:
             cur = conn.execute(
                 "SELECT id, student_id, name, embedding, version FROM templates"

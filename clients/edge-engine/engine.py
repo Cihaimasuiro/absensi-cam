@@ -30,6 +30,38 @@ import time
 import uuid
 
 import cv2
+import numpy as np
+
+class CameraReader:
+    def __init__(self, cap):
+        self.cap = cap
+        self.latest_frame = None
+        self.running = True
+        self.lock = threading.Lock()
+        
+    def start(self):
+        threading.Thread(target=self.update, daemon=True).start()
+        return self
+        
+    def update(self):
+        while self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                with self.lock:
+                    self.latest_frame = frame
+            else:
+                self.running = False
+                break
+                
+    def read(self):
+        with self.lock:
+            if self.latest_frame is not None:
+                return True, self.latest_frame.copy()
+            else:
+                return False, None
+                
+    def stop(self):
+        self.running = False
 
 import services.stream_service as stream
 from config.settings import (
@@ -145,19 +177,27 @@ class EdgeEngine:
 
         logger.info("Kamera aktif. Mulai memindai wajah…")
 
+        cam_reader = CameraReader(cap).start()
         frame_id = 0
+        DETECTION_STRIDE = 3
+
         while True:
             frame_id += 1
-            ret, frame = cap.read()
+            ret, frame = cam_reader.read()
             if not ret:
-                logger.warning("Frame tidak terbaca — kamera mungkin dicabut.")
-                break
+                # Beri waktu thread reader mengisi frame
+                time.sleep(0.01)
+                if not cam_reader.running:
+                    logger.warning("Frame tidak terbaca — kamera mungkin dicabut.")
+                    break
+                continue
 
             # Ambil template lokal terbaru (cached setiap loop)
             templates = self.db.get_all_templates()
 
             t0 = time.time()
-            results = self.pipeline.process(frame, templates)
+            use_detector = (frame_id % DETECTION_STRIDE == 0)
+            results = self.pipeline.process(frame, templates, use_detector=use_detector)
             ms = (time.time() - t0) * 1000
 
             for r in results:

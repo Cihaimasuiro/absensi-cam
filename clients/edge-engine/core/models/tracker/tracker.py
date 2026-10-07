@@ -60,6 +60,26 @@ class FaceTracker:
     def update_frame_rate(self, frame_rate: int):
         pass
 
+    def predict_only(self) -> list[dict]:
+        """Return currently active tracks without running detection."""
+        result = []
+        for track in self.tracks:
+            x1, y1, x2, y2 = track.bbox
+            result.append({
+                "bbox": {
+                    "x": int(x1),
+                    "y": int(y1),
+                    "width": int(x2 - x1),
+                    "height": int(y2 - y1)
+                },
+                "confidence": 1.0,
+                "track_id": track.track_id
+            })
+            track.mark_missed()
+        
+        self.tracks = [t for t in self.tracks if t.time_since_update < self.track_buffer]
+        return result
+
     def update(self, face_detections: list[dict], frame_rate: int | None = None) -> list[dict]:
         if not face_detections:
             for track in self.tracks:

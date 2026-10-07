@@ -1,9 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "=== M0 Benchmark Runner ==="
-sshpass -p orangepi ssh root@192.168.1.200 << 'EOF'
-cd /opt/facenox-bench/server
+EDGE_HOST="${EDGE_HOST:-192.168.1.200}"
+EDGE_USER="${EDGE_USER:-root}"
+
+# You should use SSH keys. If EDGE_PASS is set, it will use sshpass (not recommended).
+if [ -n "$EDGE_PASS" ]; then
+    SSH_CMD="sshpass -p $EDGE_PASS ssh"
+else
+    SSH_CMD="ssh"
+fi
+
+$SSH_CMD $EDGE_USER@$EDGE_HOST << 'EOF'
 source ../venv/bin/activate
 
 echo "[1/4] Starting server..."

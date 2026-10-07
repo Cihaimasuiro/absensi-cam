@@ -105,7 +105,7 @@ if [ -f "$INSTALL_DIR/requirements.lock" ]; then
 elif [ -f "$INSTALL_DIR/requirements.txt" ]; then
     uv pip install -r "$INSTALL_DIR/requirements.txt" --quiet
 else
-    uv pip install --quiet numpy opencv-python-headless flask requests pyserial python-dotenv
+    uv pip install --quiet numpy opencv-python-headless fastapi "uvicorn[standard]" python-multipart pyserial python-dotenv
 fi
 EOF
 

@@ -30,6 +30,15 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+if ! id "$USER_NAME" &>/dev/null; then
+    log_info "Creating user $USER_NAME..."
+    useradd -m -s /bin/bash "$USER_NAME"
+fi
+if [ ! -d "/home/$USER_NAME" ]; then
+    mkdir -p "/home/$USER_NAME"
+    chown "$USER_NAME:$USER_NAME" "/home/$USER_NAME"
+fi
+
 log_info "Starting Absensi Cam Edge Engine Installation (Miniforge Edition)..."
 
 # 1. Install System Dependencies
@@ -53,11 +62,21 @@ MODELS_SRC=${MODELS_SRC:-"$CURRENT_DIR/../../packages/models"}
 if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     log_info "Copying files from $CURRENT_DIR to $INSTALL_DIR..."
     rsync -a --exclude 'venv' --exclude '__pycache__' --exclude '.git' "$CURRENT_DIR/" "$INSTALL_DIR/"
+    
+    # Copy models
     if [ -d "$MODELS_SRC" ]; then
         log_info "Copying models from $MODELS_SRC..."
         rsync -L -a "$MODELS_SRC/" "$INSTALL_DIR/models/"
     else
         log_warn "Models directory not found at $MODELS_SRC. Set MODELS_SRC env var if it's elsewhere."
+    fi
+
+    # Copy packages (face_core, etc.)
+    PACKAGES_SRC="$CURRENT_DIR/../../packages"
+    if [ -d "$PACKAGES_SRC" ]; then
+        log_info "Copying packages from $PACKAGES_SRC..."
+        mkdir -p "$INSTALL_DIR/packages"
+        rsync -a "$PACKAGES_SRC/" "$INSTALL_DIR/packages/"
     fi
 fi
 

@@ -4,10 +4,12 @@ import time
 
 import numpy as np
 
-# Add current directory to path so it can import core
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add current directory and packages directory to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+sys.path.append(os.path.join(current_dir, '../../packages'))
 
-from core.models.face_detector.yunet import FaceDetector
+from core.models import FaceDetector
 
 
 def main():
@@ -20,7 +22,14 @@ def main():
         return
 
     print("Initializing YuNet...")
-    detector = FaceDetector(model_path=model_path)
+    detector = FaceDetector(
+        model_path=model_path,
+        input_size=(320, 240),
+        conf_threshold=0.6,
+        nms_threshold=0.3,
+        top_k=5000,
+        min_face_size=30
+    )
 
     # 320x240 image for benchmark
     print("Generating 320x240 dummy image...")

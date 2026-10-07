@@ -12,6 +12,9 @@ numpy==2.4.3
 onnxruntime==1.24.4
 lap==0.5.13
 
+# Cryptography for face template decryption
+cryptography>=41.0.0
+
 # Data validation and storage
 pydantic==2.12.5
 python-multipart>=0.0.24

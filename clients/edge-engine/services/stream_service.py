@@ -144,7 +144,7 @@ async def kiosk():
 
 
 def start(port: int = STREAM_PORT) -> None:
-    bind_host = os.environ.get("STREAM_BIND_HOST", "127.0.0.1")
+    bind_host = os.environ.get("STREAM_BIND_HOST", "0.0.0.0")
     logger.info(f"[Stream] Memulai server MJPEG di port {port} (Host: {bind_host})")
     # Run uvicorn in this thread (assumes it's spawned in a separate thread)
     uvicorn.run(app, host=bind_host, port=port, log_level="error")

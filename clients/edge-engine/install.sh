@@ -97,13 +97,15 @@ fi
 
 conda activate "$ENV_NAME"
 
-echo "[INFO] Installing Python dependencies..."
-pip install --upgrade pip --quiet
+echo "[INFO] Installing uv for fast dependency resolution..."
+pip install uv --quiet
 
-if [ -f "$INSTALL_DIR/requirements.txt" ]; then
-    pip install -r "$INSTALL_DIR/requirements.txt" --quiet
+if [ -f "$INSTALL_DIR/requirements.lock" ]; then
+    uv pip install -r "$INSTALL_DIR/requirements.lock" --quiet
+elif [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    uv pip install -r "$INSTALL_DIR/requirements.txt" --quiet
 else
-    pip install --quiet numpy opencv-python-headless flask requests pyserial python-dotenv
+    uv pip install --quiet numpy opencv-python-headless flask requests pyserial python-dotenv
 fi
 EOF
 

@@ -27,7 +27,7 @@
                             <td class="font-mono text-[12px] text-ink-muted">{{ $school->code }}</td>
                             <td class="font-medium text-ink">{{ $school->name }}</td>
                             <td class="text-right whitespace-nowrap">
-                                <button @click="editSchoolData = @js($school); $refs.editModal.showModal(); $refs.editForm.action = '/schools/' + editSchoolData.id" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
+                                <button @click="openEditSchool(@js($school))" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
                                 <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="if(!confirm('Hapus organisasi ini?')) $event.preventDefault()">
@@ -47,10 +47,10 @@
                                 <div class="flex justify-between items-center mb-sm">
                                     <h4 class="font-semibold text-sm">Daftar Kelas / Grup</h4>
                                     <div class="flex gap-2">
-                                        <button @click="bulkEditSchoolId = {{$school->id}}; confirmRetroactive = false; $refs.bulkEditClassroomModal.showModal(); $refs.bulkEditClassroomForm.action = '/schools/' + bulkEditSchoolId + '/classrooms/timing'" class="btn btn-primary py-1 px-3 text-xs">
+                                        <button @click="openBulkEdit({{$school->id}})" class="btn btn-primary py-1 px-3 text-xs">
                                             <i data-lucide="clock" class="w-3 h-3"></i> Update Waktu Massal
                                         </button>
-                                        <button @click="createClassroomSchoolId = {{$school->id}}; $refs.createClassroomModal.showModal()" class="btn btn-utility py-1 px-3 text-xs">
+                                        <button @click="openCreateClassroom({{$school->id}})" class="btn btn-utility py-1 px-3 text-xs">
                                             <i data-lucide="plus" class="w-3 h-3"></i> Tambah Kelas
                                         </button>
                                     </div>
@@ -82,7 +82,7 @@
                                                     <td>{{ substr($classroom->start_time, 0, 5) }}</td>
                                                     <td>{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
                                                     <td class="text-right">
-                                                        <button @click="editClassroomData = @js($classroom); editClassroomData.start_time = editClassroomData.start_time.substring(0, 5); $refs.editClassroomModal.showModal(); $refs.editClassroomForm.action = '/schools/classrooms/' + editClassroomData.id" class="text-primary hover:underline">Edit</button>
+                                                        <button @click="openEditClassroom(@js($classroom))" class="text-primary hover:underline">Edit</button>
                                                     </td>
                                                 </tr>
                                             @endforeach

@@ -27,10 +27,10 @@
                             <td class="font-mono text-[12px] text-ink-muted">{{ $school->code }}</td>
                             <td class="font-medium text-ink">{{ $school->name }}</td>
                             <td class="text-right whitespace-nowrap">
-                                <button @click="openEditSchool(@js($school))" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
+                                <button data-school="{{ json_encode($school) }}" @click="openEditSchool" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
-                                <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="if(!confirm('Hapus organisasi ini?')) $event.preventDefault()">
+                                <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus organisasi ini?">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" aria-label="Hapus Organisasi" class="btn-danger hover:underline inline-flex items-center gap-[4px] mr-sm">
@@ -82,7 +82,7 @@
                                                     <td>{{ substr($classroom->start_time, 0, 5) }}</td>
                                                     <td>{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
                                                     <td class="text-right">
-                                                        <button @click="openEditClassroom(@js($classroom))" class="text-primary hover:underline">Edit</button>
+                                                        <button data-classroom="{{ json_encode($classroom) }}" @click="openEditClassroom" class="text-primary hover:underline">Edit</button>
                                                     </td>
                                                 </tr>
                                             @endforeach

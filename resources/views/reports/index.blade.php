@@ -2,7 +2,7 @@
 @section('title', 'Laporan Presensi')
 
 @section('content')
-<div x-data>
+<div x-data="reportsData">
 
 {{-- Filter bar --}}
 <div class="card p-md mb-md">
@@ -80,7 +80,7 @@
                     <td>{{ $log->score ? number_format($log->score, 3) : '-' }}</td>
                     @role('super_admin|admin')
                     <td>
-                        <button type="button" class="btn btn-utility text-xs py-1 px-2" @click="openCorrectionModal({{ $log->id }}, '{{ $log->captured_at->format('Y-m-d\TH:i') }}', '{{ $log->direction }}')">
+                        <button type="button" class="btn btn-utility text-xs py-1 px-2" data-log="{{ json_encode(['id' => $log->id, 'captured_at' => $log->captured_at->format('Y-m-d\TH:i'), 'direction' => $log->direction]) }}" @click="openCorrectionModal">
                             Koreksi
                         </button>
                     </td>
@@ -107,23 +107,23 @@
 </div>
 
 @role('super_admin|admin')
-<div id="correctionModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-canvas rounded-lg w-full max-w-md shadow-lg overflow-hidden">
+<dialog x-ref="correctionModal" class="bg-transparent p-0 m-auto backdrop:bg-black/50 open:flex items-center justify-center min-w-full min-h-full">
+    <div class="bg-canvas rounded-lg w-full max-w-md shadow-lg overflow-hidden m-auto" @click.stop>
         <div class="px-md py-sm border-b border-hairline flex justify-between items-center">
             <h3 class="font-bold text-ink">Koreksi Absensi</h3>
-            <button type="button" @click="closeCorrectionModal()" class="text-ink-faint hover:text-ink">
+            <button type="button" @click="closeCorrectionModal" class="text-ink-faint hover:text-ink">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
-        <form id="correctionForm" method="POST" action="" class="p-md flex flex-col gap-md">
+        <form x-ref="correctionForm" method="POST" action="" class="p-md flex flex-col gap-md">
             @csrf
             <div>
                 <label class="form-label">Waktu Sebenarnya (Lokal)</label>
-                <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full">
+                <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full" x-model="correctionLogData.captured_at">
             </div>
             <div>
                 <label class="form-label">Status Absensi</label>
-                <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required>
+                <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required x-model="correctionLogData.direction">
                     <option value="in">Masuk</option>
                     <option value="out">Keluar</option>
                 </select>
@@ -133,24 +133,14 @@
                 <textarea name="reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
             </div>
             <div class="flex justify-end gap-sm mt-sm">
-                <button type="button" @click="closeCorrectionModal()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="closeCorrectionModal" class="btn btn-utility">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
             </div>
         </form>
     </div>
-</div>
+</dialog>
 
-<script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
-    function openCorrectionModal(id, datetime, direction) {
-        document.getElementById('correctionForm').action = `/reports/logs/${id}/correct`;
-        document.getElementById('corrected_captured_at').value = datetime;
-        document.getElementById('corrected_direction').value = direction;
-        document.getElementById('correctionModal').classList.remove('hidden');
-    }
-    function closeCorrectionModal() {
-        document.getElementById('correctionModal').classList.add('hidden');
-    }
-</script>
+
 @endrole
 </div>
 @endsection

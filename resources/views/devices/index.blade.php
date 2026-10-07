@@ -50,7 +50,7 @@
                         </td>
                         <td class="text-right">
                             <form method="POST" action="{{ route('devices.revoke', $device) }}" class="inline"
-                                  @submit="if(!confirm('Cabut token perangkat ini?')) $event.preventDefault()">
+                                  @submit="confirmSubmit" data-confirm="Cabut token perangkat ini?">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-[4px]">
                                     <i data-lucide="power-off" class="w-3 h-3"></i> Cabut Token

@@ -34,8 +34,12 @@ echo "Copying SSH key for $NEW_USER. You will be prompted for the NEW user passw
 ssh-copy-id -i "$KEY_PATH" $NEW_USER@$EDGE_HOST
 
 # 3. Disable Root Login and Password Authentication
+echo "Loading SSH key into agent..."
+eval "$(ssh-agent -s)"
+ssh-add "$KEY_PATH"
+
 echo "Verifying key login and disabling password auth/root login..."
-ssh -o BatchMode=yes -i "$KEY_PATH" $NEW_USER@$EDGE_HOST << 'EOF'
+ssh -t $NEW_USER@$EDGE_HOST "
     # Backup sshd_config
     sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 
@@ -52,14 +56,14 @@ ssh -o BatchMode=yes -i "$KEY_PATH" $NEW_USER@$EDGE_HOST << 'EOF'
     # Check configuration syntax
     if sudo sshd -t; then
         sudo systemctl restart sshd
-        echo "sshd restarted successfully."
+        echo 'sshd restarted successfully.'
     else
-        echo "sshd configuration test failed! Restoring backup..."
+        echo 'sshd configuration test failed! Restoring backup...'
         sudo cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config
         sudo systemctl restart sshd
         exit 1
     fi
-EOF
+"
 
 echo "=== Security Hardening Complete ==="
 echo "Connect with: ssh $NEW_USER@$EDGE_HOST"

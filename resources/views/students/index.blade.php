@@ -65,7 +65,7 @@
                         <button @click='editStudent(@json($student))' class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
                             <i data-lucide="edit" class="w-3 h-3"></i> Edit
                         </button>
-                        <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="if(!confirm('Hapus anggota ini?')) $event.preventDefault()">
+                        <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-[4px]">

@@ -9,7 +9,13 @@ import {
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
-    sidebarOpen: false
+    sidebarOpen: false,
+    confirmSubmit(e) {
+        const msg = e.target.getAttribute('data-confirm') || 'Anda yakin?';
+        if (!confirm(msg)) {
+            e.preventDefault();
+        }
+    }
 }));
 
 Alpine.data('schoolsData', () => ({
@@ -27,7 +33,8 @@ Alpine.data('schoolsData', () => ({
     bulkEditSchoolId: null,
     confirmRetroactive: false,
 
-    openEditSchool(data) {
+    openEditSchool(e) {
+        const data = JSON.parse(e.currentTarget.dataset.school);
         this.editSchoolData = data;
         this.$refs.editModal.showModal();
         this.$refs.editForm.action = '/schools/' + data.id;
@@ -38,9 +45,12 @@ Alpine.data('schoolsData', () => ({
         this.$refs.createClassroomModal.showModal();
     },
 
-    openEditClassroom(data) {
+    openEditClassroom(e) {
+        const data = JSON.parse(e.currentTarget.dataset.classroom);
         this.editClassroomData = data;
-        this.editClassroomData.start_time = data.start_time.substring(0, 5);
+        if (data.start_time) {
+            this.editClassroomData.start_time = data.start_time.substring(0, 5);
+        }
         this.$refs.editClassroomModal.showModal();
         this.$refs.editClassroomForm.action = '/schools/classrooms/' + data.id;
     },
@@ -50,6 +60,18 @@ Alpine.data('schoolsData', () => ({
         this.confirmRetroactive = false;
         this.$refs.bulkEditClassroomModal.showModal();
         this.$refs.bulkEditClassroomForm.action = '/schools/' + schoolId + '/classrooms/timing';
+    }
+}));
+
+Alpine.data('reportsData', () => ({
+    correctionLogData: {},
+    openCorrectionModal(e) {
+        this.correctionLogData = JSON.parse(e.currentTarget.dataset.log);
+        this.$refs.correctionModal.showModal();
+        this.$refs.correctionForm.action = '/reports/logs/' + this.correctionLogData.id + '/correct';
+    },
+    closeCorrectionModal() {
+        this.$refs.correctionModal.close();
     }
 }));
 

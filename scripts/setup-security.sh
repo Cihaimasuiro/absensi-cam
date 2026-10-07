@@ -38,7 +38,12 @@ echo "Loading SSH key into agent..."
 eval "$(ssh-agent -s)"
 ssh-add "$KEY_PATH"
 
-echo "Verifying key login and disabling password auth/root login..."
+echo "Verifying key login before disabling password auth/root login..."
+ssh -o BatchMode=yes -o PasswordAuthentication=no \
+    -o PreferredAuthentications=publickey -i "$KEY_PATH" \
+    $NEW_USER@$EDGE_HOST true || { echo "Login kunci gagal, dibatalkan"; exit 1; }
+
+echo "Key login successful. Disabling password auth/root login..."
 ssh -t $NEW_USER@$EDGE_HOST "
     # Backup sshd_config
     sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak

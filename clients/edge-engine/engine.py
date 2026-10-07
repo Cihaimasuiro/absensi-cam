@@ -126,13 +126,22 @@ class EdgeEngine:
         self.sync_worker.start()
 
         # ── Camera Loop ──────────────────────────────────────────────
-        cap = cv2.VideoCapture(CAMERA_INDEX)
+        cap = None
+        for idx in [CAMERA_INDEX, 0, 1, 2, 3]:
+            try:
+                cap = cv2.VideoCapture(idx)
+                if cap.isOpened():
+                    logger.info(f"Berhasil membuka kamera pada index {idx}")
+                    break
+            except Exception:
+                pass
+                
+        if cap is None or not cap.isOpened():
+            logger.error(f"Gagal membuka kamera. Pastikan kamera dicolokkan dengan benar (USB/CSI).")
+            return
+
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
-
-        if not cap.isOpened():
-            logger.error(f"Gagal membuka kamera (index {CAMERA_INDEX})")
-            return
 
         logger.info("Kamera aktif. Mulai memindai wajah…")
 

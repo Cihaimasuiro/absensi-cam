@@ -95,13 +95,17 @@ class LivenessDetector:
             bbox = det.get("bbox", {})
             bx, by, bw, bh = bbox.get("x", 0), bbox.get("y", 0), bbox.get("width", 0), bbox.get("height", 0)
             
-            # Simple margin for crop
-            margin_x = int(bw * 0.1)
-            margin_y = int(bh * 0.1)
-            x1 = max(0, bx - margin_x)
-            y1 = max(0, by - margin_y)
-            x2 = min(w, bx + bw + margin_x)
-            y2 = min(h, by + bh + margin_y)
+            # MiniFASNet requires a larger context scale (typically 2.7x or 4.0x) to see screen bezels.
+            scale = 2.7
+            cx = bx + bw / 2.0
+            cy = by + bh / 2.0
+            new_w = bw * scale
+            new_h = bh * scale
+            
+            x1 = max(0, int(cx - new_w / 2.0))
+            y1 = max(0, int(cy - new_h / 2.0))
+            x2 = min(w, int(cx + new_w / 2.0))
+            y2 = min(h, int(cy + new_h / 2.0))
             
             if x2 <= x1 or y2 <= y1:
                 det["liveness"] = self._error_liveness()

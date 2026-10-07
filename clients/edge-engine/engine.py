@@ -97,10 +97,17 @@ class EdgeEngine:
             logger.error(f"Failed to load recognizer: {e}")
             recognizer = None
 
+        from core.models.liveness_detector.detector import LivenessDetector
+        try:
+            liveness = LivenessDetector(model_path=os.path.join(MODELS_DIR, "liveness.onnx"))
+        except Exception as e:
+            logger.error(f"Failed to load liveness detector: {e}")
+            liveness = None
+
         self.pipeline = DetectionPipeline(
             detector=detector,
             recognizer=recognizer,
-            liveness=None,  # stub — ganti dengan LivenessDetector()
+            liveness=liveness,
         )
 
 

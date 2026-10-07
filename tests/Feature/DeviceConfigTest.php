@@ -41,10 +41,9 @@ class DeviceConfigTest extends TestCase
         $response->assertJsonStructure([
             'groups' => [
                 '*' => [
-                    'id', 'name', 'type', 'start_time', 'late_tolerance_minutes'
+                    'id', 'name', 'type', 'start_time', 'late_tolerance_minutes', 'track_checkout'
                 ]
             ],
-            'track_checkout',
             'mode',
             'confidence_threshold'
         ]);
@@ -72,6 +71,5 @@ class DeviceConfigTest extends TestCase
         $data = $response->json();
         
         $this->assertEmpty($data['groups']);
-        $this->assertFalse($data['track_checkout']);
     }
 }

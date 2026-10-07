@@ -22,8 +22,8 @@ return new class extends Migration
                     $staffNames[] = $classroom->name;
                 }
 
-                // late_threshold_enabled=false means they didn't care about late. We map this to the max tolerance (120 mins).
-                $tolerance = $classroom->late_threshold_enabled ? $classroom->late_threshold_minutes : 120;
+                // late_threshold_enabled=false means they didn't care about late. We map this to null (no limit).
+                $tolerance = $classroom->late_threshold_enabled ? $classroom->late_threshold_minutes : null;
 
                 DB::table('classrooms')->where('id', $classroom->id)->update([
                     'type' => $newType,
@@ -50,7 +50,7 @@ return new class extends Migration
     public function down(): void
     {
         // Recreate the old columns (nullable temporarily)
-        // Data is copied back as best effort (since tolerance < 120 determines if it was enabled).
+        // Data is copied back as best effort (since tolerance !== null determines if it was enabled).
         Schema::table('classrooms', function (Blueprint $table) {
             $table->time('class_start_time')->default('08:00')->comment('Jam masuk resmi');
             $table->boolean('late_threshold_enabled')->default(false);
@@ -60,7 +60,7 @@ return new class extends Migration
         // Copy data back best-effort
         DB::table('classrooms')->orderBy('id')->chunk(100, function ($classrooms) {
             foreach ($classrooms as $classroom) {
-                $enabled = $classroom->late_tolerance_minutes < 120;
+                $enabled = $classroom->late_tolerance_minutes !== null;
                 DB::table('classrooms')->where('id', $classroom->id)->update([
                     'class_start_time' => $classroom->start_time,
                     'late_threshold_minutes' => $classroom->late_tolerance_minutes,

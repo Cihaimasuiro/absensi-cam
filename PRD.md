@@ -861,19 +861,19 @@ Perangkat V1 menggunakan modul terpisah yang rentan terhadap koneksi longgar (he
 | `POST /attendance/qr` | Verifikasi kode QR hasil pindai ponsel | **Bukan token perangkat**: memakai token anggota/aplikasi ponsel (Q11); rate limit per anggota |
 
 **Catatan untuk `GET /config`**: 
-Format terbaru v2.4.0 mengembalikan array `groups` yang berisi konfigurasi spesifik per tipe:
+- Format terbaru v2.4.0 mengembalikan array `groups` yang berisi konfigurasi spesifik per tipe:
+- `track_checkout` sekarang spesifik per grup, bukan nilai global perangkat.
+- `etag` dikirim sebagai HTTP header `ETag: "md5hash"` (bukan di dalam body JSON), digunakan untuk request kondisional (`If-None-Match`).
+- Toleransi keterlambatan `null` berarti fitur pelacakan keterlambatan dinonaktifkan untuk grup tersebut (menggantikan setting lama "late tracking off", sebelumnya diwakili dengan 120 menit).
 ```json
 {
   "device_id": "...",
-  "etag": "W/\"3d9f1f77896fb3d1\"",
   "groups": [
-    { "id": 1, "name": "Kelas 10", "type": "class", "start_time": "07:30:00", "late_tolerance_minutes": 15 },
-    { "id": 2, "name": "GURU", "type": "staff", "start_time": "06:30:00", "late_tolerance_minutes": 120 }
-  ],
-  "track_checkout": false
+    { "id": 1, "name": "Kelas 10", "type": "class", "start_time": "07:30:00", "late_tolerance_minutes": 15, "track_checkout": false },
+    { "id": 2, "name": "GURU", "type": "staff", "start_time": "06:30:00", "late_tolerance_minutes": null, "track_checkout": false }
+  ]
 }
 ```
-Toleransi keterlambatan 120 menit digunakan untuk staf, yang berarti DTR akan menandai kedatangan di atas 120 menit sebagai terlambat (menggantikan setting lama "late tracking off").
 
 **Contoh `POST /devices/pair`**
 
@@ -1058,7 +1058,7 @@ Hardware V2 (Bagian 8) dimulai setelah M6.
 | 2.2.0 | 2026-09-30 | Perbaikan konsistensi dan kelengkapan: alur embedding per-track (FR-E05), rangkaian backlight TFT (PNP high-side), catatan pull-up I2C dan pengisi CR2032 pada DS3231, ukuran BLOB terenkripsi (540 byte), input daya SBC, batas arus UPS, FPS AC-31 = NFR-01, interval worker outbox (AC-26); menambah 7.3 risiko software (R16–R20), 10.3.1 arsitektur Laravel sesuai AGENTS.md, tabel `device_groups`/`pairing_codes`/`attendance_corrections`/`device_logs`, contoh `POST /devices/pair`, format galat seragam, AC-44..47, Q9, dan Bagian 14 (milestone dengan gate M0) | Tim Smart Absensi |
 | 2.2.1 | 2026-10-06 | Menambah metode presensi cadangan **kartu RFID (RC522)** dan **QR dinamis di TFT** tanpa mengubah struktur dokumen: konteks SekolahKita, lingkup dan perbandingan (1.1–1.4), package dan jalur komunikasi (2), BOM No 18 dan header SBC (3), perintah serial `qr` dan bagian 4.8 (RC522, pin belum ditetapkan), power budget (5.1), risiko R24–R28, AC-48..56 (grup L), FR-E17..E19, FR-A07, FR-S14..S17, model data dan API (`member_cards`, `method`, `qr_secret`, `GET /cards`, `POST /attendance/qr`), keamanan/privasi/retensi, asumsi A7–A8, pertanyaan Q10–Q12, dan penyesuaian milestone M0–M6. Sidik jari dan telapak tangan dinyatakan di luar lingkup V1 | Tim Smart Absensi |
 | 2.3.0 | 2026-10-06 | Rebase perubahan hardware pada basis v2.2.1: display MAR2406 8-bit paralel (bukan SPI); Arduino Uno hanya terminal display; LED, buzzer, tombol dipindah ke GPIO SBC lewat transistor NPN; RTC DS3231 dipindah ke I2C SBC (3,3 V); protokol serial disederhanakan (baris maks 160 byte; `io`, `backlight`, `get_time`, `set_time`, `button`, `time` dihapus); backlight tidak dapat diredupkan; BOM (No 3, 5, 11-14, 17, 19), 4.1-4.4, 4.7, 5.1, R05, R08, R21, R22, 8.2-8.3, AC-14, AC-19a/b, FR-E20..E22, FR-A02..A05, M0/M4, referensi; nomor pin GPIO/I2C/SPI SBC **belum ditetapkan**. | Tim Smart Absensi |
-| 2.4.0 | 2026-10-06 | Revisi `/api/v1/config`: array `groups` per tipe (`class`, `staff`) dengan `start_time` dan `late_tolerance_minutes`; field flat `class_start_time` dan `late_threshold_minutes` dihapus; mencatat konsekuensi 120 menit untuk DTR staf. | Tim Smart Absensi |
+| 2.4.0 | 2026-10-06 | Revisi `/api/v1/config`: array `groups` per tipe (`class`, `staff`) dengan `start_time`, `late_tolerance_minutes`, dan `track_checkout`; field flat `class_start_time` dan `late_threshold_minutes` dihapus; mencatat konsekuensi `null` untuk DTR staf (menggantikan 120 menit); ETag didokumentasikan sebagai HTTP Header; Catat bahwa SFace threshold perlu dikalibrasi di M0. | Tim Smart Absensi |
 
 ### B. Referensi
 

@@ -58,6 +58,6 @@ class MigrationTest extends TestCase
         $staff1 = DB::table('classrooms')->where('id', $staff1Id)->first();
         $this->assertEquals('staff', $staff1->type);
         $this->assertEquals('06:30:00', $staff1->start_time);
-        $this->assertEquals(120, $staff1->late_tolerance_minutes); // false -> 120
+        $this->assertNull($staff1->late_tolerance_minutes); // false -> null
     }
 }

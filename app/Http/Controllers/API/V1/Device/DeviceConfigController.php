@@ -33,15 +33,15 @@ class DeviceConfigController extends Controller
                 'type' => $g->type,
                 'start_time' => $g->start_time,
                 'late_tolerance_minutes' => $g->late_tolerance_minutes,
+                'track_checkout' => (bool)$g->track_checkout,
             ])->toArray(),
-            'track_checkout'            => $firstGroup?->track_checkout ?? false,
-            'confidence_threshold'      => 0.363, // SFace default (AC-22)
+            'confidence_threshold'      => 0.363, // TODO: To be calibrated on M0 hardware (AC-22)
             'liveness_enabled'          => true,
             'max_faces_per_frame'       => 5,
             'mode'                      => 'both', // in|out|both
         ];
 
-        $etag = md5(json_encode($config));
+        $etag = '"' . md5(json_encode($config)) . '"';
 
         if ($request->header('If-None-Match') === $etag) {
             return response()->json(null, 304);

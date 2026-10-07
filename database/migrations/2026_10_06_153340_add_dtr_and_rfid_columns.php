@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('classrooms', function (Blueprint $table) {
             $table->time('start_time')->default('07:00:00')->after('building_id');
-            $table->integer('late_tolerance_minutes')->default(15)->after('start_time');
+            $table->integer('late_tolerance_minutes')->nullable()->default(15)->after('start_time');
         });
 
         Schema::table('attendance_logs', function (Blueprint $table) {

@@ -72,16 +72,23 @@ if [ "$CURRENT_DIR" != "$INSTALL_DIR" ]; then
     fi
 
     # Copy packages (face_core, etc.)
-    PACKAGES_SRC="$CURRENT_DIR/../../packages"
+    PACKAGES_SRC="${PACKAGES_SRC:-"$CURRENT_DIR/../../packages"}"
     if [ -d "$PACKAGES_SRC" ]; then
         log_info "Copying packages from $PACKAGES_SRC..."
         mkdir -p "$INSTALL_DIR/packages"
         rsync -a "$PACKAGES_SRC/" "$INSTALL_DIR/packages/"
+    else
+        log_warn "Packages directory not found at $PACKAGES_SRC. Set PACKAGES_SRC env var if it's elsewhere."
     fi
 fi
 
 if ! ls "$INSTALL_DIR/models"/*.onnx 1> /dev/null 2>&1; then
     log_error "No .onnx files found in '$INSTALL_DIR/models'! Please copy your AI models to $MODELS_SRC or set MODELS_SRC."
+    exit 1
+fi
+
+if [ ! -d "$INSTALL_DIR/packages/face_core" ]; then
+    log_error "'face_core' package not found in '$INSTALL_DIR/packages'! Please copy your packages to $PACKAGES_SRC or set PACKAGES_SRC."
     exit 1
 fi
 

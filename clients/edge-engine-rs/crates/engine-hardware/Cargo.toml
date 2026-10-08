@@ -1,0 +1,12 @@
+[package]
+name = "engine-hardware"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serialport = "4.5"
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "engine-vision"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+image = "0.25"
+nalgebra = "0.33"
+anyhow = { workspace = true }
+tracing = { workspace = true }
+# ort = "2.0.0-rc.4" # Uncomment saat model ONNX disiapkan

@@ -1,0 +1,17 @@
+[package]
+name = "engine-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+libsql = { version = "0.6", features = ["replication"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+aes-gcm = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = { workspace = true }

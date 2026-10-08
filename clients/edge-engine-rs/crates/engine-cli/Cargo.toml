@@ -1,0 +1,18 @@
+[package]
+name = "engine-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-core = { path = "../engine-core" }
+engine-sync = { path = "../engine-sync" }
+engine-hardware = { path = "../engine-hardware" }
+engine-vision = { path = "../engine-vision" }
+engine-server = { path = "../engine-server" }
+clap = { version = "4.5", features = ["derive"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }

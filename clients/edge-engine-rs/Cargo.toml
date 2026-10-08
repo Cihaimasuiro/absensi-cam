@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/engine-core",
+    "crates/engine-sync",
+    "crates/engine-hardware",
+    "crates/engine-vision",
+    "crates/engine-server",
+    "crates/engine-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Smart Absensi Team"]
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+anyhow = "1.0"

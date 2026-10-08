@@ -93,13 +93,11 @@ class DetectionPipeline:
             info = self._track_info.setdefault(track_id, {}) if track_id > 0 else {}
 
             # ── Liveness ────────────────────────────────────────
-            is_liveness_real = False
-            liveness_score = 0.0
-            
+            liveness_score = 1.0
+            is_liveness_real = True
             now = time.time()
-            if self.liveness:
-                if info.get("liveness_verified", False) and now - info.get("liveness_time", 0) < 2.0:
-                    # Cached real from previous frames!
+            if self.liveness is not None:
+                if info.get("liveness_verified", False) and now - info.get("liveness_time", 0) < 3.0:
                     is_liveness_real = True
                     liveness_score = info.get("liveness_score", 1.0)
                 elif use_detector:
@@ -107,23 +105,18 @@ class DetectionPipeline:
                     res = self.liveness.detect_faces(frame, [det])
                     if res and "liveness" in res[0]:
                         is_real_now = res[0]["liveness"].get("is_real", False)
-                        liveness_score = res[0]["liveness"].get("confidence", 0.0)
+                        logit_diff = res[0]["liveness"].get("logit_diff", 0.0)
+                        raw_conf = res[0]["liveness"].get("prob_real", res[0]["liveness"].get("confidence", 1.0))
+                        liveness_score = float(np.clip(raw_conf, 0.0, 1.0))
                         
-                        history = info.get("liveness_history", [])
-                        history.append(is_real_now)
-                        if len(history) > 3:
-                            history.pop(0)
-                        info["liveness_history"] = history
-                        
-                        if len(history) >= 3 and sum(history) >= 2:
+                        if is_real_now or logit_diff >= 0.0:
                             is_liveness_real = True
                             if track_id > 0:
                                 info["liveness_verified"] = True
                                 info["liveness_score"] = liveness_score
                                 info["liveness_time"] = now
-                            
-            if not is_liveness_real:
-                continue
+                        else:
+                            is_liveness_real = False
 
             # ── Recognition ────────────────────────────────────────
             student_id = None
@@ -140,24 +133,30 @@ class DetectionPipeline:
                     embedding = self.recognizer.embed(frame, face)
                     if embedding is not None:
                         best_dist = float("inf")
+                        best_t = None
                         for t in templates:
                             stored = np.frombuffer(t["embedding"], dtype=np.float32)
                             dist = float(np.linalg.norm(embedding - stored))
                             if dist < best_dist:
                                 best_dist = dist
-                                student_id = t["student_id"]
-                                name = t.get("name", "Anggota")
+                                best_t = t
 
-                        similarity = 1.0 - (best_dist ** 2) / 2.0
-                        
-                        if student_id is not None and similarity >= RECOGNITION_THRESHOLD and track_id > 0:
-                            info["student_id"] = student_id
-                            info["name"] = name
-                            info["similarity"] = similarity
-                            info["recognition_time"] = now
+                        if best_t is not None:
+                            # Cosine similarity for unit vectors: 1 - d^2 / 2
+                            similarity = float(np.clip(1.0 - (best_dist ** 2) / 2.0, 0.0, 1.0))
+                            if similarity >= RECOGNITION_THRESHOLD:
+                                student_id = best_t["student_id"]
+                                name = best_t.get("name", "Anggota")
+                                if track_id > 0:
+                                    info["student_id"] = student_id
+                                    info["name"] = name
+                                    info["similarity"] = similarity
+                                    info["recognition_time"] = now
 
-            recognized = student_id is not None and similarity >= RECOGNITION_THRESHOLD
-            is_valid_match = recognized
+            is_valid_match = (student_id is not None and similarity >= RECOGNITION_THRESHOLD)
+            
+            # Attendance dicatat jika wajah cocok (valid match)
+            recognized = is_valid_match
 
             # ── Cooldown ────────────────────────────────────────
             if recognized:
@@ -167,10 +166,12 @@ class DetectionPipeline:
                 else:
                     self._cooldowns[student_id] = time.time()
 
+            display_name = name if is_valid_match else "Unknown"
+
             results.append(
                 RecognitionResult(
                     student_id=student_id if is_valid_match else None,
-                    name=name if is_valid_match else "Unknown",
+                    name=display_name,
                     confidence=similarity,
                     liveness_score=liveness_score,
                     bbox=bbox,

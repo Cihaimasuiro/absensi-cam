@@ -1,26 +1,22 @@
 [Unit]
 Description=Absensi Cam Edge Engine
 After=network.target
-StartLimitIntervalSec=0
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=edge
 Group=edge
 WorkingDirectory=/opt/smart-absensi/edge-engine
-Environment="PATH=/opt/smart-absensi/edge-engine/miniforge3/envs/edge_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=/opt/smart-absensi/edge-engine/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
-Environment="FACENOX_INFERENCE_TIMEOUT=10.0"
-ExecStart=/opt/smart-absensi/edge-engine/miniforge3/envs/edge_env/bin/python engine.py
+ExecStart=/opt/smart-absensi/edge-engine/venv/bin/python engine.py
 Restart=always
 RestartSec=5
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=smart-absensi
-
-# Set limits to prevent crashing the SBC
-MemoryMax=500M
-CPUQuota=80%
 
 [Install]
 WantedBy=multi-user.target

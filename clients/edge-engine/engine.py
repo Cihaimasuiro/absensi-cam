@@ -38,6 +38,7 @@ class CameraReader:
         self.latest_frame = None
         self.running = True
         self.lock = threading.Lock()
+        self.frame_ready = threading.Event()
         
     def start(self):
         threading.Thread(target=self.update, daemon=True).start()
@@ -49,16 +50,18 @@ class CameraReader:
             if ret:
                 with self.lock:
                     self.latest_frame = frame
+                self.frame_ready.set()
             else:
                 self.running = False
                 break
                 
     def read(self):
-        with self.lock:
-            if self.latest_frame is not None:
-                return True, self.latest_frame.copy()
-            else:
-                return False, None
+        if self.frame_ready.wait(timeout=1.0):
+            with self.lock:
+                frame = self.latest_frame.copy()
+            self.frame_ready.clear()
+            return True, frame
+        return False, None
                 
     def stop(self):
         self.running = False
@@ -179,7 +182,6 @@ class EdgeEngine:
 
         cam_reader = CameraReader(cap).start()
         frame_id = 0
-        DETECTION_STRIDE = 3
 
         while True:
             frame_id += 1
@@ -196,7 +198,10 @@ class EdgeEngine:
             templates = self.db.get_all_templates()
 
             t0 = time.time()
-            use_detector = (frame_id % DETECTION_STRIDE == 0)
+            
+            # Selalu gunakan detektor (karena tracker sering lepas di H6)
+            use_detector = True 
+            
             results = self.pipeline.process(frame, templates, use_detector=use_detector)
             ms = (time.time() - t0) * 1000
 

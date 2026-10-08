@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class SyncWorker:
     def __init__(self, db: DatabaseManager, api_url: str, api_token: str):
         self.db = db
-        self.api_url = api_url.rstrip("/")
-        self.api_token = api_token
+        self.api_url = api_url.strip().rstrip("/") if api_url else ""
+        self.api_token = api_token.strip() if api_token else ""
         self.is_running = False
         self.thread = None
         self.sync_interval = 15  # detik
@@ -102,8 +102,8 @@ class SyncWorker:
                     "student_id": r["student_id"],
                     "captured_at": r["captured_at"],
                     "direction": r["direction"],
-                    "score": r["score"],
-                    "liveness_score": r["liveness_score"],
+                    "score": round(min(1.0, max(0.0, float(r["score"]))), 4) if r.get("score") is not None else 0.5,
+                    "liveness_score": round(min(1.0, max(0.0, float(r["liveness_score"]))), 4) if r.get("liveness_score") is not None else 1.0,
                     "time_source": r["time_source"],
                 }
                 for r in records

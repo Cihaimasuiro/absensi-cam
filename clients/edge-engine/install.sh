@@ -16,8 +16,7 @@ NC='\033[0m' # No Color
 # --- Paths ---
 INSTALL_DIR="/opt/smart-absensi/edge-engine"
 SERVICE_NAME="smart-absensi.service"
-ENV_NAME="edge_env"
-PYTHON_VERSION="3.11"
+
 USER_NAME="edge"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -49,7 +48,7 @@ apt-get install -y --no-install-recommends \
     build-essential pkg-config \
     libgl1 libglib2.0-0 libsm6 libxext6 \
     v4l-utils curl wget rsync \
-    libv4l-dev python3-dev
+    libv4l-dev python3-dev python3-venv
 
 # 2. Setup Working Directory
 log_info "Setting up working directory at $INSTALL_DIR..."
@@ -94,37 +93,21 @@ fi
 
 cd "$INSTALL_DIR"
 
-# 3. Install Miniforge for Modern Python (3.11) on AARCH64
-if [ ! -d "miniforge3" ]; then
-    log_info "Downloading Miniforge3 (AARCH64)..."
-    wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh"
-    log_info "Installing Miniforge3..."
-    bash Miniforge3.sh -b -p "$INSTALL_DIR/miniforge3"
-    rm Miniforge3.sh
-else
-    log_info "Miniforge3 is already installed, skipping..."
+# 3. Create Virtual Environment
+log_info "Setting up Python virtual environment..."
+if [ ! -d "$INSTALL_DIR/venv" ]; then
+    python3 -m venv "$INSTALL_DIR/venv"
 fi
 
-# Set ownership early so conda env works correctly for the edge user
+# Set ownership early so venv works correctly for the edge user
 log_info "Setting ownership of $INSTALL_DIR to $USER_NAME..."
 chown -R $USER_NAME:$USER_NAME "$INSTALL_DIR" || log_warn "Could not set ownership to $USER_NAME."
 
-# 4. Create and Setup Conda Environment as user
+# 4. Install dependencies
+log_info "Installing Python dependencies..."
 sudo -u $USER_NAME bash <<EOF
-source "$INSTALL_DIR/miniforge3/etc/profile.d/conda.sh" || true
-source "$INSTALL_DIR/miniforge3/bin/activate" || true
-
-if ! conda env list | grep -q "$ENV_NAME"; then
-    echo "[INFO] Creating conda environment '$ENV_NAME' with Python $PYTHON_VERSION..."
-    conda create -y -n "$ENV_NAME" python="$PYTHON_VERSION"
-else
-    echo "[INFO] Conda environment '$ENV_NAME' already exists, updating..."
-fi
-
-conda activate "$ENV_NAME"
-
-echo "[INFO] Installing uv for fast dependency resolution..."
-pip install uv --quiet
+source "$INSTALL_DIR/venv/bin/activate"
+pip install --upgrade pip uv --quiet
 
 if [ -f "$INSTALL_DIR/requirements.lock" ]; then
     uv pip install -r "$INSTALL_DIR/requirements.lock" --quiet
@@ -154,13 +137,17 @@ else
     log_warn "$SERVICE_NAME not found, skipping service installation."
 fi
 
+# 7. Final Ownership Check
+log_info "Enforcing ownership of $INSTALL_DIR to $USER_NAME..."
+chown -R $USER_NAME:$USER_NAME "$INSTALL_DIR" || true
+
 log_success "============================================================================"
 log_success "✅ Edge Engine Installation Complete!"
 log_success "============================================================================"
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Configure your API URL in $INSTALL_DIR/.env if needed."
 echo "2. Run the pairing script to connect to the Laravel backend:"
-echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/miniforge3/envs/$ENV_NAME/bin/python pairing.py"
+echo "   cd $INSTALL_DIR && sudo -u $USER_NAME $INSTALL_DIR/venv/bin/python pairing.py"
 echo "3. Models are placed in '$INSTALL_DIR/models'."
 echo "4. Start the service: 'systemctl start $SERVICE_NAME'"
 echo "5. View logs: 'journalctl -fu $SERVICE_NAME'"

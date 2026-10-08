@@ -143,7 +143,7 @@
 
     {{-- Global Confirm Modal --}}
     <dialog x-ref="globalConfirmModal" @click="$event.target === $refs.globalConfirmModal && $refs.globalConfirmModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-2xl m-auto">
-        <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
+        <div class="flex justify-between items-center mb-md border-b pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="alert-triangle" class="w-4 h-4 text-danger"></i> Konfirmasi
             </h3>

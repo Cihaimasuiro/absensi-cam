@@ -5,7 +5,7 @@ import {
     Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-    createIcons
+    UserCheck, RefreshCw, createIcons
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
@@ -94,6 +94,7 @@ createIcons({
         Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
         Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
         FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, Edit3, Edit2,
-        AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud
+        AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
+        UserCheck, RefreshCw
     }
 })

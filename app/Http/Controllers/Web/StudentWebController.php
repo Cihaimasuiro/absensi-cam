@@ -12,7 +12,7 @@ class StudentWebController extends Controller
 {
     public function index(Request $request)
     {
-        $students = Student::with(['group:id,name', 'school:id,name', 'faceTemplate:id,student_id'])
+        $students = Student::with(['group:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
             ->when($request->search, fn ($q) =>
                 $q->where(fn ($q) =>
                     $q->where('name', 'like', '%'.$request->search.'%')
@@ -133,8 +133,40 @@ class StudentWebController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Enrollment dijadwalkan. Template akan tersedia dalam beberapa detik.'
+            'message' => 'Enrollment berhasil diproses. Template wajah telah aktif.'
         ]);
+    }
+
+    public function photo(Student $student)
+    {
+        $template = $student->faceTemplate;
+        if (! $template || ! $template->photo_path || ! \Illuminate\Support\Facades\Storage::disk('local')->exists($template->photo_path)) {
+            abort(404, 'Foto wajah tidak ditemukan');
+        }
+
+        $path = \Illuminate\Support\Facades\Storage::disk('local')->path($template->photo_path);
+        return response()->file($path);
+    }
+
+    public function enrollDestroy(Request $request, Student $student)
+    {
+        $template = $student->faceTemplate;
+        if ($template) {
+            if ($template->photo_path && \Illuminate\Support\Facades\Storage::disk('local')->exists($template->photo_path)) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($template->photo_path);
+                $template->photo_path = null;
+            }
+            $template->delete();
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Data biometrik wajah berhasil dihapus.'
+            ]);
+        }
+
+        return redirect()->route('students.index')->with('success', 'Data biometrik wajah berhasil dihapus.');
     }
 
     public function bulkEnroll(Request $request)

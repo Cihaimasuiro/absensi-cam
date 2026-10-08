@@ -84,17 +84,21 @@ class GenerateFaceEmbedding implements ShouldQueue
                     'key_id' => 'default_key', // This should match edge engine's configured key
                     'model_version' => $usedModelVersion,
                     'embedding_hash' => $hash,
-                    'deleted_at' => null
                 ];
                 
                 if ($this->photoPath) {
                     $data['photo_path'] = $this->photoPath;
                 }
 
-                FaceTemplate::updateOrCreate(
-                    ['student_id' => $this->studentId],
-                    $data
-                );
+                $template = FaceTemplate::withTrashed()->where('student_id', $this->studentId)->first();
+                if ($template) {
+                    if ($template->trashed()) {
+                        $template->restore();
+                    }
+                    $template->update($data);
+                } else {
+                    FaceTemplate::create(array_merge(['student_id' => $this->studentId], $data));
+                }
             });
 
             Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);

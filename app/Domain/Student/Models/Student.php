@@ -32,6 +32,16 @@ class Student extends Model
 
     protected $casts = ['is_active' => 'boolean'];
 
+    protected $appends = ['face_photo_url'];
+
+    public function getFacePhotoUrlAttribute(): ?string
+    {
+        if ($this->relationLoaded('faceTemplate') && $this->faceTemplate && $this->faceTemplate->photo_path) {
+            return route('students.photo', $this->id);
+        }
+        return null;
+    }
+
     public function school(): BelongsTo
     {
         return $this->belongsTo(School::class);

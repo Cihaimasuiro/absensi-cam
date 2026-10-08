@@ -24,8 +24,10 @@ Route::middleware('auth')->group(function () {
         Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
         Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
         Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
+        Route::delete('students/{student}/enroll', [StudentWebController::class, 'enrollDestroy'])->name('students.enroll.destroy');
         Route::resource('students', StudentWebController::class)->except(['index', 'show']);
     });
+    Route::get('students/{student}/photo', [StudentWebController::class, 'photo'])->name('students.photo');
     Route::resource('students', StudentWebController::class)->only(['index', 'show']);
 
     // Reports

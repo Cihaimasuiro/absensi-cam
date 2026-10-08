@@ -108,7 +108,7 @@
     </div>
 
     {{-- Create Modal --}}
-    <dialog x-ref="createModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Organisasi
@@ -142,7 +142,7 @@
     </dialog>
 
     {{-- Edit Modal --}}
-    <dialog x-ref="editModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+    <dialog x-ref="editModal" @click="$event.target === $refs.editModal && $refs.editModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Organisasi
@@ -185,7 +185,7 @@
     </dialog>
 
     {{-- Classroom Create Modal --}}
-    <dialog x-ref="createClassroomModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+    <dialog x-ref="createClassroomModal" @click="$event.target === $refs.createClassroomModal && $refs.createClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Kelas
@@ -235,7 +235,7 @@
     </dialog>
 
     {{-- Classroom Edit Modal --}}
-    <dialog x-ref="editClassroomModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+    <dialog x-ref="editClassroomModal" @click="$event.target === $refs.editClassroomModal && $refs.editClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-2" class="w-4 h-4 text-primary"></i> Edit Kelas
@@ -295,7 +295,7 @@
     </dialog>
 
     {{-- Classroom Bulk Edit Modal --}}
-    <dialog x-ref="bulkEditClassroomModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+    <dialog x-ref="bulkEditClassroomModal" @click="$event.target === $refs.bulkEditClassroomModal && $refs.bulkEditClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="clock" class="w-4 h-4 text-primary"></i> Update Waktu Massal

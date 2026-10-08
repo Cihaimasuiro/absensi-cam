@@ -94,9 +94,14 @@
 {{-- Add Device Modal --}}
 <div x-show="addDeviceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;">
     <div @click.away="addDeviceModal = false" class="card p-lg animate-fade-in-up" style="width: 400px; max-width: 90vw;">
-        <h2 class="text-[16px] font-bold text-ink mb-[4px] flex items-center gap-xs">
-            <i data-lucide="plus-circle" class="w-4 h-4 text-primary"></i> Tambah Perangkat
-        </h2>
+        <div class="flex justify-between items-center mb-xs border-b border-hairline pb-xs">
+            <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
+                <i data-lucide="plus-circle" class="w-4 h-4 text-primary"></i> Tambah Perangkat
+            </h2>
+            <button type="button" @click="addDeviceModal = false" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
         <p class="text-caption text-ink-muted mb-md">
             Daftarkan perangkat baru dan generate token konfigurasinya seketika.
         </p>
@@ -134,7 +139,14 @@
 {{-- Edit Device Modal --}}
 <div x-show="editDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;">
     <div @click.away="editDevice = null" class="card p-lg animate-fade-in-up" style="width: 400px; max-width: 90vw;">
-        <h2 class="text-[16px] font-bold text-ink mb-md">Edit Perangkat</h2>
+        <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
+            <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
+                <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Perangkat
+            </h2>
+            <button type="button" @click="editDevice = null" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
         <template x-if="editDevice">
             <form method="POST" x-bind:action="'/devices/' + editDevice.id" @submit="$el.action = '/devices/' + editDevice.id">
                 @csrf @method('PUT')

@@ -96,7 +96,7 @@
 </div>
 
 {{-- Create Modal --}}
-<dialog id="createModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+<dialog id="createModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota
@@ -136,7 +136,7 @@
 </dialog>
 
 {{-- Edit Modal --}}
-<dialog id="editModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+<dialog id="editModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota
@@ -184,7 +184,7 @@
 </dialog>
 
 {{-- Import Modal --}}
-<dialog id="importModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+<dialog id="importModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="upload" class="w-4 h-4 text-primary"></i> Import Anggota (CSV)
@@ -208,7 +208,7 @@
 </dialog>
 
 {{-- Bulk Enroll Modal --}}
-<dialog id="bulkEnrollModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/20 shadow-xl m-auto">
+<dialog id="bulkEnrollModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4 text-accent"></i> Bulk Enroll (via ZIP)
@@ -236,7 +236,7 @@
 </dialog>
 
 {{-- Enroll Modal --}}
-<dialog id="enrollModal" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-2xl m-auto">
+<dialog id="enrollModal" onclick="if(event.target === this) closeEnrollModal()" oncancel="closeEnrollModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-2xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="camera" class="w-4 h-4 text-accent"></i> Daftarkan Wajah

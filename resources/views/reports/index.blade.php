@@ -107,40 +107,38 @@
 </div>
 
 @role('super_admin|admin')
-<dialog x-ref="correctionModal" class="bg-transparent p-0 m-auto backdrop:bg-black/50 open:flex items-center justify-center min-w-full min-h-full">
-    <div class="bg-canvas rounded-lg w-full max-w-md shadow-lg overflow-hidden m-auto" @click.stop>
-        <div class="px-md py-sm border-b border-hairline flex justify-between items-center">
-            <h3 class="font-bold text-ink">Koreksi Absensi</h3>
-            <button type="button" @click="closeCorrectionModal" class="text-ink-faint hover:text-ink">
-                <i data-lucide="x" class="w-5 h-5"></i>
-            </button>
-        </div>
-        <form x-ref="correctionForm" method="POST" action="" class="p-md flex flex-col gap-md">
-            @csrf
-            <div>
-                <label class="form-label">Waktu Sebenarnya (Lokal)</label>
-                <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full" x-model="correctionLogData.captured_at">
-            </div>
-            <div>
-                <label class="form-label">Status Absensi</label>
-                <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required x-model="correctionLogData.direction">
-                    <option value="in">Masuk</option>
-                    <option value="out">Keluar</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Alasan Koreksi</label>
-                <textarea name="reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
-            </div>
-            <div class="flex justify-end gap-sm mt-sm">
-                <button type="button" @click="closeCorrectionModal" class="btn btn-utility">Batal</button>
-                <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
-            </div>
-        </form>
+<dialog x-ref="correctionModal" @click="$event.target === $refs.correctionModal && closeCorrectionModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[420px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
+        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs text-ink">
+            <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Koreksi Absensi
+        </h3>
+        <button type="button" @click="closeCorrectionModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
     </div>
+    <form x-ref="correctionForm" method="POST" action="" class="flex flex-col gap-md">
+        @csrf
+        <div>
+            <label for="corrected_captured_at" class="form-label">Waktu Sebenarnya (Lokal) *</label>
+            <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full" x-model="correctionLogData.captured_at">
+        </div>
+        <div>
+            <label for="corrected_direction" class="form-label">Status Absensi *</label>
+            <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required x-model="correctionLogData.direction">
+                <option value="in">Masuk</option>
+                <option value="out">Keluar</option>
+            </select>
+        </div>
+        <div>
+            <label for="correction_reason" class="form-label">Alasan Koreksi *</label>
+            <textarea name="reason" id="correction_reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
+        </div>
+        <div class="flex justify-end gap-xs mt-sm">
+            <button type="button" @click="closeCorrectionModal" class="btn btn-utility">Batal</button>
+            <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
+        </div>
+    </form>
 </dialog>
-
-
 @endrole
 </div>
 @endsection

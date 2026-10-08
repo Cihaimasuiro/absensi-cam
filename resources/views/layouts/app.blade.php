@@ -119,8 +119,8 @@
             @endif
         </div>
 
-        {{-- Flash Messages --}}
-        @if(session('success') || session('error'))
+        {{-- Flash Messages & Validation Errors --}}
+        @if(session('success') || session('error') || ($errors->any()))
             <div class="mb-lg">
                 @if(session('success'))
                     <div class="alert alert-success flex items-center gap-xs" role="alert">
@@ -130,6 +130,18 @@
                 @if(session('error'))
                     <div class="alert alert-error flex items-center gap-xs" role="alert">
                         <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
+                    </div>
+                @endif
+                @if($errors->any())
+                    <div class="alert alert-error flex flex-col gap-xs" role="alert">
+                        <div class="flex items-center gap-xs font-semibold">
+                            <i data-lucide="alert-circle" class="w-4 h-4"></i> Terdapat kesalahan pada formulir:
+                        </div>
+                        <ul class="list-disc list-inside text-[13px] m-0 pl-xs">
+                            @foreach($errors->all() as $err)
+                                <li>{{ $err }}</li>
+                            @endforeach
+                        </ul>
                     </div>
                 @endif
             </div>

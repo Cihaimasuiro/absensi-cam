@@ -12,7 +12,7 @@ class StudentWebController extends Controller
 {
     public function index(Request $request)
     {
-        $students = Student::with(['group:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
+        $students = Student::with(['classroom:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
             ->when($request->search, fn ($q) =>
                 $q->where(fn ($q) =>
                     $q->where('name', 'like', '%'.$request->search.'%')
@@ -23,7 +23,7 @@ class StudentWebController extends Controller
             ->when($request->filter === 'inactive',     fn ($q) => $q->where('is_active', false))
             ->when($request->filter !== 'inactive',     fn ($q) => $q->where('is_active', true))
             ->when($request->classroom_id, fn ($q) => $q->where('classroom_id', $request->classroom_id))
-            ->select(['id', 'code', 'name', 'email', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
+            ->select(['id', 'code', 'name', 'email', 'phone', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
             ->orderBy('name')
             ->paginate(50)
             ->withQueryString();

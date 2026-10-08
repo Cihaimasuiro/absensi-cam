@@ -52,6 +52,11 @@ class Student extends Model
         return $this->belongsTo(Classroom::class, 'classroom_id');
     }
 
+    public function classroom(): BelongsTo
+    {
+        return $this->belongsTo(Classroom::class, 'classroom_id');
+    }
+
     public function consents(): HasMany
     {
         return $this->hasMany(Consent::class);

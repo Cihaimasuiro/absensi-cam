@@ -19,14 +19,23 @@
     </div>
 </div>
 
-{{-- Search --}}
+{{-- Search & Filter --}}
 <div class="card p-sm px-md mb-md">
-    <form method="GET" action="{{ route('students.index') }}" class="flex gap-sm items-center">
-        <div class="relative flex-1 max-w-[320px]">
+    <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-sm items-center">
+        <div class="relative flex-1 min-w-[200px] max-w-[320px]">
             <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
             <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari Kode atau Nama…" class="form-input pl-9 w-full">
         </div>
+        <select name="classroom_id" onchange="this.form.submit()" class="form-select text-[13px] w-auto">
+            <option value="">-- Semua Ruang / Kelas --</option>
+            @foreach($classrooms as $c)
+                <option value="{{ $c->id }}" {{ request('classroom_id') == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
+            @endforeach
+        </select>
         <button type="submit" class="btn btn-utility">Cari</button>
+        @if(request('search') || request('classroom_id'))
+            <a href="{{ route('students.index') }}" class="text-[12px] text-ink-faint hover:text-ink">Reset</a>
+        @endif
     </form>
 </div>
 
@@ -37,6 +46,7 @@
             <tr>
                 <th>Kode / NIS</th>
                 <th>Nama Lengkap</th>
+                <th>Ruang / Kelas</th>
                 <th>Organisasi / Gedung</th>
                 <th>Template Wajah</th>
                 <th class="text-right">Aksi</th>
@@ -47,6 +57,7 @@
                 <tr>
                     <td class="font-mono text-[12px]">{{ $student->code }}</td>
                     <td class="font-medium text-ink">{{ $student->name }}</td>
+                    <td class="text-ink-muted text-[13px]">{{ $student->classroom->name ?? $student->group->name ?? '-' }}</td>
                     <td>{{ $student->school->name ?? '-' }}</td>
                     <td>
                         @if($student->faceTemplate)
@@ -82,7 +93,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="text-center text-ink-faint p-xxl">
+                    <td colspan="6" class="text-center text-ink-faint p-xxl">
                         <div class="flex flex-col items-center justify-center gap-sm">
                             <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
                             Tidak ada anggota terdaftar.
@@ -101,12 +112,12 @@
 </div>
 
 {{-- Create Modal --}}
-<dialog id="createModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog id="createModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[440px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota
         </h3>
-        <button onclick="document.getElementById('createModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('createModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -114,23 +125,75 @@
         @csrf
         <div class="mb-sm">
             <label class="form-label">Kode / NIS *</label>
-            <input type="text" name="code" required class="form-input">
+            <input type="text" name="code" value="{{ old('code') }}" required class="form-input @error('code') border-danger @enderror" placeholder="misal: 10021">
+            @error('code')
+                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+            @enderror
         </div>
         <div class="mb-sm">
             <label class="form-label">Nama Lengkap *</label>
-            <input type="text" name="name" required class="form-input">
+            <input type="text" name="name" value="{{ old('name') }}" required class="form-input @error('name') border-danger @enderror" placeholder="misal: Ahmad Fauzi">
+            @error('name')
+                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+            @enderror
+        </div>
+        <div class="grid grid-cols-2 gap-sm mb-sm">
+            <div>
+                <label class="form-label">Peran</label>
+                <select name="role" class="form-select @error('role') border-danger @enderror">
+                    <option value="student" {{ old('role') === 'student' ? 'selected' : '' }}>Siswa / Anggota</option>
+                    <option value="teacher" {{ old('role') === 'teacher' ? 'selected' : '' }}>Guru / Pengajar</option>
+                    <option value="employee" {{ old('role') === 'employee' ? 'selected' : '' }}>Karyawan / Staf</option>
+                </select>
+                @error('role')
+                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+                @enderror
+            </div>
+            <div>
+                <label class="form-label">Gedung / Sekolah</label>
+                <select id="createSchool" name="school_id" onchange="filterClassrooms('create')" class="form-select @error('school_id') border-danger @enderror">
+                    <option value="">-- Pilih --</option>
+                    @foreach($schools as $school)
+                        <option value="{{ $school->id }}" {{ old('school_id') == $school->id ? 'selected' : '' }}>{{ $school->name }}</option>
+                    @endforeach
+                </select>
+                @error('school_id')
+                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+                @enderror
+            </div>
         </div>
         <div class="mb-sm">
-            <label class="form-label">Gedung / Sekolah</label>
-            <select name="school_id" class="form-select">
-                <option value="">-- Pilih --</option>
-                @foreach($schools as $school)
-                    <option value="{{ $school->id }}">{{ $school->name }}</option>
+            <label class="form-label">Ruang Kelas / Kelompok</label>
+            <select id="createClassroom" name="classroom_id" class="form-select @error('classroom_id') border-danger @enderror">
+                <option value="">-- Tanpa Kelas / Umum --</option>
+                @foreach($classrooms as $classroom)
+                    <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}" {{ old('classroom_id') == $classroom->id ? 'selected' : '' }}>
+                        {{ $classroom->name }}
+                    </option>
                 @endforeach
             </select>
+            @error('classroom_id')
+                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+            @enderror
+        </div>
+        <div class="grid grid-cols-2 gap-sm mb-sm">
+            <div>
+                <label class="form-label">Email (Opsional)</label>
+                <input type="email" name="email" value="{{ old('email') }}" class="form-input @error('email') border-danger @enderror" placeholder="email@sekolah.sch.id">
+                @error('email')
+                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+                @enderror
+            </div>
+            <div>
+                <label class="form-label">No. Telepon (Opsional)</label>
+                <input type="text" name="phone" value="{{ old('phone') }}" class="form-input @error('phone') border-danger @enderror" placeholder="08xxxxxxxxxx">
+                @error('phone')
+                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
+                @enderror
+            </div>
         </div>
         <div class="mb-sm flex items-center gap-xs mt-sm">
-            <input type="checkbox" name="has_consent" value="1" checked id="createConsent">
+            <input type="checkbox" name="has_consent" value="1" {{ old('has_consent', '1') ? 'checked' : '' }} id="createConsent">
             <label for="createConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
@@ -141,12 +204,12 @@
 </dialog>
 
 {{-- Edit Modal --}}
-<dialog id="editModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog id="editModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[440px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota
         </h3>
-        <button onclick="document.getElementById('editModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('editModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -161,21 +224,52 @@
             <label class="form-label">Nama Lengkap *</label>
             <input type="text" id="editName" name="name" required class="form-input">
         </div>
-        <div class="mb-sm">
-            <label class="form-label">Gedung / Sekolah</label>
-            <select id="editSchool" name="school_id" class="form-select">
-                <option value="">-- Pilih --</option>
-                @foreach($schools as $school)
-                    <option value="{{ $school->id }}">{{ $school->name }}</option>
-                @endforeach
-            </select>
+        <div class="grid grid-cols-2 gap-sm mb-sm">
+            <div>
+                <label class="form-label">Peran</label>
+                <select id="editRole" name="role" class="form-select">
+                    <option value="student">Siswa / Anggota</option>
+                    <option value="teacher">Guru / Pengajar</option>
+                    <option value="employee">Karyawan / Staf</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Gedung / Sekolah</label>
+                <select id="editSchool" name="school_id" onchange="filterClassrooms('edit')" class="form-select">
+                    <option value="">-- Pilih --</option>
+                    @foreach($schools as $school)
+                        <option value="{{ $school->id }}">{{ $school->name }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
-        <div class="mb-sm">
-            <label class="form-label">Status Aktif</label>
-            <select id="editActive" name="is_active" class="form-select">
-                <option value="1">Aktif</option>
-                <option value="0">Tidak Aktif</option>
-            </select>
+        <div class="grid grid-cols-2 gap-sm mb-sm">
+            <div>
+                <label class="form-label">Ruang Kelas / Kelompok</label>
+                <select id="editClassroom" name="classroom_id" class="form-select">
+                    <option value="">-- Tanpa Kelas / Umum --</option>
+                    @foreach($classrooms as $classroom)
+                        <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}">{{ $classroom->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Status Aktif</label>
+                <select id="editActive" name="is_active" class="form-select">
+                    <option value="1">Aktif</option>
+                    <option value="0">Tidak Aktif</option>
+                </select>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-sm mb-sm">
+            <div>
+                <label class="form-label">Email (Opsional)</label>
+                <input type="email" id="editEmail" name="email" class="form-input" placeholder="email@sekolah.sch.id">
+            </div>
+            <div>
+                <label class="form-label">No. Telepon (Opsional)</label>
+                <input type="text" id="editPhone" name="phone" class="form-input" placeholder="08xxxxxxxxxx">
+            </div>
         </div>
         <div class="mb-sm flex items-center gap-xs mt-sm">
             <input type="checkbox" name="has_consent" value="1" id="editConsent">
@@ -189,12 +283,12 @@
 </dialog>
 
 {{-- Import Modal --}}
-<dialog id="importModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog id="importModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="upload" class="w-4 h-4 text-primary"></i> Import Anggota (CSV)
         </h3>
-        <button onclick="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -213,12 +307,12 @@
 </dialog>
 
 {{-- Bulk Enroll Modal --}}
-<dialog id="bulkEnrollModal" onclick="if(event.target === this) this.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog id="bulkEnrollModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4 text-accent"></i> Bulk Enroll (via ZIP)
         </h3>
-        <button onclick="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -322,13 +416,49 @@
 
     function editStudent(student) {
         document.getElementById('editForm').action = '/students/' + student.id;
-        document.getElementById('editCode').value = student.code;
-        document.getElementById('editName').value = student.name;
+        document.getElementById('editCode').value = student.code || '';
+        document.getElementById('editName').value = student.name || '';
+        document.getElementById('editRole').value = student.role || 'student';
         document.getElementById('editSchool').value = student.school_id || '';
+        filterClassrooms('edit');
+        document.getElementById('editClassroom').value = student.classroom_id || '';
+        document.getElementById('editEmail').value = student.email || '';
+        document.getElementById('editPhone').value = student.phone || '';
         document.getElementById('editActive').value = student.is_active ? '1' : '0';
         document.getElementById('editConsent').checked = true;
         document.getElementById('editModal').showModal();
     }
+
+    function filterClassrooms(prefix) {
+        const schoolSelect = document.getElementById(prefix + 'School');
+        const classroomSelect = document.getElementById(prefix + 'Classroom');
+        if (!schoolSelect || !classroomSelect) return;
+        const selectedSchool = schoolSelect.value;
+        const currentClassroomVal = classroomSelect.value;
+
+        Array.from(classroomSelect.options).forEach(opt => {
+            if (!opt.value) return;
+            const schoolId = opt.getAttribute('data-school');
+            if (!selectedSchool || !schoolId || schoolId === selectedSchool) {
+                opt.hidden = false;
+            } else {
+                opt.hidden = true;
+                if (opt.value === currentClassroomVal) {
+                    classroomSelect.value = '';
+                }
+            }
+        });
+    }
+
+    @if($errors->any())
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('createModal');
+        if (modal) {
+            modal.showModal();
+            filterClassrooms('create');
+        }
+    });
+    @endif
 
     let enrollStream = null;
     let currentEnrollStudent = null;

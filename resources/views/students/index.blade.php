@@ -4,6 +4,21 @@
 @section('content')
 <div x-data>
 
+<div class="flex items-center justify-between mb-md">
+    <h1 class="text-[18px] font-bold text-ink">Daftar Anggota</h1>
+    <div x-data class="flex items-center gap-xs">
+        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
+            <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
+        </button>
+        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
+            <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
+        </button>
+        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary inline-flex items-center gap-xs">
+            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
+        </button>
+    </div>
+</div>
+
 {{-- Search --}}
 <div class="card p-sm px-md mb-md">
     <form method="GET" action="{{ route('students.index') }}" class="flex gap-sm items-center">
@@ -13,18 +28,6 @@
         </div>
         <button type="submit" class="btn btn-utility">Cari</button>
     </form>
-    
-    <div x-data class="flex gap-xs">
-        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility">
-            <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
-        </button>
-        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility">
-            <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
-        </button>
-        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary">
-            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
-        </button>
-    </div>
 </div>
 
 {{-- Table --}}

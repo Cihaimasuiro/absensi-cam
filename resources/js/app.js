@@ -10,11 +10,21 @@ import {
 
 Alpine.data('layoutData', () => ({
     sidebarOpen: false,
+    confirmMessage: '',
+    confirmAction: null,
     confirmSubmit(e) {
-        const msg = e.target.getAttribute('data-confirm') || 'Anda yakin?';
-        if (!confirm(msg)) {
-            e.preventDefault();
+        e.preventDefault();
+        this.confirmMessage = e.target.getAttribute('data-confirm') || 'Anda yakin?';
+        this.confirmAction = () => {
+            e.target.submit();
+        };
+        this.$refs.globalConfirmModal.showModal();
+    },
+    executeConfirm() {
+        if (this.confirmAction) {
+            this.confirmAction();
         }
+        this.$refs.globalConfirmModal.close();
     }
 }));
 

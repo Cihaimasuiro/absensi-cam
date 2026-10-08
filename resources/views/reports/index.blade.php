@@ -16,7 +16,7 @@
             <input type="date" name="end_date" value="{{ request('end_date', now()->format('Y-m-d')) }}" class="form-input w-[160px]">
         </div>
         <div class="flex-1 min-w-[160px]">
-            <label class="form-label">Cari NIS / Nama</label>
+            <label class="form-label">Cari</label>
             <div class="relative">
                 <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input pl-9 w-full">

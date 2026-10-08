@@ -51,8 +51,8 @@
             Log Aktivitas Terbaru
         </div>
         <div class="flex-1 overflow-y-auto custom-scroll pr-xs">
-            @if(isset($recentLogs) && $recentLogs->count() > 0)
-                @foreach($recentLogs as $log)
+            @if(isset($recentActivity) && $recentActivity->count() > 0)
+                @foreach($recentActivity as $log)
                     <div class="flex justify-between py-xs border-b border-hairline last:border-0 hover:bg-canvas-soft transition-colors px-xs -mx-xs rounded-xs">
                         <div class="flex items-center gap-sm">
                             <div class="w-8 h-8 rounded-full bg-canvas flex items-center justify-center border border-hairline shrink-0">
@@ -70,7 +70,7 @@
                             </div>
                             <div class="text-caption text-ink-faint flex items-center justify-end gap-[4px]">
                                 <i data-lucide="clock" class="w-3 h-3"></i>
-                                {{ $log->scanned_at->format('H:i') }}
+                                {{ $log->captured_at->format('H:i') }}
                             </div>
                         </div>
                     </div>

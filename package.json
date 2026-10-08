@@ -4,8 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "concurrently -c \"cyan,magenta,yellow,blue,green\" -n \"LARAVEL,VITE,EDGE,QUEUE,SCHEDULER\" \"php artisan serve\" \"vite\" \"node scripts/run-edge.mjs\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
-        "dev:lan": "concurrently -c \"cyan,magenta,yellow,blue,green\" -n \"LARAVEL,VITE,EDGE,QUEUE,SCHEDULER\" \"php artisan serve --host=0.0.0.0\" \"vite\" \"node scripts/run-edge.mjs\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
+        "dev": "concurrently -c \"cyan,magenta,yellow,blue\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
+        "dev:lan": "concurrently -c \"cyan,magenta,yellow,blue\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve --host=0.0.0.0\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
         "dev:web": "concurrently -c \"cyan,magenta,blue,green\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
         "dev:edge": "node scripts/run-edge.mjs"
     },

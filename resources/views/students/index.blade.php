@@ -11,7 +11,7 @@
             <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
         </button>
         <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
-            <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Import Excel
         </button>
         <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary inline-flex items-center gap-xs">
             <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
@@ -286,19 +286,27 @@
 <dialog id="importModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="upload" class="w-4 h-4 text-primary"></i> Import Anggota (CSV)
+            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-primary"></i> Import Anggota (Excel)
         </h3>
         <button type="button" onclick="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
+    
+    <div class="mb-sm p-sm bg-gray-50 border border-hairline rounded-md">
+        <p class="text-[12px] text-ink-muted mb-xs">Gunakan format template yang telah disediakan agar proses impor berjalan lancar.</p>
+        <a href="{{ route('students.template') }}" class="btn btn-utility text-xs py-1 px-3 inline-flex items-center gap-xs">
+            <i data-lucide="download" class="w-3 h-3"></i> Unduh Template Excel
+        </a>
+    </div>
+
     <form method="POST" action="{{ route('students.import') }}" enctype="multipart/form-data">
         @csrf
         <div class="mb-sm">
-            <label class="form-label">Berkas Excel/CSV</label>
-            <input type="file" name="file" accept=".csv, .xlsx, .xls" required class="text-[13px] form-input">
+            <label class="form-label">Berkas Excel (.xlsx / .xls)</label>
+            <input type="file" name="file" accept=".xlsx, .xls" required class="text-[13px] form-input">
         </div>
-        <p class="text-[12px] text-ink-faint mb-md">Format kolom: code, name, email, phone, role. Sistem otomatis mendaftarkan tanpa wajah.</p>
+        <p class="text-[11px] text-ink-faint mb-md">Sistem otomatis mendaftarkan anggota tanpa profil wajah. Profil wajah dapat di-enroll menyusul.</p>
         <div class="flex justify-end gap-xs">
             <button type="button" onclick="document.getElementById('importModal').close()" class="btn btn-utility">Batal</button>
             <button type="submit" class="btn btn-primary">Import Data</button>

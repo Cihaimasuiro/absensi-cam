@@ -109,6 +109,14 @@ class StudentWebController extends Controller
 
         return redirect()->route('students.index')->with('success', 'Anggota dihapus dan akan dikeluarkan dari perangkat.');
     }
+    public function downloadTemplate()
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Domain\Student\Exports\StudentsTemplateExport,
+            'Template_Impor_Anggota.xlsx'
+        );
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -121,6 +129,18 @@ class StudentWebController extends Controller
                 $request->file('file')
             );
             return redirect()->route('students.index')->with('success', 'Data anggota berhasil diimpor.');
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $messages = [];
+            foreach ($failures as $failure) {
+                $messages[] = "Baris {$failure->row()}: " . implode(', ', $failure->errors());
+            }
+            // limit to first 3 errors to avoid huge flash messages
+            if (count($messages) > 3) {
+                $messages = array_slice($messages, 0, 3);
+                $messages[] = '...dan kesalahan lainnya.';
+            }
+            return redirect()->route('students.index')->with('error', 'Validasi gagal: ' . implode(' | ', $messages));
         } catch (\Exception $e) {
             return redirect()->route('students.index')->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
         }

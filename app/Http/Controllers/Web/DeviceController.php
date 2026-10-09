@@ -14,7 +14,7 @@ class DeviceController extends Controller
     {
         $devices = Device::with('building:id,name')
             ->select(['id', 'name', 'device_code', 'building_id', 'fw_version', 'model_version',
-                      'last_heartbeat_at', 'last_cpu_temp', 'last_outbox_len', 'status', 'ip_address'])
+                      'last_heartbeat_at', 'last_cpu_temp', 'last_outbox_len', 'status', 'ip_address', 'liveness_enabled'])
             ->orderBy('name')
             ->get();
 
@@ -129,6 +129,8 @@ ENV;
             'building_id' => ['required', 'exists:buildings,id'],
             'ip_address' => ['nullable', 'string', 'max:45'],
         ]);
+
+        $validated['liveness_enabled'] = $request->boolean('liveness_enabled');
 
         $device->update($validated);
 

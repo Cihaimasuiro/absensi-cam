@@ -159,6 +159,14 @@
                     <p class="text-[11px] text-ink-muted mt-1">Digunakan untuk melihat video streaming di halaman dashboard.</p>
                 </div>
 
+                <div class="mb-md">
+                    <label class="flex items-center gap-xs cursor-pointer">
+                        <input type="checkbox" name="liveness_enabled" x-model="editDevice.liveness_enabled" class="rounded border-gray-300 text-primary shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
+                        <span class="text-[13px] font-medium text-ink">Aktifkan Anti-Spoofing (Liveness)</span>
+                    </label>
+                    <p class="text-[11px] text-ink-muted mt-1 ml-6">Mencegah presensi menggunakan foto/video dari HP. Matikan untuk menghemat CPU Edge Engine.</p>
+                </div>
+
                 <div class="flex justify-end gap-sm">
                     <button type="button" class="btn btn-secondary" @click="editDevice = null">Batal</button>
                     <button type="submit" class="btn btn-primary">Simpan Perubahan</button>

@@ -21,6 +21,7 @@ Route::middleware('auth')->group(function () {
     // Students — full CRUD + enrollment
     // Students
     Route::middleware('role:super_admin|admin')->group(function () {
+        Route::get('students/template', [StudentWebController::class, 'downloadTemplate'])->name('students.template');
         Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
         Route::post('students/bulk-enroll', [StudentWebController::class, 'bulkEnroll'])->name('students.bulk-enroll');
         Route::post('students/{student}/enroll', [StudentWebController::class, 'enrollStore'])->name('students.enroll.store');
@@ -33,6 +34,7 @@ Route::middleware('auth')->group(function () {
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/',    [ReportController::class, 'index'])->name('index');
+        Route::get('/student-logs', [ReportController::class, 'studentLogs'])->name('student-logs');
         Route::middleware('role:super_admin|admin')->group(function () {
             Route::get('/csv', [ReportController::class, 'exportCsv'])->name('export.csv');
             Route::get('/dtr/xlsx', [ReportController::class, 'exportDtr'])->name('export.dtr.xlsx');

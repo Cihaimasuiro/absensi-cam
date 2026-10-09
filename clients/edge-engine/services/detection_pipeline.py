@@ -109,14 +109,32 @@ class DetectionPipeline:
                         raw_conf = res[0]["liveness"].get("prob_real", res[0]["liveness"].get("confidence", 1.0))
                         liveness_score = float(np.clip(raw_conf, 0.0, 1.0))
                         
-                        if liveness_score >= LIVENESS_THRESHOLD:
-                            is_liveness_real = True
-                            if track_id > 0:
-                                info["liveness_verified"] = True
-                                info["liveness_score"] = liveness_score
-                                info["liveness_time"] = now
-                        else:
+                        # Face Size Limit Check (Max 40% of frame)
+                        fh, fw = frame.shape[:2]
+                        face_area = bbox[2] * bbox[3]
+                        frame_area = fh * fw
+                        size_ratio = face_area / frame_area
+                        
+                        if size_ratio > 0.40:
                             is_liveness_real = False
+                            info["liveness_count"] = 0
+                            info["liveness_rejected_reason"] = "Face too close/large"
+                        else:
+                            if liveness_score >= LIVENESS_THRESHOLD:
+                                info["liveness_count"] = info.get("liveness_count", 0) + 1
+                            else:
+                                info["liveness_count"] = 0
+                                
+                            # Require at least 2 consecutive passing frames to avoid 1-frame spoof spikes
+                            # (Since FPS is ~0.6 to 1.5, 2 frames is 1-3 seconds, maintaining walk-in feel)
+                            if info.get("liveness_count", 0) >= 2:
+                                is_liveness_real = True
+                                if track_id > 0:
+                                    info["liveness_verified"] = True
+                                    info["liveness_score"] = liveness_score
+                                    info["liveness_time"] = now
+                            else:
+                                is_liveness_real = False
 
             # ── Recognition ────────────────────────────────────────
             student_id = None

@@ -43,7 +43,7 @@
                                 </button>
                             </td>
                         </tr>
-                        <tr id="classrooms-{{$school->id}}" x-show="openRows.includes('classrooms-{{$school->id}}')" x-cloak class="bg-surface-muted">
+                        <tr id="classrooms-{{$school->id}}" x-show="openRows.includes('classrooms-{{$school->id}}')" x-cloak class="bg-canvas-soft">
                             <td colspan="4" class="p-4 border-b border-hairline">
                                 <div class="flex justify-between items-center mb-sm">
                                     <h4 class="font-semibold text-sm">Daftar Kelas / Grup</h4>
@@ -75,9 +75,9 @@
                                                     <td>{{ $classroom->code ?? '-' }}</td>
                                                     <td>
                                                         @if($classroom->type === 'staff')
-                                                            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded">Staf</span>
+                                                            <span class="badge badge-primary text-[11px]">Staf</span>
                                                         @else
-                                                            <span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded">Siswa</span>
+                                                            <span class="badge badge-success text-[11px]">Siswa</span>
                                                         @endif
                                                     </td>
                                                     <td>{{ substr($classroom->start_time, 0, 5) }}</td>

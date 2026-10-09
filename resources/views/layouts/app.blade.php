@@ -6,80 +6,90 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script>
+        if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            document.documentElement.classList.add('sidebar-collapsed');
+        }
+    </script>
 </head>
 <body x-data="layoutData" class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
 
-{{-- WowDash Sidebar --}}
-<aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 w-[260px] bg-canvas border-r border-hairline flex flex-col transition-all duration-300 z-50 shadow-sm md:translate-x-0 -translate-x-full">
-    <div class="h-[72px] flex items-center px-xl border-b border-hairline shrink-0">
+{{-- Mobile Drawer Backdrop --}}
+<div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity" x-cloak></div>
+
+{{-- Sidebar --}}
+<aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 bg-canvas border-r border-hairline flex flex-col transition-all duration-300 ease-in-out z-50 shadow-sm md:translate-x-0 w-[260px] [.sidebar-collapsed_&]:md:w-[80px] overflow-hidden">
+    <div class="h-[72px] flex items-center border-b border-hairline shrink-0 px-lg transition-all duration-300 overflow-hidden">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-sm">
-            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shrink-0 transition-all duration-300">
                 <i data-lucide="scan-face" class="w-5 h-5"></i>
             </div>
-            <span class="text-[20px] font-bold text-ink tracking-tight">Smart Absensi</span>
+            <span class="text-[18px] font-bold text-ink tracking-tight whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Smart Absensi</span>
         </a>
     </div>
 
-    <div class="flex-1 overflow-y-auto py-md custom-scroll">
-        <ul class="flex flex-col gap-[4px] px-md">
+    <div class="flex-1 overflow-y-auto py-md custom-scroll overflow-x-hidden">
+        <ul class="flex flex-col gap-[4px] transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-2">
             <li>
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('dashboard') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-                    <span>Dashboard</span>
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-sm py-[10px] rounded-lg transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-[22px] {{ request()->routeIs('dashboard') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Dashboard</span>
                 </a>
             </li>
 
-            <li class="mt-md mb-xs px-md">
-                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Aplikasi</span>
+            <li class="mt-md mb-xs relative flex items-center h-[20px] transition-all duration-300 overflow-hidden px-0">
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider whitespace-nowrap transition-all duration-300 overflow-hidden absolute left-[16px] md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Aplikasi</span>
+                <span class="transition-all duration-300 absolute left-1/2 -translate-x-1/2 text-ink-faint hidden md:opacity-0 [.sidebar-collapsed_&]:md:opacity-100 [.sidebar-collapsed_&]:md:block">•••</span>
             </li>
             
             <li>
-                <a href="{{ route('students.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('students.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
-                    <i data-lucide="users" class="w-5 h-5"></i>
-                    <span>Anggota</span>
+                <a href="{{ route('students.index') }}" class="flex items-center gap-sm py-[10px] rounded-lg transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-[22px] {{ request()->routeIs('students.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="users" class="w-5 h-5 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Anggota</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('reports.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('reports.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
-                    <i data-lucide="file-text" class="w-5 h-5"></i>
-                    <span>Laporan</span>
+                <a href="{{ route('reports.index') }}" class="flex items-center gap-sm py-[10px] rounded-lg transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-[22px] {{ request()->routeIs('reports.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="file-text" class="w-5 h-5 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Laporan</span>
                 </a>
             </li>
 
-            <li class="mt-md mb-xs px-md">
-                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider">Manajemen</span>
+            <li class="mt-md mb-xs relative flex items-center h-[20px] transition-all duration-300 overflow-hidden px-0">
+                <span class="text-[12px] font-semibold text-ink-faint uppercase tracking-wider whitespace-nowrap transition-all duration-300 overflow-hidden absolute left-[16px] md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Manajemen</span>
+                <span class="transition-all duration-300 absolute left-1/2 -translate-x-1/2 text-ink-faint hidden md:opacity-0 [.sidebar-collapsed_&]:md:opacity-100 [.sidebar-collapsed_&]:md:block">•••</span>
             </li>
 
             <li>
-                <a href="{{ route('schools.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('schools.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
-                    <i data-lucide="building" class="w-5 h-5"></i>
-                    <span>Organisasi</span>
+                <a href="{{ route('schools.index') }}" class="flex items-center gap-sm py-[10px] rounded-lg transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-[22px] {{ request()->routeIs('schools.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="building" class="w-5 h-5 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Organisasi</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('devices.index') }}" class="flex items-center gap-sm px-md py-[10px] rounded-lg transition-colors {{ request()->routeIs('devices.*') ? 'bg-primary-50 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
-                    <i data-lucide="cpu" class="w-5 h-5"></i>
-                    <span>Perangkat</span>
+                <a href="{{ route('devices.index') }}" class="flex items-center gap-sm py-[10px] rounded-lg transition-all duration-300 px-md [.sidebar-collapsed_&]:md:px-[22px] {{ request()->routeIs('devices.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-muted hover:bg-surface hover:text-ink font-medium' }}">
+                    <i data-lucide="cpu" class="w-5 h-5 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Perangkat</span>
                 </a>
             </li>
         </ul>
     </div>
 </aside>
 
-{{-- WowDash Main Content --}}
-<main class="md:ml-[260px] min-h-screen flex flex-col transition-all duration-300 relative">
+{{-- Main Content --}}
+<main class="min-h-screen flex flex-col transition-all duration-300 ease-in-out relative ml-0 md:ml-[260px] [.sidebar-collapsed_&]:md:ml-[80px]">
     
-    {{-- WowDash Navbar Header --}}
+    {{-- Navbar Header --}}
     <div class="h-[72px] px-xl bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div class="flex items-center gap-md">
-            <button @click="sidebarOpen = !sidebarOpen" aria-label="Toggle Menu" class="md:hidden text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface">
-                <i data-lucide="menu" class="w-6 h-6"></i>
+            <button type="button" @click="toggleSidebar()" aria-label="Toggle Sidebar" class="text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-9 h-9 rounded-md hover:bg-canvas-soft cursor-pointer">
+                <i data-lucide="menu" class="w-5 h-5"></i>
             </button>
         </div>
         
         <div class="flex items-center gap-md">
-            <div class="flex items-center gap-sm cursor-pointer ml-xs pl-md border-l border-hairline">
-                <div class="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shrink-0 text-primary font-bold">
+            <div class="flex items-center gap-sm cursor-pointer ml-xs pl-md">
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 text-primary font-bold">
                     {{ substr(Auth::user()->name ?? 'A', 0, 1) }}
                 </div>
                 <div class="hidden md:block text-left mr-sm">

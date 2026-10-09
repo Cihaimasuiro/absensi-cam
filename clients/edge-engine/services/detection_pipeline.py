@@ -49,7 +49,7 @@ class DetectionPipeline:
             logger.error(f"Tracker failed to load: {e}")
             self.tracker = None
 
-    def process(self, frame: np.ndarray, templates: list[dict], use_detector: bool = True) -> list[RecognitionResult]:
+    def process(self, frame: np.ndarray, templates: list[dict], use_detector: bool = True, liveness_enabled: bool = True) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
 
         if use_detector:
@@ -96,7 +96,7 @@ class DetectionPipeline:
             liveness_score = 1.0
             is_liveness_real = True
             now = time.time()
-            if self.liveness is not None:
+            if liveness_enabled and self.liveness is not None:
                 if info.get("liveness_verified", False) and now - info.get("liveness_time", 0) < 3.0:
                     is_liveness_real = True
                     liveness_score = info.get("liveness_score", 1.0)
@@ -156,7 +156,7 @@ class DetectionPipeline:
             is_valid_match = (student_id is not None and similarity >= RECOGNITION_THRESHOLD)
             
             # Attendance dicatat jika wajah cocok (valid match)
-            recognized = is_valid_match
+            recognized = is_valid_match and (not liveness_enabled or is_liveness_real)
 
             # ── Cooldown ────────────────────────────────────────
             if recognized:

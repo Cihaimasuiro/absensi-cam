@@ -196,13 +196,19 @@ class EdgeEngine:
 
             # Ambil template lokal terbaru (cached setiap loop)
             templates = self.db.get_all_templates()
+            liveness_enabled = self.db.get_metadata("liveness_enabled", "true") == "true"
 
             t0 = time.time()
             
             # Selalu gunakan detektor (karena tracker sering lepas di H6)
             use_detector = True 
             
-            results = self.pipeline.process(frame, templates, use_detector=use_detector)
+            results = self.pipeline.process(
+                frame, 
+                templates, 
+                use_detector=use_detector, 
+                liveness_enabled=liveness_enabled
+            )
             ms = (time.time() - t0) * 1000
 
             for r in results:

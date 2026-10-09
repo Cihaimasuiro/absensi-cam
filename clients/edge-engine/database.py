@@ -116,6 +116,22 @@ class DatabaseManager:
             )
             conn.commit()
 
+    def get_metadata(self, key: str, default=None):
+        with self.get_connection() as conn:
+            try:
+                cur = conn.execute("SELECT value FROM metadata WHERE key = ?", (key,))
+                row = cur.fetchone()
+                if row:
+                    return row["value"]
+            except sqlite3.OperationalError:
+                pass
+        return default
+
+    def set_metadata(self, key: str, value: str):
+        with self.get_connection() as conn:
+            conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)", (key, str(value)))
+            conn.commit()
+
     def get_last_template_sync_time(self) -> int:
         with self.get_connection() as conn:
             try:

@@ -109,7 +109,7 @@ class DetectionPipeline:
                         raw_conf = res[0]["liveness"].get("prob_real", res[0]["liveness"].get("confidence", 1.0))
                         liveness_score = float(np.clip(raw_conf, 0.0, 1.0))
                         
-                        if is_real_now or logit_diff >= 0.0:
+                        if liveness_score >= LIVENESS_THRESHOLD:
                             is_liveness_real = True
                             if track_id > 0:
                                 info["liveness_verified"] = True

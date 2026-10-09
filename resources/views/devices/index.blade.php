@@ -2,20 +2,11 @@
 @section('title', 'Manajemen Perangkat')
 
 @section('content')
-<div x-data="{ editDevice: null, addDeviceModal: false }">
-
-{{-- Direct Token Result --}}
-@if(session('new_device_env'))
-    <div class="card bg-blue-50 border-blue-200 mb-md p-md">
-        <p class="text-eyebrow text-primary mb-xs">Perangkat Berhasil Ditambahkan — Salin Konfigurasi Berikut</p>
-        <p class="text-caption text-primary mb-sm">
-            Salin teks di bawah ini dan simpan ke dalam file <code class="bg-blue-100 px-1 py-[2px] rounded-sm">clients/edge-engine/.env</code> di Orange Pi Anda:
-        </p>
-        <div class="bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-[13px] overflow-x-auto whitespace-pre">
-{{ session('new_device_env') }}
-        </div>
-    </div>
-@endif
+<div x-data="devicesData(
+    {{ session('show_edit_device') ? session('show_edit_device') : 'null' }}, 
+    {{ session('show_config_device') ? session('show_config_device') : 'null' }},
+    {{ session('new_device_env') ? json_encode(session('new_device_env')) : 'null' }}
+)">
 
 <div class="flex items-center justify-between mb-md">
     <h1 class="text-[18px] font-bold text-ink">Daftar Perangkat</h1>
@@ -57,16 +48,12 @@
                             {{ $device->last_heartbeat_at ? $device->last_heartbeat_at->diffForHumans() : 'Belum pernah' }}
                         </td>
                         <td class="text-right flex items-center justify-end gap-2">
-                            <button type="button" @click='editDevice = {{ $device->toJson() }}' class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
+                            <button type="button" @click="openEdit({{ $device->toJson() }})" class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
                                 <i data-lucide="edit" class="w-3 h-3"></i> Edit
                             </button>
-                            <form method="POST" action="{{ route('devices.reset-token', $device) }}" class="inline"
-                                  @submit="confirmSubmit" data-confirm="Menampilkan konfigurasi akan MENGGANTI (reset) token lama. Orange Pi akan terputus sampai Anda memasukkan token yang baru. Lanjutkan?">
-                                @csrf
-                                <button type="submit" class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
-                                    <i data-lucide="key" class="w-3 h-3"></i> Konfigurasi (.env)
-                                </button>
-                            </form>
+                            <button type="button" @click="openConfig({{ $device->toJson() }})" class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
+                                <i data-lucide="key" class="w-3 h-3"></i> Konfigurasi (.env)
+                            </button>
                             <form method="POST" action="{{ route('devices.destroy', $device) }}" class="inline"
                                   @submit="confirmSubmit" data-confirm="Hapus perangkat ini secara permanen? Peringatan: Data absensi dari mesin ini akan ikut terhapus.">
                                 @csrf @method('DELETE')
@@ -137,18 +124,19 @@
 </div>
 
 {{-- Edit Device Modal --}}
-<div x-show="editDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;">
-    <div @click.away="editDevice = null" class="card p-lg animate-fade-in-up" style="width: 400px; max-width: 90vw;">
+<div x-show="editDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-cloak>
+    <div @click.away="closeEdit()" class="card p-lg animate-fade-in-up" style="width: 500px; max-width: 90vw;">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
                 <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Perangkat
             </h2>
-            <button type="button" @click="editDevice = null" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="closeEdit()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
         <template x-if="editDevice">
-            <form method="POST" x-bind:action="'/devices/' + editDevice.id" @submit="$el.action = '/devices/' + editDevice.id">
+            <div>
+                <form method="POST" x-bind:action="'/devices/' + editDevice.id" @submit="$el.action = '/devices/' + editDevice.id">
                 @csrf @method('PUT')
                 
                 <div class="mb-sm">
@@ -176,6 +164,40 @@
                     <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
                 </div>
             </form>
+            </div>
+        </template>
+    </div>
+</div>
+
+{{-- Config Device Modal --}}
+<div x-show="configDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-cloak>
+    <div @click.away="closeConfig()" class="card p-lg animate-fade-in-up" style="width: 650px; max-width: 95vw;">
+        <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
+            <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
+                <i data-lucide="key" class="w-4 h-4 text-primary"></i> Konfigurasi Perangkat
+            </h2>
+            <button type="button" @click="closeConfig()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <template x-if="configDevice">
+            <div>
+                <p class="text-[12px] text-ink-muted mb-sm">
+                    Salin teks ini ke dalam file .env di Perangkat Edge Anda.
+                </p>
+                <div class="bg-gray-900 text-gray-100 p-3 rounded text-[13px] font-mono whitespace-pre-wrap break-all select-all mb-md" 
+                     x-text="newDeviceEnv ? newDeviceEnv : 'SMART_ABSENSI_URL={{ request()->getSchemeAndHttpHost() }}\nSMART_ABSENSI_TOKEN=<RAHASIA_SILAKAN_GENERATE_ULANG_JIKA_LUPA>\nSMART_ABSENSI_DEVICE_ID=' + configDevice.device_code + '\nENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE='">
+                </div>
+                <div class="flex justify-right gap-sm mt-md pt-sm">
+                    <form method="POST" x-bind:action="'/devices/' + configDevice.id + '/reset-token'" @submit="confirmSubmit" data-confirm="Anda yakin ingin MENGGANTI (reset) token lama? Device akan terputus sampai token baru dipasang.">
+                        @csrf
+                        <button type="submit" class="btn btn-secondary text-danger border-danger/50 hover:bg-danger/10 inline-flex items-center gap-xs">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Generate Ulang Token
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-secondary" @click="closeConfig()">Tutup</button>
+                </div>
+            </div>
         </template>
     </div>
 </div>

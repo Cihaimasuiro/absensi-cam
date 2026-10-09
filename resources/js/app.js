@@ -3,13 +3,30 @@ import {
     ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
     Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
     Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
-    FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, Edit3, Edit2,
+    FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-    UserCheck, RefreshCw, createIcons
+    UserCheck, RefreshCw, PlusCircle, List, Loader2, createIcons
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
     sidebarOpen: false,
+    sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+
+    toggleSidebar() {
+        if (window.innerWidth < 768) {
+            this.sidebarOpen = !this.sidebarOpen;
+        } else {
+            this.sidebarCollapsed = !this.sidebarCollapsed;
+            localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed);
+            
+            if (this.sidebarCollapsed) {
+                document.documentElement.classList.add('sidebar-collapsed');
+            } else {
+                document.documentElement.classList.remove('sidebar-collapsed');
+            }
+        }
+    },
+
     confirmMessage: '',
     confirmAction: null,
     confirmSubmit(e) {
@@ -75,6 +92,8 @@ Alpine.data('schoolsData', () => ({
 
 Alpine.data('reportsData', () => ({
     correctionLogData: {},
+    logs: [],
+    isFetchingLogs: false,
     openCorrectionModal(e) {
         this.correctionLogData = JSON.parse(e.currentTarget.dataset.log);
         this.$refs.correctionModal.showModal();
@@ -82,6 +101,45 @@ Alpine.data('reportsData', () => ({
     },
     closeCorrectionModal() {
         this.$refs.correctionModal.close();
+    },
+    async fetchLogs(studentId, date) {
+        this.isFetchingLogs = true;
+        this.logs = [];
+        this.$refs.logsModal.showModal();
+        try {
+            const res = await fetch(`/reports/student-logs?student_id=${studentId}&date=${date}`);
+            this.logs = await res.json();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            this.isFetchingLogs = false;
+        }
+    },
+    closeLogsModal() {
+        this.$refs.logsModal.close();
+    }
+}));
+
+Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null, initialNewDeviceEnv = null) => ({
+    editDevice: initialEditDevice,
+    configDevice: initialConfigDevice,
+    newDeviceEnv: initialNewDeviceEnv,
+    addDeviceModal: false,
+    openEdit(device) {
+        this.editDevice = device;
+        this.newDeviceEnv = null;
+    },
+    closeEdit() {
+        this.editDevice = null;
+        this.newDeviceEnv = null;
+    },
+    openConfig(device) {
+        this.configDevice = device;
+        this.newDeviceEnv = null;
+    },
+    closeConfig() {
+        this.configDevice = null;
+        this.newDeviceEnv = null;
     }
 }));
 
@@ -93,8 +151,8 @@ createIcons({
         ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
         Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
         Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
-        FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, Edit3, Edit2,
+        FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
         AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-        UserCheck, RefreshCw
+        UserCheck, RefreshCw, PlusCircle, List, Loader2
     }
-})
+})  

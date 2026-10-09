@@ -31,8 +31,13 @@ class DeviceController extends Controller
             'building_id' => ['required', 'exists:buildings,id'],
         ]);
 
-        $deviceCount = Device::count() + 1;
-        $deviceCode = 'dev-' . str_pad($deviceCount, 4, '0', STR_PAD_LEFT);
+        $lastCode = \Illuminate\Support\Facades\DB::table('devices')
+            ->select('device_code')
+            ->get()
+            ->map(fn($row) => (int) str_replace('dev-', '', $row->device_code))
+            ->max();
+
+        $deviceCode = 'dev-' . str_pad(($lastCode ?? 0) + 1, 4, '0', STR_PAD_LEFT);
 
         $device = Device::create([
             'id' => \Illuminate\Support\Str::uuid(),
@@ -57,7 +62,10 @@ SMART_ABSENSI_DEVICE_ID={$deviceCode}
 ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
 ENV;
 
-        return back()->with('new_device_env', $envContent)->with('success', 'Perangkat berhasil ditambahkan.');
+        return back()
+            ->with('new_device_env', $envContent)
+            ->with('show_config_device', $device->toJson())
+            ->with('success', 'Perangkat berhasil ditambahkan.');
     }
 
     /** Mark device offline / revoke Sanctum token */
@@ -94,7 +102,10 @@ SMART_ABSENSI_DEVICE_ID={$device->device_code}
 ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
 ENV;
 
-        return back()->with('new_device_env', $envContent)->with('success', "Token untuk perangkat {$device->name} berhasil di-reset.");
+        return back()
+            ->with('new_device_env', $envContent)
+            ->with('show_config_device', $device->toJson())
+            ->with('success', "Token untuk perangkat {$device->name} berhasil di-reset.");
     }
 
     /** Permanently delete the device */

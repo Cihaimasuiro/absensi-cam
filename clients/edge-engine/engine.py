@@ -212,16 +212,32 @@ class EdgeEngine:
             ms = (time.time() - t0) * 1000
 
             for r in results:
-                # Gambar bounding box tipis warna merah (0, 0, 255)
                 x, y, w, h = r.bbox
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 
-                # Teks score warna kuning (0, 255, 255)
-                cv2.putText(frame, f"score:{r.confidence:.2f}", (x, y + h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+                # Default merah (Unknown / Belum Absen)
+                color = (0, 0, 255)
+                status_text = "Unknown"
                 
-                # Teks id warna merah (0, 0, 255)
-                display_name = r.name if r.name else "Unknown"
-                cv2.putText(frame, f"id:{display_name}", (x, y + h - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                if r.liveness_score < 0.5 and liveness_enabled:
+                    # Spoof = Kuning
+                    color = (0, 255, 255)
+                    status_text = "SPOOF"
+                elif r.recognized:
+                    # Berhasil = Hijau
+                    color = (0, 255, 0)
+                    status_text = r.name
+                elif r.name != "Unknown":
+                    # Wajah cocok tapi sedang cooldown / belum liveness
+                    color = (0, 165, 255) # Orange
+                    status_text = r.name
+
+                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 1)
+                
+                # Teks score
+                cv2.putText(frame, f"score:{r.confidence:.2f} liv:{r.liveness_score:.2f}", (x, y + h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                
+                # Teks status / id
+                cv2.putText(frame, f"id:{status_text}", (x, y + h - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
                 if r.recognized:
                     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

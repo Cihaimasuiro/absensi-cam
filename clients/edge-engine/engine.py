@@ -181,10 +181,9 @@ class EdgeEngine:
         logger.info("Kamera aktif. Mulai memindai wajah…")
 
         cam_reader = CameraReader(cap).start()
-        frame_id = 0
+        engine_start_time = time.time()
 
         while True:
-            frame_id += 1
             ret, frame = cam_reader.read()
             if not ret:
                 # Beri waktu thread reader mengisi frame
@@ -271,7 +270,12 @@ class EdgeEngine:
                     )
 
             fps = 1000 / ms if ms > 0 else 0
-            status = f"FRAMEID= {frame_id} FPS: {fps:.2f}"
+            uptime_sec = int(time.time() - engine_start_time)
+            hours, remainder = divmod(uptime_sec, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            
+            status = f"Aktif: {uptime_str} | FPS: {fps:.1f}"
             stream.push_frame(frame, status)
 
             time.sleep(0.01)  # Hindari CPU lock 100% di H6

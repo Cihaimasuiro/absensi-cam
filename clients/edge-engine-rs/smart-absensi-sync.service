@@ -8,17 +8,17 @@ Type=notify
 NotifyAccess=main
 User=edge
 Group=edge
-WorkingDirectory=/home/edge/absensi-cam/clients/edge-engine
-ExecStart=/usr/local/bin/smart-absensi-sync --db /home/edge/absensi-cam/clients/edge-engine/local_edge.db
+WorkingDirectory=/opt/smart-absensi/edge-engine
+ExecStart=/usr/local/bin/smart-absensi-sync --db /opt/smart-absensi/edge-engine/local_edge.db
 Restart=always
 RestartSec=5
 WatchdogSec=60
-EnvironmentFile=/home/edge/absensi-cam/clients/edge-engine/.env
+EnvironmentFile=/opt/smart-absensi/edge-engine/.env
 
 # Security Hardening
 NoNewPrivileges=true
 ProtectSystem=full
-ReadWritePaths=/home/edge/absensi-cam/clients/edge-engine
+ReadWritePaths=/opt/smart-absensi/edge-engine
 
 [Install]
 WantedBy=multi-user.target

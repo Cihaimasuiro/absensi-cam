@@ -117,6 +117,16 @@ async fn main() -> Result<()> {
 }
 
 async fn run_stream(device: String, port: u16, width: u32, height: u32) -> Result<()> {
+    println!("--------------------------------------------------");
+    println!(" Smart Absensi MJPEG Stream Server (Rust Engine)");
+    println!(" Device   : {}", device);
+    println!(" Resolusi : {}x{}", width, height);
+    println!(" Server   : http://0.0.0.0:{}", port);
+    println!(" Stream   : http://<BOARD_IP>:{}/stream", port);
+    println!(" Snapshot : http://<BOARD_IP>:{}/snapshot.jpg", port);
+    println!("--------------------------------------------------");
+    println!(" Server aktif & mendengarkan. Tekan Ctrl+C untuk berhenti.");
+
     info!(
         "Memulai Smart Absensi Stream Server pada port {} (Device: {}, Resolusi: {}x{})...",
         port, device, width, height

@@ -394,6 +394,11 @@ pub mod linux {
                 };
                 let pixel_format = camera.pixel_format;
 
+                println!(
+                    "[Camera] Terhubung ke {} (Resolusi: {}x{}, Format: {:?}, Stride: {} bytes)",
+                    device_path, w, h, pixel_format, stride
+                );
+
                 // Preallocated buffers for YUYV transcoding
                 let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
                     vec![0u8; (w * h * 3) as usize]
@@ -405,6 +410,9 @@ pub mod linux {
                 } else {
                     Vec::new()
                 };
+
+                let mut frame_count: u64 = 0;
+                let mut last_fps_time = std::time::Instant::now();
 
                 while running.load(Ordering::Relaxed) {
                     let capture_res = camera.capture_frame(500, |frame| {
@@ -427,7 +435,16 @@ pub mod linux {
                     });
 
                     match capture_res {
-                        Ok(Some(())) => {}
+                        Ok(Some(())) => {
+                            frame_count += 1;
+                            let elapsed = last_fps_time.elapsed();
+                            if elapsed.as_secs() >= 5 {
+                                let fps = frame_count as f64 / elapsed.as_secs_f64();
+                                println!("[Camera Live] FPS: {:.1} (Format: {:?})", fps, pixel_format);
+                                frame_count = 0;
+                                last_fps_time = std::time::Instant::now();
+                            }
+                        }
                         Ok(None) => {
                             // Timeout or skipped corrupted frame
                         }

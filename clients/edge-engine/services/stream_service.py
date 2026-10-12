@@ -63,9 +63,9 @@ async def _generate_mjpeg():
             continue
 
         if status:
-            # Blue text (255, 0, 0), font scale 0.5, thickness 1
+            # Blue text (255, 0, 0), font scale 0.4, thickness 1
             cv2.putText(
-                frame, status, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1
+                frame, status, (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1
             )
 
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])

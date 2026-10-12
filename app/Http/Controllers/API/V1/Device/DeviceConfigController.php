@@ -36,7 +36,7 @@ class DeviceConfigController extends Controller
                 'track_checkout' => (bool)$g->track_checkout,
             ])->toArray(),
             'confidence_threshold'      => 0.363, // TODO: To be calibrated on M0 hardware (AC-22)
-            'liveness_enabled'          => true,
+            'liveness_enabled'          => (bool)$device->liveness_enabled,
             'max_faces_per_frame'       => 5,
             'mode'                      => 'both', // in|out|both
         ];

@@ -38,6 +38,7 @@ class SyncWorker:
                 self.send_heartbeat()
                 self.push_attendance()
                 self.pull_templates()
+                self.pull_config()
             except Exception as e:  # noqa: BLE001
                 logger.error(f"Sync error: {e}")
 
@@ -172,3 +173,25 @@ class SyncWorker:
                 )
         except requests.exceptions.RequestException:
             logger.info("Menunggu server online untuk pull templates (offline mode).")
+
+    def pull_config(self):
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.api_token}",
+        }
+
+        try:
+            res = requests.get(
+                f"{self.api_url}/api/v1/config",
+                headers=headers,
+                timeout=5,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                if "liveness_enabled" in data:
+                    is_enabled = data["liveness_enabled"]
+                    # Simpan state ke metadata local_edge.db
+                    self.db.set_metadata("liveness_enabled", "true" if is_enabled else "false")
+        except requests.exceptions.RequestException:
+            pass
+

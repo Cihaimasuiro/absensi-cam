@@ -184,10 +184,9 @@ class EdgeEngine:
         logger.info("Kamera aktif. Mulai memindai wajah…")
 
         cam_reader = CameraReader(cap).start()
-        frame_id = 0
+        engine_start_time = time.time()
 
         while True:
-            frame_id += 1
             ret, frame = cam_reader.read()
             if not ret:
                 # Beri waktu thread reader mengisi frame
@@ -199,26 +198,48 @@ class EdgeEngine:
 
             # Ambil template lokal terbaru (cached setiap loop)
             templates = self.db.get_all_templates()
+            liveness_enabled = self.db.get_metadata("liveness_enabled", "true") == "true"
 
             t0 = time.time()
             
             # Selalu gunakan detektor (karena tracker sering lepas di H6)
             use_detector = True 
             
-            results = self.pipeline.process(frame, templates, use_detector=use_detector)
+            results = self.pipeline.process(
+                frame, 
+                templates, 
+                use_detector=use_detector, 
+                liveness_enabled=liveness_enabled
+            )
             ms = (time.time() - t0) * 1000
 
             for r in results:
-                # Gambar bounding box tipis warna merah (0, 0, 255)
                 x, y, w, h = r.bbox
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 
-                # Teks score warna kuning (0, 255, 255)
-                cv2.putText(frame, f"score:{r.confidence:.2f}", (x, y + h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+                # Default merah (Unknown / Belum Absen)
+                color = (0, 0, 255)
+                status_text = "Unknown"
                 
-                # Teks id warna merah (0, 0, 255)
-                display_name = r.name if r.name else "Unknown"
-                cv2.putText(frame, f"id:{display_name}", (x, y + h - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+                if r.liveness_score < 0.5 and liveness_enabled:
+                    # Spoof = Kuning
+                    color = (0, 255, 255)
+                    status_text = "SPOOF"
+                elif r.recognized:
+                    # Berhasil = Hijau
+                    color = (0, 255, 0)
+                    status_text = r.name
+                elif r.name != "Unknown":
+                    # Wajah cocok tapi sedang cooldown / belum liveness
+                    color = (0, 165, 255) # Orange
+                    status_text = r.name
+
+                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 1)
+                
+                # Teks score
+                cv2.putText(frame, f"score:{r.confidence:.2f} liv:{r.liveness_score:.2f}", (x, y + h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+                
+                # Teks status / id
+                cv2.putText(frame, f"id:{status_text}", (x, y + h - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
                 if r.recognized:
                     now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -252,7 +273,12 @@ class EdgeEngine:
                     )
 
             fps = 1000 / ms if ms > 0 else 0
-            status = f"FRAMEID= {frame_id} FPS: {fps:.2f}"
+            uptime_sec = int(time.time() - engine_start_time)
+            hours, remainder = divmod(uptime_sec, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            
+            status = f"Aktif: {uptime_str} | FPS: {fps:.1f}"
             stream.push_frame(frame, status)
 
             time.sleep(0.01)  # Hindari CPU lock 100% di H6

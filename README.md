@@ -55,7 +55,14 @@ A Modular Monolith built with Laravel, responsible for:
 - Providing the REST API for Edge Devices to sync attendance.
 - Broadcasting OTA update triggers.
 
-### 2. The Edge Engine (Python)
+### 2. The Frontend (Blade + Tailwind + Alpine.js)
+A modern, fast, and responsive administration dashboard:
+- **UI Framework:** Tailwind CSS for utility-first styling.
+- **Interactivity:** Alpine.js for lightweight, JS-driven state management (e.g., zero-FOUC collapsible mini-sidebar).
+- **Design System:** Built upon the modern WowDash Admin Dashboard aesthetics, seamlessly integrated directly into Laravel Blade.
+- **Icons:** Lucide Icons for clean and consistent iconography.
+
+### 3. The Edge Engine (Python)
 A lightweight, high-performance Python application running on the edge:
 - **Runtime:** Python 3.11+
 - **Inference:** ONNX Runtime (CPU Execution Provider) via `face_core`.

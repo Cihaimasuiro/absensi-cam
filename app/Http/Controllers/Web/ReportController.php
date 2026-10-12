@@ -19,19 +19,68 @@ class ReportController extends Controller
         $startUtc = \Carbon\Carbon::parse($start)->startOfDay()->setTimezone('UTC');
         $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
 
+        $offset = now()->offsetHours;
+        $offsetSql = $offset >= 0 ? "+{$offset}" : $offset;
+
         $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name', 'device:id,name'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
-            ->select(['id', 'student_id', 'device_id', 'captured_at', 'direction', 'score', 'liveness_score', 'is_corrected', 'time_source'])
-            ->orderBy('captured_at')
+            ->selectRaw('
+                student_id,
+                MAX(device_id) as device_id,
+                DATE(DATE_ADD(captured_at, INTERVAL ' . $offset . ' HOUR)) as log_date,
+                MIN(captured_at) as first_in,
+                MAX(captured_at) as last_out,
+                COUNT(id) as total_logs,
+                MAX(is_corrected) as is_corrected,
+                MAX(id) as id,
+                (SELECT id FROM attendance_logs al2 WHERE al2.student_id = attendance_logs.student_id AND al2.captured_at = MIN(attendance_logs.captured_at) LIMIT 1) as first_log_id
+            ')
+            ->groupBy('student_id', 'log_date')
+            ->orderBy('log_date', 'desc')
+            ->orderBy('first_in', 'asc')
             ->paginate(100)
             ->withQueryString();
 
         $classrooms = Classroom::active()->select(['id', 'name'])->orderBy('name')->get();
 
         return view('reports.index', compact('logs', 'classrooms', 'start', 'end', 'groupId'));
+    }
+
+    public function studentLogs(Request $request)
+    {
+        $studentId = $request->input('student_id');
+        $date = $request->input('date');
+
+        if (!$studentId || !$date) {
+            return response()->json([]);
+        }
+
+        $offset = now()->offsetHours;
+        
+        $logs = AttendanceLog::with('device:id,name')
+            ->where('student_id', $studentId)
+            ->whereRaw("DATE(DATE_ADD(captured_at, INTERVAL {$offset} HOUR)) = ?", [$date])
+            ->orderBy('captured_at', 'asc')
+            ->get(['id', 'captured_at', 'direction', 'score', 'is_corrected', 'device_id']);
+
+        $count = $logs->count();
+        $formatted = $logs->map(function ($log, $index) use ($count) {
+            return [
+                'id' => $log->id,
+                'time' => $log->captured_at->timezone(config('app.timezone'))->format('H:i:s'),
+                'device' => $log->device->name ?? '-',
+                'score' => $log->score ? number_format($log->score, 3) : '-',
+                'direction' => $log->direction,
+                'is_corrected' => $log->is_corrected,
+                'is_first' => $index === 0,
+                'is_last' => $count > 1 && $index === $count - 1
+            ];
+        });
+
+        return response()->json($formatted);
     }
 
     public function exportCsv(Request $request)

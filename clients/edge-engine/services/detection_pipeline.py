@@ -49,7 +49,7 @@ class DetectionPipeline:
             logger.error(f"Tracker failed to load: {e}")
             self.tracker = None
 
-    def process(self, frame: np.ndarray, templates: list[dict], use_detector: bool = True) -> list[RecognitionResult]:
+    def process(self, frame: np.ndarray, templates: list[dict], use_detector: bool = True, liveness_enabled: bool = True) -> list[RecognitionResult]:
         results: list[RecognitionResult] = []
 
         if use_detector:
@@ -96,7 +96,7 @@ class DetectionPipeline:
             liveness_score = 1.0
             is_liveness_real = True
             now = time.time()
-            if self.liveness is not None:
+            if liveness_enabled and self.liveness is not None:
                 if info.get("liveness_verified", False) and now - info.get("liveness_time", 0) < 3.0:
                     is_liveness_real = True
                     liveness_score = info.get("liveness_score", 1.0)
@@ -109,14 +109,32 @@ class DetectionPipeline:
                         raw_conf = res[0]["liveness"].get("prob_real", res[0]["liveness"].get("confidence", 1.0))
                         liveness_score = float(np.clip(raw_conf, 0.0, 1.0))
                         
-                        if is_real_now or logit_diff >= 0.0:
-                            is_liveness_real = True
-                            if track_id > 0:
-                                info["liveness_verified"] = True
-                                info["liveness_score"] = liveness_score
-                                info["liveness_time"] = now
-                        else:
+                        # Face Size Limit Check (Max 40% of frame)
+                        fh, fw = frame.shape[:2]
+                        face_area = bbox[2] * bbox[3]
+                        frame_area = fh * fw
+                        size_ratio = face_area / frame_area
+                        
+                        if size_ratio > 0.40:
                             is_liveness_real = False
+                            info["liveness_count"] = 0
+                            info["liveness_rejected_reason"] = "Face too close/large"
+                        else:
+                            if liveness_score >= LIVENESS_THRESHOLD:
+                                info["liveness_count"] = info.get("liveness_count", 0) + 1
+                            else:
+                                info["liveness_count"] = 0
+                                
+                            # Require at least 2 consecutive passing frames to avoid 1-frame spoof spikes
+                            # (Since FPS is ~0.6 to 1.5, 2 frames is 1-3 seconds, maintaining walk-in feel)
+                            if info.get("liveness_count", 0) >= 2:
+                                is_liveness_real = True
+                                if track_id > 0:
+                                    info["liveness_verified"] = True
+                                    info["liveness_score"] = liveness_score
+                                    info["liveness_time"] = now
+                            else:
+                                is_liveness_real = False
 
             # ── Recognition ────────────────────────────────────────
             student_id = None
@@ -156,7 +174,7 @@ class DetectionPipeline:
             is_valid_match = (student_id is not None and similarity >= RECOGNITION_THRESHOLD)
             
             # Attendance dicatat jika wajah cocok (valid match)
-            recognized = is_valid_match
+            recognized = is_valid_match and (not liveness_enabled or is_liveness_real)
 
             # ── Cooldown ────────────────────────────────────────
             if recognized:

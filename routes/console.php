@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schedule;
 |--------------------------------------------------------------------------
 | Console Schedule — Smart Absensi
 |--------------------------------------------------------------------------
-| Ported from Facenox lifespan.py (startup retention purge) and
+| Ported from (startup retention purge) and
 | maintenance.py (on-demand cleanup endpoints) into Laravel's task scheduler.
 | PRD §12.3 governs all retention windows.
 |--------------------------------------------------------------------------

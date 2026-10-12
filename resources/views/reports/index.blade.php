@@ -27,15 +27,15 @@
                 <i data-lucide="filter" class="w-4 h-4"></i> Filter
             </button>
             @role('super_admin|admin')
-            <div class="flex gap-1 border-surface-border">
+            <div class="flex gap-1 items-center">
                 <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
                     <i data-lucide="download" class="w-4 h-4"></i> Raw CSV
                 </a>
                 <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-primary flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> DTR XLSX
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> XLSX
                 </a>
                 <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-danger flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-text" class="w-4 h-4"></i> DTR PDF
+                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF
                 </a>
             </div>
             @endrole
@@ -51,9 +51,9 @@
                 <th>Nama Anggota</th>
                 <th>NIS</th>
                 <th>Gedung / Organisasi</th>
-                <th>Waktu</th>
-                <th>Status</th>
-                <th>Keyakinan</th>
+                <th>Waktu Masuk</th>
+                <th>Terakhir Terdeteksi</th>
+                <th>Jumlah Deteksi</th>
                 @role('super_admin|admin')
                 <th>Aksi</th>
                 @endrole
@@ -70,25 +70,36 @@
                     </td>
                     <td class="font-mono text-[12px]">{{ $log->student->code ?? '-' }}</td>
                     <td>{{ $log->student->school->name ?? '-' }}</td>
-                    <td>{{ $log->captured_at->format('Y-m-d H:i:s') }}</td>
                     <td>
-                        <span class="badge {{ $log->direction === 'in' ? 'badge-success' : 'badge-muted' }} inline-flex items-center gap-1">
-                            <i data-lucide="{{ $log->direction === 'in' ? 'log-in' : 'log-out' }}" class="w-3 h-3"></i>
-                            {{ $log->direction === 'in' ? 'Masuk' : 'Keluar' }}
-                        </span>
+                        <span class="font-medium">{{ \Carbon\Carbon::parse($log->first_in)->format('H:i:s') }}</span>
+                        <div class="text-[10px] text-ink-muted">{{ \Carbon\Carbon::parse($log->first_in)->format('d M Y') }}</div>
                     </td>
-                    <td>{{ $log->score ? number_format($log->score, 3) : '-' }}</td>
+                    <td class="text-ink-muted text-[13px]">
+                        @if($log->last_out && $log->last_out !== $log->first_in)
+                            {{ \Carbon\Carbon::parse($log->last_out)->format('H:i:s') }}
+                        @else
+                            -
+                        @endif
+                    </td>
+                    <td>
+                        <span class="badge badge-muted">{{ $log->total_logs }}x</span>
+                    </td>
                     @role('super_admin|admin')
                     <td>
-                        <button type="button" class="btn btn-utility text-xs py-1 px-2" data-log="{{ json_encode(['id' => $log->id, 'captured_at' => $log->captured_at->format('Y-m-d\TH:i'), 'direction' => $log->direction]) }}" @click="openCorrectionModal">
-                            Koreksi
-                        </button>
+                        <div class="flex gap-xs items-center">
+                            <button type="button" class="btn btn-utility text-xs py-1 px-2" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
+                                Koreksi
+                            </button>
+                            <button type="button" class="btn btn-secondary text-xs py-1 px-2" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
+                                <i data-lucide="list" class="w-3 h-3"></i> Log
+                            </button>
+                        </div>
                     </td>
                     @endrole
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="text-center text-ink-faint p-xxl">
+                    <td colspan="7" class="text-center text-ink-faint p-xxl">
                         <div class="flex flex-col items-center justify-center gap-sm">
                             <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
                             Tidak ada data absensi.
@@ -140,5 +151,69 @@
     </form>
 </dialog>
 @endrole
+
+<dialog x-ref="logsModal" @click="$event.target === $refs.logsModal && closeLogsModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[500px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
+        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs text-ink">
+            <i data-lucide="history" class="w-4 h-4 text-primary"></i> Riwayat Deteksi
+        </h3>
+        <button type="button" @click="closeLogsModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+    
+    <div class="flex flex-col gap-sm">
+        <template x-if="isFetchingLogs">
+            <div class="py-md text-center text-ink-faint flex flex-col items-center gap-xs">
+                <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-primary"></i>
+                Memuat data...
+            </div>
+        </template>
+        
+        <template x-if="!isFetchingLogs && logs.length === 0">
+            <div class="py-md text-center text-ink-faint">
+                Tidak ada data log.
+            </div>
+        </template>
+
+        <template x-if="!isFetchingLogs && logs.length > 0">
+            <div class="max-h-[300px] overflow-y-auto pr-sm relative space-y-3">
+                <template x-for="log in logs" :key="log.id">
+                    <div class="flex items-center justify-between p-sm border border-hairline rounded bg-canvas-soft relative">
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-[14px]" x-text="log.time"></span>
+                                <template x-if="log.is_first">
+                                    <span class="badge badge-success text-[10px]">Masuk (Dihitung)</span>
+                                </template>
+                                <template x-if="log.is_last && !log.is_first">
+                                    <span class="badge badge-muted text-[10px]">Terakhir</span>
+                                </template>
+                                <template x-if="log.is_corrected">
+                                    <span class="badge badge-warning text-[10px]">Edited</span>
+                                </template>
+                            </div>
+                            <div class="text-[11px] text-ink-muted flex items-center gap-2">
+                                <span><i data-lucide="camera" class="w-3 h-3 inline"></i> <span x-text="log.device"></span></span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <template x-if="log.direction === 'in'">
+                                <span class="text-emerald-600 text-xs font-medium"><i data-lucide="log-in" class="w-3 h-3 inline"></i> IN</span>
+                            </template>
+                            <template x-if="log.direction === 'out'">
+                                <span class="text-amber-600 text-xs font-medium"><i data-lucide="log-out" class="w-3 h-3 inline"></i> OUT</span>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+    <div class="flex justify-end gap-xs mt-md pt-sm border-t border-hairline">
+        <button type="button" @click="closeLogsModal" class="btn btn-secondary">Tutup</button>
+    </div>
+</dialog>
+
 </div>
 @endsection

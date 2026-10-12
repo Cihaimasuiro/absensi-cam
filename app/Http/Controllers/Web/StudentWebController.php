@@ -12,7 +12,7 @@ class StudentWebController extends Controller
 {
     public function index(Request $request)
     {
-        $students = Student::with(['group:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
+        $students = Student::with(['classroom:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
             ->when($request->search, fn ($q) =>
                 $q->where(fn ($q) =>
                     $q->where('name', 'like', '%'.$request->search.'%')
@@ -23,7 +23,7 @@ class StudentWebController extends Controller
             ->when($request->filter === 'inactive',     fn ($q) => $q->where('is_active', false))
             ->when($request->filter !== 'inactive',     fn ($q) => $q->where('is_active', true))
             ->when($request->classroom_id, fn ($q) => $q->where('classroom_id', $request->classroom_id))
-            ->select(['id', 'code', 'name', 'email', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
+            ->select(['id', 'code', 'name', 'email', 'phone', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
             ->orderBy('name')
             ->paginate(50)
             ->withQueryString();
@@ -109,6 +109,14 @@ class StudentWebController extends Controller
 
         return redirect()->route('students.index')->with('success', 'Anggota dihapus dan akan dikeluarkan dari perangkat.');
     }
+    public function downloadTemplate()
+    {
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Domain\Student\Exports\StudentsTemplateExport,
+            'Template_Impor_Anggota.xlsx'
+        );
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -121,6 +129,18 @@ class StudentWebController extends Controller
                 $request->file('file')
             );
             return redirect()->route('students.index')->with('success', 'Data anggota berhasil diimpor.');
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            $failures = $e->failures();
+            $messages = [];
+            foreach ($failures as $failure) {
+                $messages[] = "Baris {$failure->row()}: " . implode(', ', $failure->errors());
+            }
+            // limit to first 3 errors to avoid huge flash messages
+            if (count($messages) > 3) {
+                $messages = array_slice($messages, 0, 3);
+                $messages[] = '...dan kesalahan lainnya.';
+            }
+            return redirect()->route('students.index')->with('error', 'Validasi gagal: ' . implode(' | ', $messages));
         } catch (\Exception $e) {
             return redirect()->route('students.index')->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
         }

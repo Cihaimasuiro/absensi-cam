@@ -8,12 +8,19 @@ echo === Building Smart Absensi Sync Daemon for aarch64 (glibc 2.28 / Buster) ==
 
 cd /d "%ROOT_DIR%"
 
+where zig >nul 2>nul
+if %errorlevel% neq 0 (
+    for /f "delims=" %%i in ('python -c "import ziglang, os; print(os.path.dirname(ziglang.__file__))" 2^>nul') do (
+        set "PATH=%%i;!PATH!"
+    )
+)
+
 where cargo-zigbuild >nul 2>nul
 if %errorlevel% equ 0 (
     echo Using cargo-zigbuild with target aarch64-unknown-linux-gnu.2.28...
     rustup target add aarch64-unknown-linux-gnu 2>nul
     cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release --bin engine-cli
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo ERROR: cargo-zigbuild failed.
         exit /b 1
     )

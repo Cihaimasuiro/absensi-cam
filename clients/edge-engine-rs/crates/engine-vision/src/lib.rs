@@ -1,4 +1,6 @@
 
+pub mod camera;
+
 pub struct FaceRecognizer {
     pub threshold: f32,
 }

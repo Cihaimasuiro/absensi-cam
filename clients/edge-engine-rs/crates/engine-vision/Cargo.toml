@@ -10,4 +10,5 @@ image = "0.25"
 nalgebra = "0.33"
 anyhow = { workspace = true }
 tracing = { workspace = true }
+libc = "0.2"
 # ort = "2.0.0-rc.4" # Uncomment saat model ONNX disiapkan

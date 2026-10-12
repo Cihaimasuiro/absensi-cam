@@ -780,10 +780,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "bytes",
  "clap",
  "dotenvy",
  "engine-core",
+ "engine-server",
  "engine-sync",
+ "engine-vision",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -821,9 +824,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "bytes",
+ "futures-util",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
@@ -848,6 +854,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "image",
+ "libc",
  "nalgebra",
  "tracing",
 ]
@@ -3339,6 +3346,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

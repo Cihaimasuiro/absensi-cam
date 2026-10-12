@@ -14,12 +14,20 @@ pub mod linux {
     use std::sync::Arc;
     use std::time::Duration;
     use tracing::{error, info, warn};
+    use crate::{encode_rgb_to_jpeg_into, yuyv_to_rgb};
 
     // ── V4L2 Constants ──────────────────────────────────────────────────────────
     pub const V4L2_BUF_TYPE_VIDEO_CAPTURE: u32 = 1;
     pub const V4L2_MEMORY_MMAP: u32 = 1;
     pub const V4L2_FIELD_ANY: u32 = 0;
     pub const V4L2_PIX_FMT_MJPEG: u32 = 0x47504a4d; // 'MJPG'
+    pub const V4L2_PIX_FMT_YUYV: u32 = 0x56595559;  // 'YUYV'
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum PixelFormat {
+        Mjpeg,
+        Yuyv,
+    }
 
     // Linux ioctl magic definitions for 64-bit architectures
     pub const VIDIOC_REQBUFS: libc::c_ulong = 0xc0145608;
@@ -119,8 +127,9 @@ pub mod linux {
     pub struct Camera {
         fd: RawFd,
         buffers: Vec<MmapBuffer>,
-        width: u32,
-        height: u32,
+        pub width: u32,
+        pub height: u32,
+        pub pixel_format: PixelFormat,
     }
 
     impl Camera {
@@ -136,6 +145,7 @@ pub mod linux {
                 buffers: Vec::new(),
                 width,
                 height,
+                pixel_format: PixelFormat::Mjpeg,
             };
 
             if let Err(e) = cam.init() {
@@ -147,7 +157,7 @@ pub mod linux {
         }
 
         fn init(&mut self) -> Result<()> {
-            // 1. Set format to MJPEG
+            // 1. Set format: First try requesting MJPEG, fallback to YUYV if unsupported
             let mut fmt: V4l2Format = unsafe { std::mem::zeroed() };
             fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             {
@@ -158,22 +168,47 @@ pub mod linux {
                 pix.field = V4L2_FIELD_ANY;
             }
 
-            if unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) } < 0 {
-                bail!("VIDIOC_S_FMT failed: {}", std::io::Error::last_os_error());
-            }
+            let _ = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
 
             let actual_pix = fmt.pix();
-            if actual_pix.pixelformat != V4L2_PIX_FMT_MJPEG {
-                let fourcc = actual_pix.pixelformat.to_le_bytes();
-                bail!(
-                    "Driver does not support MJPEG. Requested 'MJPG', got fourcc: '{}{}{}{}' (0x{:08x})",
-                    fourcc[0] as char, fourcc[1] as char, fourcc[2] as char, fourcc[3] as char, actual_pix.pixelformat
-                );
+            let mut negotiated_format = actual_pix.pixelformat;
+
+            if negotiated_format != V4L2_PIX_FMT_MJPEG && negotiated_format != V4L2_PIX_FMT_YUYV {
+                // Camera rejected MJPEG, request explicitly YUYV
+                let mut yuyv_fmt: V4l2Format = unsafe { std::mem::zeroed() };
+                yuyv_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                {
+                    let pix = yuyv_fmt.pix_mut();
+                    pix.width = self.width;
+                    pix.height = self.height;
+                    pix.pixelformat = V4L2_PIX_FMT_YUYV;
+                    pix.field = V4L2_FIELD_ANY;
+                }
+                if unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut yuyv_fmt) } >= 0 {
+                    fmt = yuyv_fmt;
+                    negotiated_format = fmt.pix().pixelformat;
+                }
             }
 
+            self.pixel_format = match negotiated_format {
+                V4L2_PIX_FMT_MJPEG => PixelFormat::Mjpeg,
+                V4L2_PIX_FMT_YUYV => PixelFormat::Yuyv,
+                other => {
+                    let fourcc = other.to_le_bytes();
+                    bail!(
+                        "Driver returned unsupported pixel format '{}{}{}{}' (0x{:08x}). Supported: MJPG, YUYV",
+                        fourcc[0] as char, fourcc[1] as char, fourcc[2] as char, fourcc[3] as char, other
+                    );
+                }
+            };
+
+            let actual_pix = fmt.pix();
             self.width = actual_pix.width;
             self.height = actual_pix.height;
-            info!("V4L2 Camera initialized: {}x{} MJPEG", self.width, self.height);
+            info!(
+                "V4L2 Camera initialized on fd {}: {}x{} (format: {:?})",
+                self.fd, self.width, self.height, self.pixel_format
+            );
 
             // 2. Request 4 MMAP buffers
             let mut req: V4l2Requestbuffers = unsafe { std::mem::zeroed() };
@@ -321,10 +356,41 @@ pub mod linux {
                     }
                 };
 
+                let w = camera.width;
+                let h = camera.height;
+                let pixel_format = camera.pixel_format;
+
+                // Reusable buffers to eliminate per-frame heap allocations
+                let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
+                    vec![0u8; (w * h * 3) as usize]
+                } else {
+                    Vec::new()
+                };
+                let mut jpeg_buf = if pixel_format == PixelFormat::Yuyv {
+                    Vec::with_capacity((w * h / 4) as usize)
+                } else {
+                    Vec::new()
+                };
+
                 while running.load(Ordering::Relaxed) {
                     match camera.capture_frame(500) {
                         Ok(Some(frame)) => {
-                            on_frame(frame);
+                            match pixel_format {
+                                PixelFormat::Mjpeg => {
+                                    // Hardware MJPEG is already JPEG bytes
+                                    on_frame(frame);
+                                }
+                                PixelFormat::Yuyv => {
+                                    // Fast YUYV 4:2:2 -> RGB8 conversion
+                                    yuyv_to_rgb(frame, w as usize, h as usize, &mut rgb_buf);
+                                    // Encode RGB8 to JPEG into reusable buffer
+                                    if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 75, &mut jpeg_buf) {
+                                        error!("JPEG encode failed: {:#}", e);
+                                        continue;
+                                    }
+                                    on_frame(&jpeg_buf);
+                                }
+                            }
                         }
                         Ok(None) => {
                             // Timeout without frame

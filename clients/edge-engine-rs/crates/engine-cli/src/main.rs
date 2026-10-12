@@ -25,14 +25,8 @@ struct Args {
     #[arg(long)]
     embed_key: Option<String>,
 
-    #[arg(long, default_value_t = 15)]
-    sync_interval: u64,
-
     #[arg(long)]
-    turso_url: Option<String>,
-
-    #[arg(long)]
-    turso_token: Option<String>,
+    model_version: Option<String>,
 }
 
 #[tokio::main]
@@ -66,24 +60,23 @@ async fn main() -> Result<()> {
         base64::engine::general_purpose::STANDARD.decode(k).ok()
     });
 
-    let turso_url = args.turso_url.or_else(|| env::var("TURSO_DATABASE_URL").ok());
-    let turso_token = args.turso_token.or_else(|| env::var("TURSO_AUTH_TOKEN").ok());
+    let model_version = args
+        .model_version
+        .or_else(|| env::var("MODEL_VERSION").ok())
+        .unwrap_or_else(|| "v1.0-yunet".to_string());
 
-    // 4. Inisialisasi Database SQLite / Turso
+    // 4. Inisialisasi Database SQLite lokal
     info!("Membuka database SQLite pada: {}", args.db);
-    let db = EdgeDb::init(&args.db, turso_url.as_deref(), turso_token.as_deref()).await?;
+    let db = EdgeDb::init(&args.db).await?;
 
     // 5. Buat dan jalankan SyncWorker
-    let worker = SyncWorker::new(db, api_url, api_token, embed_key_bytes)?;
+    let worker = SyncWorker::new(db, api_url, api_token, embed_key_bytes, model_version)?;
 
     let worker_handle = tokio::spawn(async move {
-        worker.run_loop(args.sync_interval).await;
+        worker.run_loop().await;
     });
 
-    info!(
-        "Daemon aktif. Menguras outbox setiap {} detik. Tekan Ctrl+C untuk berhenti.",
-        args.sync_interval
-    );
+    info!("Daemon aktif. Menjalankan jadwal PRD (Outbox: 15s, Templates: 60s, Heartbeat: 60s). Tekan Ctrl+C untuk berhenti.");
 
     // 6. Tunggu sinyal shutdown
     tokio::select! {
@@ -99,4 +92,5 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
 

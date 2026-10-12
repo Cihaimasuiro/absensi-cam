@@ -15,34 +15,16 @@ pub struct EdgeDb {
 }
 
 impl EdgeDb {
-    /// Buka database lokal atau remote replica Turso
-    pub async fn init(
-        db_path: impl AsRef<Path>,
-        turso_url: Option<&str>,
-        turso_token: Option<&str>,
-    ) -> Result<Self> {
-        let db = match (turso_url, turso_token) {
-            (Some(url), Some(token)) if !url.is_empty() && !token.is_empty() => {
-                info!("Menginisialisasi Turso Embedded Replica: {}", url);
-                Builder::new_remote_replica(
-                    db_path.as_ref().to_str().unwrap(),
-                    url.to_string(),
-                    token.to_string(),
-                )
-                .build()
-                .await?
-            }
-            _ => {
-                info!("Menginisialisasi database lokal SQLite: {:?}", db_path.as_ref());
-                Builder::new_local(db_path.as_ref()).build().await?
-            }
-        };
-
+    /// Buka database SQLite lokal dalam WAL mode
+    pub async fn init(db_path: impl AsRef<Path>) -> Result<Self> {
+        info!("Menginisialisasi database SQLite lokal: {:?}", db_path.as_ref());
+        let db = Builder::new_local(db_path.as_ref()).build().await?;
         let conn = db.connect()?;
 
         // Aktifkan WAL mode dan synchronous normal untuk concurrency aman bersama Python
         let _ = conn
             .execute_batch(
+
                 r#"
                 PRAGMA journal_mode = WAL;
                 PRAGMA synchronous = NORMAL;
@@ -91,11 +73,6 @@ impl EdgeDb {
         Ok(())
     }
 
-    /// Sinkronkan replica dengan Turso cloud jika dalam mode remote replica
-    pub async fn sync(&self) -> Result<()> {
-        self.db.sync().await?;
-        Ok(())
-    }
 
     /// Ambil baris absensi yang belum tersinkronisasi (synced = 0)
     pub async fn get_unsynced_attendance(&self, limit: usize) -> Result<Vec<OutboxRecord>> {
@@ -329,7 +306,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_edge_db_outbox_operations() {
-        let db = EdgeDb::init(":memory:", None, None)
+        let db = EdgeDb::init(":memory:")
             .await
             .expect("Inisialisasi in-memory DB harus berhasil");
 
@@ -360,6 +337,26 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, "att-2");
     }
+
+    #[test]
+    fn test_aes_gcm_cross_language_python_vector() {
+        use base64::Engine;
+        // Key 32 bytes 'k'
+        let key = b"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk";
+        let student_id = "std-python-99";
+        let model_version = "v1.0-yunet";
+        let expected_plaintext = vec![b'e'; 2048];
+
+        // Ciphertext 2076 bytes yang di-generate langsung oleh Python cryptography (AESGCM)
+        let blob_b64 = "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";
+        let blob = base64::engine::general_purpose::STANDARD.decode(blob_b64).unwrap();
+        assert_eq!(blob.len(), 2076);
+
+        let decrypted = EdgeDb::decrypt_embedding(key, &blob, student_id, model_version)
+            .expect("Harus berhasil mendekripsi ciphertext dari Python");
+        assert_eq!(decrypted, expected_plaintext);
+    }
 }
+
 
 

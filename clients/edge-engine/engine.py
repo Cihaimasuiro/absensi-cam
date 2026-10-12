@@ -158,7 +158,10 @@ class EdgeEngine:
         self.arduino.standby()
 
         # ── Background Sync ──────────────────────────────────────────
-        self.sync_worker.start()
+        if str(self.config.get("DISABLE_INTERNAL_SYNC", "false")).lower() not in ("true", "1", "yes"):
+            self.sync_worker.start()
+        else:
+            logger.info("Internal Python SyncWorker disabled (managed by external Rust daemon).")
 
         # ── Camera Loop ──────────────────────────────────────────────
         cap = None

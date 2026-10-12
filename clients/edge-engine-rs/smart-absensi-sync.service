@@ -1,0 +1,21 @@
+[Unit]
+Description=Smart Absensi Edge Sync Daemon (Rust)
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/home/orangepi/absensi-cam/clients/edge-engine
+ExecStart=/home/orangepi/absensi-cam/clients/edge-engine-rs/target/release/engine-cli --db /home/orangepi/absensi-cam/clients/edge-engine/local_edge.db
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/orangepi/absensi-cam/clients/edge-engine/.env
+
+# Security Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/home/orangepi/absensi-cam/clients/edge-engine
+
+[Install]
+WantedBy=multi-user.target

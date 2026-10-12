@@ -1,4 +1,3 @@
-use anyhow::Result;
 
 pub struct FaceRecognizer {
     pub threshold: f32,

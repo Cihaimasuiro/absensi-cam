@@ -37,8 +37,9 @@ impl FrameHub {
     }
 
     /// Publish a newly captured frame to all connected viewers.
+    /// Uses send_replace so that latest frame is retained for snapshot even if no active stream receivers exist.
     pub fn publish(&self, frame: Bytes) {
-        let _ = self.sender.send(Some(frame));
+        let _ = self.sender.send_replace(Some(frame));
     }
 
     /// Subscribe to receiving live frames.
@@ -69,7 +70,7 @@ async fn index_handler() -> Html<&'static str> {
     <h2>Smart Absensi Edge Camera (Rust Engine)</h2>
     <div class="stream-box">
         <img src="/stream" alt="Live Stream" />
-        <div class="meta">Live MJPEG Video Feed (Port 5000)</div>
+        <div class="meta">Live MJPEG Video Feed</div>
     </div>
 </body>
 </html>"#)

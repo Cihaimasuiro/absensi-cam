@@ -2,11 +2,11 @@
 //!
 //! Gated with #[cfg(target_os = "linux")].
 //! Uses native libc::ioctl with #[repr(C)] structs and compile-time size assertions.
-//! Enforces MJPEG only. Runs capture on a dedicated thread with mmap buffers.
+//! Supports MJPEG and YUYV 4:2:2 formats. Runs capture on a dedicated thread with mmap buffers.
 
 #[cfg(target_os = "linux")]
 pub mod linux {
-    use anyhow::{bail, Context, Result};
+    use anyhow::{bail, Result};
     use std::ffi::CString;
     use std::os::unix::io::RawFd;
     use std::ptr;
@@ -14,7 +14,7 @@ pub mod linux {
     use std::sync::Arc;
     use std::time::Duration;
     use tracing::{error, info, warn};
-    use crate::{encode_rgb_to_jpeg_into, yuyv_to_rgb};
+    use crate::{encode_rgb_to_jpeg_into, yuyv_to_rgb_stride};
 
     // ── V4L2 Constants ──────────────────────────────────────────────────────────
     pub const V4L2_BUF_TYPE_VIDEO_CAPTURE: u32 = 1;
@@ -22,6 +22,7 @@ pub mod linux {
     pub const V4L2_FIELD_ANY: u32 = 0;
     pub const V4L2_PIX_FMT_MJPEG: u32 = 0x47504a4d; // 'MJPG'
     pub const V4L2_PIX_FMT_YUYV: u32 = 0x56595559;  // 'YUYV'
+    pub const V4L2_BUF_FLAG_ERROR: u32 = 0x00000040;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum PixelFormat {
@@ -129,6 +130,7 @@ pub mod linux {
         buffers: Vec<MmapBuffer>,
         pub width: u32,
         pub height: u32,
+        pub bytesperline: u32,
         pub pixel_format: PixelFormat,
     }
 
@@ -145,13 +147,12 @@ pub mod linux {
                 buffers: Vec::new(),
                 width,
                 height,
+                bytesperline: width * 2,
                 pixel_format: PixelFormat::Mjpeg,
             };
 
-            if let Err(e) = cam.init() {
-                unsafe { libc::close(fd) };
-                return Err(e);
-            }
+            // If init() fails, Drop for Camera will close self.fd cleanly (no double-close)
+            cam.init()?;
 
             Ok(cam)
         }
@@ -168,13 +169,15 @@ pub mod linux {
                 pix.field = V4L2_FIELD_ANY;
             }
 
-            let _ = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
+            let s_fmt_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
+            let mut configured_format = if s_fmt_res >= 0 && fmt.pix().pixelformat == V4L2_PIX_FMT_MJPEG {
+                Some(PixelFormat::Mjpeg)
+            } else {
+                None
+            };
 
-            let actual_pix = fmt.pix();
-            let mut negotiated_format = actual_pix.pixelformat;
-
-            if negotiated_format != V4L2_PIX_FMT_MJPEG && negotiated_format != V4L2_PIX_FMT_YUYV {
-                // Camera rejected MJPEG, request explicitly YUYV
+            if configured_format.is_none() {
+                // Camera rejected MJPEG or ioctl returned non-MJPEG; explicitly request YUYV
                 let mut yuyv_fmt: V4l2Format = unsafe { std::mem::zeroed() };
                 yuyv_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 {
@@ -184,30 +187,46 @@ pub mod linux {
                     pix.pixelformat = V4L2_PIX_FMT_YUYV;
                     pix.field = V4L2_FIELD_ANY;
                 }
-                if unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut yuyv_fmt) } >= 0 {
+                let yuyv_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut yuyv_fmt) };
+                if yuyv_res >= 0 && yuyv_fmt.pix().pixelformat == V4L2_PIX_FMT_YUYV {
                     fmt = yuyv_fmt;
-                    negotiated_format = fmt.pix().pixelformat;
+                    configured_format = Some(PixelFormat::Yuyv);
                 }
             }
 
-            self.pixel_format = match negotiated_format {
-                V4L2_PIX_FMT_MJPEG => PixelFormat::Mjpeg,
-                V4L2_PIX_FMT_YUYV => PixelFormat::Yuyv,
-                other => {
-                    let fourcc = other.to_le_bytes();
+            // If neither was confirmed via S_FMT, query what the driver is actually using
+            if configured_format.is_none() {
+                let mut get_fmt: V4l2Format = unsafe { std::mem::zeroed() };
+                get_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                if unsafe { libc::ioctl(self.fd, VIDIOC_G_FMT, &mut get_fmt) } >= 0 {
+                    fmt = get_fmt;
+                    let fourcc = fmt.pix().pixelformat;
+                    if fourcc == V4L2_PIX_FMT_MJPEG {
+                        configured_format = Some(PixelFormat::Mjpeg);
+                    } else if fourcc == V4L2_PIX_FMT_YUYV {
+                        configured_format = Some(PixelFormat::Yuyv);
+                    }
+                }
+            }
+
+            let actual_pix = fmt.pix();
+            self.pixel_format = match configured_format {
+                Some(f) => f,
+                None => {
+                    let fourcc = actual_pix.pixelformat.to_le_bytes();
                     bail!(
-                        "Driver returned unsupported pixel format '{}{}{}{}' (0x{:08x}). Supported: MJPG, YUYV",
-                        fourcc[0] as char, fourcc[1] as char, fourcc[2] as char, fourcc[3] as char, other
+                        "Driver rejected both MJPG and YUYV. Negotiated fourcc: '{}{}{}{}' (0x{:08x})",
+                        fourcc[0] as char, fourcc[1] as char, fourcc[2] as char, fourcc[3] as char, actual_pix.pixelformat
                     );
                 }
             };
 
-            let actual_pix = fmt.pix();
             self.width = actual_pix.width;
             self.height = actual_pix.height;
+            self.bytesperline = actual_pix.bytesperline;
             info!(
-                "V4L2 Camera initialized on fd {}: {}x{} (format: {:?})",
-                self.fd, self.width, self.height, self.pixel_format
+                "V4L2 Camera initialized on fd {}: {}x{} (bytesperline={}, format: {:?})",
+                self.fd, self.width, self.height, self.bytesperline, self.pixel_format
             );
 
             // 2. Request 4 MMAP buffers
@@ -270,7 +289,10 @@ pub mod linux {
             Ok(())
         }
 
-        pub fn capture_frame(&mut self, timeout_ms: i32) -> Result<Option<&[u8]>> {
+        pub fn capture_frame<F, R>(&mut self, timeout_ms: i32, f: F) -> Result<Option<R>>
+        where
+            F: FnOnce(&[u8]) -> R,
+        {
             let mut pfd = libc::pollfd {
                 fd: self.fd,
                 events: libc::POLLIN,
@@ -306,16 +328,23 @@ pub mod linux {
             let mmap_buf = &self.buffers[idx];
             let bytes_used = buf.bytesused as usize;
 
-            let frame_slice = unsafe {
-                std::slice::from_raw_parts(mmap_buf.ptr as *const u8, bytes_used.min(mmap_buf.len))
+            // Check if frame was flagged with hardware capture error
+            let result = if (buf.flags & V4L2_BUF_FLAG_ERROR) != 0 {
+                warn!("Frame flagged with V4L2_BUF_FLAG_ERROR, skipping corrupted frame");
+                None
+            } else {
+                let frame_slice = unsafe {
+                    std::slice::from_raw_parts(mmap_buf.ptr as *const u8, bytes_used.min(mmap_buf.len))
+                };
+                Some(f(frame_slice))
             };
 
-            // Immediately re-queue buffer so the camera can continue filling it
+            // Re-queue buffer AFTER caller finishes processing/copying frame data!
             if unsafe { libc::ioctl(self.fd, VIDIOC_QBUF, &mut buf) } < 0 {
                 warn!("VIDIOC_QBUF re-queue failed: {}", std::io::Error::last_os_error());
             }
 
-            Ok(Some(frame_slice))
+            Ok(result)
         }
     }
 
@@ -358,9 +387,14 @@ pub mod linux {
 
                 let w = camera.width;
                 let h = camera.height;
+                let stride = if camera.bytesperline >= w * 2 {
+                    camera.bytesperline as usize
+                } else {
+                    (w * 2) as usize
+                };
                 let pixel_format = camera.pixel_format;
 
-                // Reusable buffers to eliminate per-frame heap allocations
+                // Preallocated buffers for YUYV transcoding
                 let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
                     vec![0u8; (w * h * 3) as usize]
                 } else {
@@ -373,27 +407,29 @@ pub mod linux {
                 };
 
                 while running.load(Ordering::Relaxed) {
-                    match camera.capture_frame(500) {
-                        Ok(Some(frame)) => {
-                            match pixel_format {
-                                PixelFormat::Mjpeg => {
-                                    // Hardware MJPEG is already JPEG bytes
-                                    on_frame(frame);
+                    let capture_res = camera.capture_frame(500, |frame| {
+                        match pixel_format {
+                            PixelFormat::Mjpeg => {
+                                on_frame(frame);
+                            }
+                            PixelFormat::Yuyv => {
+                                if !yuyv_to_rgb_stride(frame, w as usize, h as usize, stride, &mut rgb_buf) {
+                                    warn!("Truncated or malformed YUYV frame (len={}), skipping", frame.len());
+                                    return;
                                 }
-                                PixelFormat::Yuyv => {
-                                    // Fast YUYV 4:2:2 -> RGB8 conversion
-                                    yuyv_to_rgb(frame, w as usize, h as usize, &mut rgb_buf);
-                                    // Encode RGB8 to JPEG into reusable buffer
-                                    if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 75, &mut jpeg_buf) {
-                                        error!("JPEG encode failed: {:#}", e);
-                                        continue;
-                                    }
-                                    on_frame(&jpeg_buf);
+                                if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 75, &mut jpeg_buf) {
+                                    error!("JPEG encode failed: {:#}", e);
+                                    return;
                                 }
+                                on_frame(&jpeg_buf);
                             }
                         }
+                    });
+
+                    match capture_res {
+                        Ok(Some(())) => {}
                         Ok(None) => {
-                            // Timeout without frame
+                            // Timeout or skipped corrupted frame
                         }
                         Err(e) => {
                             error!("Error capturing frame: {:#}", e);

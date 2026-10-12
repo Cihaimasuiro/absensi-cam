@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use engine_core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload};
+use engine_core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload, OutboxRecord};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
 use std::time::Duration;
@@ -64,56 +64,70 @@ impl SyncWorker {
 
     /// Loop sinkronisasi latar belakang mandiri
     /// Mengikuti spesifikasi PRD FR-E10, FR-E11, FR-E12:
-    /// - Outbox check: tiap 15s (FR-E10)
+    /// - Watchdog dedicated: ping tiap 20s independen dari jaringan
+    /// - Outbox check: tiap 15s (FR-E10) dengan non-blocking backoff timestamp
     /// - Template & config sync: tiap 60s (FR-E11)
     /// - Heartbeat: tiap 60s (FR-E12)
     /// - Backoff schedule: 5s, 30s, 120s (2m), 600s (10m), 900s (15m)
     pub async fn run_loop(&self) {
+        let mut watchdog_interval = tokio::time::interval(Duration::from_secs(20));
         let mut outbox_interval = tokio::time::interval(Duration::from_secs(15));
         let mut template_interval = tokio::time::interval(Duration::from_secs(60));
         let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(60));
 
         const BACKOFF_SCHEDULE: [u64; 5] = [5, 30, 120, 600, 900];
         let mut failure_streak = 0usize;
+        let mut next_outbox_attempt = tokio::time::Instant::now();
 
         info!(
-            "SyncWorker daemon berjalan (Outbox: 15s, Templates: 60s, Heartbeat: 60s, Model: {})",
+            "SyncWorker daemon berjalan (Outbox: 15s, Templates: 60s, Heartbeat: 60s, Watchdog: 20s, Model: {})",
             self.model_version
         );
 
         loop {
             tokio::select! {
+                // 1. Dedicated Watchdog Ping (TIDAK BOLEH TERHALANG OUTAGE JARINGAN)
+                _ = watchdog_interval.tick() => {
+                    notify_systemd("WATCHDOG=1\n");
+                }
+
+                // 2. Outbox Drain dengan Non-blocking Backoff (FR-E10)
                 _ = outbox_interval.tick() => {
-                    notify_systemd_watchdog();
+                    if tokio::time::Instant::now() < next_outbox_attempt {
+                        // Masih dalam cooldown backoff; lewati tanpa memblokir task loop lain!
+                        continue;
+                    }
 
                     match self.push_outbox_to_laravel().await {
                         Ok((synced, rejected)) => {
                             if synced > 0 || rejected > 0 {
                                 info!(
-                                    "Outbox sync: {} disinkronkan, {} ditolak (tersisa di outbox)",
+                                    "Outbox sync: {} disinkronkan, {} ditolak/dikarantina",
                                     synced, rejected
                                 );
                             }
                             failure_streak = 0;
                         }
                         Err(e) => {
-                            let backoff = BACKOFF_SCHEDULE[failure_streak.min(BACKOFF_SCHEDULE.len() - 1)];
+                            let backoff_secs = BACKOFF_SCHEDULE[failure_streak.min(BACKOFF_SCHEDULE.len() - 1)];
                             failure_streak += 1;
+                            next_outbox_attempt = tokio::time::Instant::now() + Duration::from_secs(backoff_secs);
                             error!(
-                                "Gagal push outbox absensi ke Laravel (kegagalan #{}): {:?}. Menunggu {}s (FR-E10 backoff)",
-                                failure_streak, e, backoff
+                                "Gagal push outbox absensi ke Laravel (kegagalan #{}): {:?}. Cooldown backoff aktif selama {}s (FR-E10)",
+                                failure_streak, e, backoff_secs
                             );
-                            tokio::time::sleep(Duration::from_secs(backoff)).await;
                         }
                     }
                 }
 
+                // 3. Template & Config Delta Sync (FR-E11)
                 _ = template_interval.tick() => {
                     if let Err(e) = self.pull_templates().await {
                         warn!("Gagal pull templates wajah: {:?}", e);
                     }
                 }
 
+                // 4. Heartbeat Telemetry (FR-E12)
                 _ = heartbeat_interval.tick() => {
                     if let Err(e) = self.send_heartbeat().await {
                         warn!("Gagal mengirim heartbeat: {:?}", e);
@@ -124,8 +138,10 @@ impl SyncWorker {
     }
 
     /// Push pending rows from outbox_attendance to Laravel /api/v1/attendance/batch
-    /// Parsir hasil per-record: hanya tandai status 'created' dan 'duplicate' sebagai synced.
-    /// Record dengan status 'rejected' tetap dibiarkan di outbox (synced = 0) agar tidak hilang.
+    /// - Parsir hasil per-record: hanya tandai status 'created' dan 'duplicate' sebagai synced.
+    /// - Jika menerima HTTP 4xx (misal 422 Unprocessable Entity karena record beracun):
+    ///   pecah batch menjadi pengiriman individual agar baris yang valid tetap tersinkron
+    ///   dan baris yang korup dikarantina (synced = -1).
     pub async fn push_outbox_to_laravel(&self) -> Result<(usize, usize)> {
         let records = self.db.get_unsynced_attendance(50).await?;
         if records.is_empty() {
@@ -133,15 +149,15 @@ impl SyncWorker {
         }
 
         let payload_records: Vec<AttendancePayloadRecord> = records
-            .into_iter()
+            .iter()
             .map(|r| AttendancePayloadRecord {
-                id: r.id,
-                student_id: r.student_id,
-                captured_at: r.captured_at,
-                direction: r.direction,
+                id: r.id.clone(),
+                student_id: r.student_id.clone(),
+                captured_at: r.captured_at.clone(),
+                direction: r.direction.clone(),
                 score: (r.score.clamp(0.0, 1.0) * 10000.0).round() / 10000.0,
                 liveness_score: (r.liveness_score.clamp(0.0, 1.0) * 10000.0).round() / 10000.0,
-                time_source: r.time_source,
+                time_source: r.time_source.clone(),
             })
             .collect();
 
@@ -186,6 +202,14 @@ impl SyncWorker {
             }
 
             Ok((synced_ids.len(), rejected_count))
+        } else if status.is_client_error() {
+            let body = resp.text().await.unwrap_or_default();
+            warn!(
+                "Laravel API mengembalikan HTTP {} untuk batch: {}. Memecah batch untuk mengisolasi record beracun...",
+                status.as_u16(),
+                body
+            );
+            self.push_records_individually(&records).await
         } else {
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
@@ -194,6 +218,72 @@ impl SyncWorker {
                 body
             );
         }
+    }
+
+    /// Fallback saat batch mendapat HTTP 4xx (misal 422):
+    /// Mengirim tiap record satu per satu agar record valid tersinkron dan record beracun dikarantina.
+    async fn push_records_individually(&self, records: &[OutboxRecord]) -> Result<(usize, usize)> {
+        let mut synced_count = 0usize;
+        let mut quarantined_count = 0usize;
+
+        for r in records {
+            let single_payload = AttendanceBatchPayload {
+                records: vec![AttendancePayloadRecord {
+                    id: r.id.clone(),
+                    student_id: r.student_id.clone(),
+                    captured_at: r.captured_at.clone(),
+                    direction: r.direction.clone(),
+                    score: (r.score.clamp(0.0, 1.0) * 10000.0).round() / 10000.0,
+                    liveness_score: (r.liveness_score.clamp(0.0, 1.0) * 10000.0).round() / 10000.0,
+                    time_source: r.time_source.clone(),
+                }],
+            };
+
+            let url = format!("{}/api/v1/attendance/batch", self.api_url);
+            let res = self
+                .client
+                .post(&url)
+                .headers(self.auth_headers())
+                .json(&single_payload)
+                .send()
+                .await;
+
+            match res {
+                Ok(resp) => {
+                    let st = resp.status();
+                    if st.is_success() {
+                        self.db.mark_as_synced(&[r.id.clone()]).await?;
+                        synced_count += 1;
+                    } else if st.is_client_error() {
+                        let body = resp.text().await.unwrap_or_default();
+                        error!(
+                            "Record {} permanen ditolak (HTTP {}): {}. Mengkarantina record (synced = -1) agar tidak memblokir antrean.",
+                            r.id,
+                            st.as_u16(),
+                            body
+                        );
+                        self.db.quarantine_records(&[r.id.clone()]).await?;
+                        quarantined_count += 1;
+                    } else {
+                        // 5xx server error, hentikan loop individual agar retry batch nanti
+                        anyhow::bail!(
+                            "Server error HTTP {} saat pengiriman individual record {}",
+                            st.as_u16(),
+                            r.id
+                        );
+                    }
+                }
+                Err(e) => {
+                    anyhow::bail!(
+                        "Network error saat pengiriman individual record {}: {:?}",
+                        r.id,
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok((synced_count, quarantined_count))
     }
 
     /// Pull updated face templates from Laravel /api/v1/templates
@@ -258,7 +348,6 @@ impl SyncWorker {
     }
 
     /// Kirim heartbeat telemetry ke Laravel /api/v1/devices/heartbeat
-    /// Menggunakan metrik sistem riil (suhu SoC, RAM bebas, disk bebas, outbox, IP lokal)
     pub async fn send_heartbeat(&self) -> Result<()> {
         let unsynced_len = self.db.get_unsynced_count().await.unwrap_or(0);
         let payload = HeartbeatPayload {
@@ -325,7 +414,6 @@ fn read_free_ram_mb() -> i64 {
 }
 
 fn read_free_disk_mb() -> i64 {
-    // Membaca statvfs jika di Unix, atau fallback
     #[cfg(unix)]
     {
         use std::ffi::CString;
@@ -361,17 +449,17 @@ fn check_serial_status() -> bool {
 }
 
 #[cfg(unix)]
-fn notify_systemd_watchdog() {
+pub fn notify_systemd(state: &str) {
     use std::os::unix::net::UnixDatagram;
     if let Ok(sock_path) = std::env::var("NOTIFY_SOCKET") {
         if let Ok(sock) = UnixDatagram::unbound() {
-            let _ = sock.send_to(b"WATCHDOG=1\n", sock_path);
+            let _ = sock.send_to(state.as_bytes(), sock_path);
         }
     }
 }
 
 #[cfg(not(unix))]
-fn notify_systemd_watchdog() {}
+pub fn notify_systemd(_state: &str) {}
 
 // ── Unit & Integration Tests ─────────────────────────────────────────────────
 
@@ -383,7 +471,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_push_outbox_mixed_batch_handling() {
-        // Mock server yang mengembalikan kombinasi created, duplicate, dan rejected
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let api_url = format!("http://127.0.0.1:{}", port);
@@ -394,7 +481,11 @@ mod tests {
                 let _ = socket.read(&mut buf).await.unwrap_or(0);
 
                 let body = "{\"results\":[{\"id\":\"att-ok-1\",\"status\":\"created\"},{\"id\":\"att-dup-2\",\"status\":\"duplicate\"},{\"id\":\"att-rej-3\",\"status\":\"rejected\",\"reason\":\"server_error\"}]}";
-                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
                 let _ = socket.write_all(response.as_bytes()).await;
             }
         });
@@ -431,6 +522,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_push_outbox_handles_422_poisoned_batch() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        // Server handler:
+        // - Panggilan 1: Batch berisi 2 record -> return 422 Unprocessable Entity
+        // - Panggilan 2: Individual record 'att-poison' -> return 422 Unprocessable Entity
+        // - Panggilan 3: Individual record 'att-good' -> return 200 OK
+        tokio::spawn(async move {
+            let mut call_count = 0;
+            while let Ok((mut socket, _)) = listener.accept().await {
+                call_count += 1;
+                let mut buf = [0u8; 4096];
+                let n = socket.read(&mut buf).await.unwrap_or(0);
+                let req_text = String::from_utf8_lossy(&buf[..n]);
+
+                if call_count == 1 {
+                    // Panggilan batch pertama gagal 422
+                    let body = "{\"message\":\"Validation error: invalid student_id format\"}";
+                    let resp = format!(
+                        "HTTP/1.1 422 Unprocessable Entity\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = socket.write_all(resp.as_bytes()).await;
+                } else if req_text.contains("att-poison") {
+                    let body = "{\"message\":\"Invalid student_id\"}";
+                    let resp = format!(
+                        "HTTP/1.1 422 Unprocessable Entity\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = socket.write_all(resp.as_bytes()).await;
+                } else {
+                    let body = "{\"results\":[{\"id\":\"att-good\",\"status\":\"created\"}]}";
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = socket.write_all(resp.as_bytes()).await;
+                }
+            }
+        });
+
+        let db = EdgeDb::init(":memory:").await.unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO outbox_attendance (id, student_id, captured_at, direction, score, liveness_score, time_source, synced) \
+                 VALUES ('att-poison', 'bad-id', '2026-10-12 10:00:00', 'in', 0.95, 0.98, 'rtc', 0), \
+                        ('att-good', 'std-valid', '2026-10-12 10:00:01', 'in', 0.95, 0.98, 'rtc', 0)",
+                (),
+            )
+            .await
+            .unwrap();
+
+        let worker = SyncWorker::new(
+            db,
+            api_url,
+            "test-token-123".to_string(),
+            None,
+            "v1.0-yunet".to_string(),
+        )
+        .unwrap();
+
+        // Push batch akan menangani 422, memecah batch, mengkarantina 'att-poison', dan mensinkronkan 'att-good'
+        let (synced, quarantined) = worker.push_outbox_to_laravel().await.unwrap();
+        assert_eq!(synced, 1, "Record baik harus berhasil disinkronkan");
+        assert_eq!(quarantined, 1, "Record beracun harus dikarantina");
+
+        // Antrean outbox aktif (synced = 0) sekarang harus kosong (tidak terblokir!)
+        let unsynced = worker.db.get_unsynced_attendance(50).await.unwrap();
+        assert_eq!(unsynced.len(), 0, "Antrean outbox harus bersih tidak terblokir");
+    }
+
+    #[tokio::test]
     async fn test_push_outbox_failure_keeps_records_unsynced() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -440,7 +608,7 @@ mod tests {
             if let Ok((mut socket, _)) = listener.accept().await {
                 let mut buf = [0u8; 1024];
                 let _ = socket.read(&mut buf).await;
-                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 15\r\n\r\nServer Error 500";
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 15\r\nConnection: close\r\n\r\nServer Error 500";
                 let _ = socket.write_all(response.as_bytes()).await;
             }
         });

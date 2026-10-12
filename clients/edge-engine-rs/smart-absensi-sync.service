@@ -4,11 +4,12 @@ After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=edge
 Group=edge
 WorkingDirectory=/home/edge/absensi-cam/clients/edge-engine
-ExecStart=/home/edge/absensi-cam/clients/edge-engine-rs/target/release/engine-cli --db /home/edge/absensi-cam/clients/edge-engine/local_edge.db
+ExecStart=/usr/local/bin/smart-absensi-sync --db /home/edge/absensi-cam/clients/edge-engine/local_edge.db
 Restart=always
 RestartSec=5
 WatchdogSec=60

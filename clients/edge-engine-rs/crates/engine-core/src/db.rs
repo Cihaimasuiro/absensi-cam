@@ -119,6 +119,25 @@ impl EdgeDb {
         Ok(())
     }
 
+    /// Tandai baris absensi yang ditolak/rusak permanen sebagai dikarantina (synced = -1) agar tidak memblokir antrean
+    pub async fn quarantine_records(&self, ids: &[String]) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+
+        let tx = self.conn.transaction().await?;
+        for id in ids {
+            tx.execute(
+                "UPDATE outbox_attendance SET synced = -1 WHERE id = ?",
+                [id.as_str()],
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+
     /// Hitung jumlah baris outbox yang belum tersinkronisasi
     pub async fn get_unsynced_count(&self) -> Result<usize> {
         let mut rows = self

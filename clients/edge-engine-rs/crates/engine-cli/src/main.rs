@@ -72,6 +72,9 @@ async fn main() -> Result<()> {
     // 5. Buat dan jalankan SyncWorker
     let worker = SyncWorker::new(db, api_url, api_token, embed_key_bytes, model_version)?;
 
+    // Beritahu systemd bahwa daemon telah siap melayani (Type=notify)
+    engine_sync::notify_systemd("READY=1\n");
+
     let worker_handle = tokio::spawn(async move {
         worker.run_loop().await;
     });

@@ -8,17 +8,16 @@ pub const CARD_PENDING_BG: Color32 = Color32::from_rgb(34, 29, 20);
 pub const CONTROLS: Color32 = Color32::from_rgb(34, 36, 44);
 pub const SUNKEN: Color32 = Color32::from_rgb(10, 11, 14);
 
-// Text inks with enhanced contrast
+// High-contrast text inks for lit rooms & field conditions
 pub const INK: Color32 = Color32::from_rgb(245, 245, 242);
-pub const INK_MUTED: Color32 = alpha(245, 245, 242, 185);
-pub const INK_DIM: Color32 = alpha(245, 245, 242, 145);
-pub const INK_FAINT: Color32 = alpha(245, 245, 242, 90);
+pub const INK_MUTED: Color32 = alpha(245, 245, 242, 215);
+pub const INK_DIM: Color32 = alpha(245, 245, 242, 175);
+pub const INK_FAINT: Color32 = alpha(245, 245, 242, 130);
 
 pub const LINE: Color32 = alpha(255, 255, 255, 42);
-pub const LINE_STRONG: Color32 = alpha(245, 245, 242, 110);
+pub const LINE_STRONG: Color32 = alpha(245, 245, 242, 120);
 
 pub const ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
-pub const ACCENT_BG: Color32 = Color32::from_rgb(37, 99, 235);
 
 pub const ONLINE_FG: Color32 = Color32::from_rgb(52, 211, 153);
 pub const ONLINE_BG: Color32 = alpha(16, 45, 35, 220);
@@ -26,8 +25,27 @@ pub const ONLINE_BG: Color32 = alpha(16, 45, 35, 220);
 pub const OFFLINE_FG: Color32 = Color32::from_rgb(248, 113, 113);
 pub const OFFLINE_BG: Color32 = alpha(48, 20, 24, 220);
 
+// Amber strictly reserved for "Needs Decision / Pending"
 pub const PENDING_FG: Color32 = Color32::from_rgb(251, 191, 36);
 pub const PENDING_BG: Color32 = alpha(48, 38, 16, 220);
+
+// Solid Primary Approve button for pending cards
+pub const SOLID_APPROVE_BG: Color32 = Color32::from_rgb(16, 128, 76);
+
+// Reject button styles
+pub const REJECT_FG: Color32 = Color32::from_rgb(248, 113, 113);
+
+// Neutral badge for Outdated (does not clash with Amber)
+pub const OUTDATED_FG: Color32 = Color32::from_rgb(180, 185, 200);
+pub const OUTDATED_BG: Color32 = alpha(255, 255, 255, 22);
+
+// Diagnostic & State Banners
+pub const BANNER_WARN_BG: Color32 = alpha(54, 38, 14, 230);
+pub const BANNER_ERR_BG: Color32 = alpha(54, 18, 22, 230);
+
+// Active Tab Inverted Chip (High Contrast)
+pub const TAB_ACTIVE_BG: Color32 = Color32::from_rgb(240, 242, 246);
+pub const TAB_ACTIVE_FG: Color32 = Color32::from_rgb(15, 16, 20);
 
 pub const RADIUS: CornerRadius = CornerRadius::same(3);
 
@@ -50,7 +68,6 @@ pub fn temp_color(c: f32) -> Color32 {
 }
 
 pub fn configure_theme(ctx: &egui::Context) {
-    // 1. Setup Embedded Fonts (Inter, Geist Mono, Archivo)
     let mut fonts = FontDefinitions::default();
 
     fonts.font_data.insert(
@@ -93,7 +110,6 @@ pub fn configure_theme(ctx: &egui::Context) {
 
     ctx.set_fonts(fonts);
 
-    // 2. Setup Brutalist Visuals
     let mut visuals = Visuals::dark();
     visuals.panel_fill = BG;
     visuals.window_fill = PANEL;
@@ -106,7 +122,6 @@ pub fn configure_theme(ctx: &egui::Context) {
     visuals.selection.bg_fill = ACCENT;
     visuals.selection.stroke = Stroke::new(1.0, Color32::WHITE);
 
-    // Style button widgets
     for w in [
         &mut visuals.widgets.inactive,
         &mut visuals.widgets.hovered,

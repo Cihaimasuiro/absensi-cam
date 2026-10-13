@@ -55,6 +55,11 @@ impl FrameHub {
     pub fn latest(&self) -> Option<Bytes> {
         self.sender.borrow().clone()
     }
+
+    /// Check if any active HTTP stream subscribers are currently connected.
+    pub fn has_viewers(&self) -> bool {
+        self.sender.receiver_count() > 0
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -243,7 +243,13 @@ async fn run_stream(
     }
 
     // 2. Setup Decoupled AI Pipeline Channel (kapasitas 1, non-blocking)
-    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<(Bytes, u32, u32)>(1);
+    #[allow(dead_code)]
+    enum AiFrame {
+        Rgb { data: Bytes, width: u32, height: u32 },
+        Jpeg { data: Bytes, width: u32, height: u32 },
+    }
+
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<AiFrame>(1);
 
     if vision_enabled {
         let base_dirs = vec![
@@ -304,21 +310,25 @@ async fn run_stream(
                                     let mut cooldown_map: HashMap<String, Instant> = HashMap::new();
 
                                     while running_ai.load(Ordering::Relaxed) {
-                                        let (frame_bytes, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
-                                            Ok(f) => f,
+                                        let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
+                                            Ok(AiFrame::Rgb { data, width, height }) => {
+                                                // Zero-copy / zero-decode path: raw RGB dari YUYV langsung digunakan!
+                                                (data, width, height)
+                                            }
+                                            Ok(AiFrame::Jpeg { data, width, height }) => {
+                                                // Decode JPEG HANYA jika frame berasal dari kamera hardware MJPEG
+                                                match image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg) {
+                                                    Ok(dyn_img) => (Bytes::from(dyn_img.to_rgb8().into_raw()), width, height),
+                                                    Err(e) => {
+                                                        debug!("AI worker lewati frame tak terbaca: {:#}", e);
+                                                        continue;
+                                                    }
+                                                }
+                                            }
                                             Err(_) => continue,
                                         };
 
                                         let start_ai = Instant::now();
-
-                                        // Decode JPEG ke RGB HANYA di background thread AI worker ini!
-                                        let frame_rgb = match image::load_from_memory_with_format(&frame_bytes, image::ImageFormat::Jpeg) {
-                                            Ok(dyn_img) => dyn_img.to_rgb8().into_raw(),
-                                            Err(e) => {
-                                                debug!("AI worker lewati frame tak terbaca: {:#}", e);
-                                                continue;
-                                            }
-                                        };
 
                                         let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
                                             Ok(f) => f,
@@ -513,8 +523,9 @@ async fn run_stream(
     {
         let tx_frame_clone = tx_frame.clone();
         let hub_clone = hub.clone();
+        let hub_viewers = hub.clone();
         let cam_fps_clone = cam_fps_shared.clone();
-        let mut frame_count: u32 = 0;
+        let mut cam_frame_count: u32 = 0;
         let mut last_fps_time = Instant::now();
 
         engine_vision::camera::linux::spawn_capture_thread_decoupled(
@@ -522,24 +533,37 @@ async fn run_stream(
             width,
             height,
             running_clone,
-            move |frame_bytes, _format, _w, _h| {
-                // 1. Publikasikan frame hardware MJPEG langsung ke HTTP streamer (0% CPU decoding)
-                let b = Bytes::copy_from_slice(frame_bytes);
-                hub_clone.publish(b.clone());
-
-                frame_count += 1;
+            move || hub_viewers.has_viewers(),
+            move |jpeg_bytes, _format, _w, _h| {
+                // 1. Publikasikan frame JPEG hasil encode ke HTTP streamer (FrameHub)
+                hub_clone.publish(Bytes::copy_from_slice(jpeg_bytes));
+            },
+            Some(move |frame_bytes: &[u8], format: engine_vision::camera::PixelFormat, w: u32, h: u32| {
+                // Hitung true hardware capture FPS dari kamera
+                cam_frame_count += 1;
                 let elapsed = last_fps_time.elapsed();
                 if elapsed.as_secs_f32() >= 1.0 {
-                    let fps = frame_count as f32 / elapsed.as_secs_f32();
+                    let fps = cam_frame_count as f32 / elapsed.as_secs_f32();
                     cam_fps_clone.store((fps * 10.0) as u32, Ordering::Relaxed);
-                    frame_count = 0;
+                    cam_frame_count = 0;
                     last_fps_time = Instant::now();
                 }
 
-                // 2. Berikan ke AI worker HANYA jika channel kosong (non-blocking, tidak menahan stream)
-                tx_frame_clone.try_send((b, width, height)).ok();
-            },
-            None::<fn(&[u8], engine_vision::camera::linux::PixelFormat, u32, u32)>,
+                // 2. Berikan ke AI worker HANYA jika channel kosong (non-blocking)
+                let ai_frame = match format {
+                    engine_vision::camera::PixelFormat::Yuyv => AiFrame::Rgb {
+                        data: Bytes::copy_from_slice(frame_bytes),
+                        width: w,
+                        height: h,
+                    },
+                    engine_vision::camera::PixelFormat::Mjpeg => AiFrame::Jpeg {
+                        data: Bytes::copy_from_slice(frame_bytes),
+                        width: w,
+                        height: h,
+                    },
+                };
+                tx_frame_clone.try_send(ai_frame).ok();
+            }),
         );
     }
 
@@ -588,8 +612,12 @@ async fn run_stream(
                 while running_mock.load(Ordering::Relaxed) {
                     if engine_vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
                         let b = Bytes::copy_from_slice(&jpeg_buf);
-                        hub_mock.publish(b.clone());
-                        tx_frame_clone.try_send((b, width, height)).ok();
+                        hub_mock.publish(b);
+                        tx_frame_clone.try_send(AiFrame::Rgb {
+                            data: Bytes::copy_from_slice(&base_rgb),
+                            width,
+                            height,
+                        }).ok();
                     }
 
                     frame_count += 1;

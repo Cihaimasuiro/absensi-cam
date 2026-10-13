@@ -7,7 +7,7 @@ pub mod overlay;
 
 pub use alignment::align_face_to_tensor_nchw;
 pub use detector::{FaceDetection, FaceDetector};
-pub use liveness::{LivenessDetector, LivenessResult};
+pub use liveness::{LivenessDetector, LivenessResult, DEFAULT_PASS_MARGIN};
 pub use recognizer::{init_onnx_runtime, FaceRecognizer, REFERENCE_POINTS};
 pub use overlay::{draw_rect, draw_text};
 pub use camera::PixelFormat;

@@ -13,6 +13,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
+#[derive(Debug, Clone)]
+struct TrackedStudent {
+    consecutive_frames: u32,
+    last_center: (f32, f32),
+    last_seen: Instant,
+}
+
 
 
 #[derive(Parser, Debug)]
@@ -103,6 +110,15 @@ enum Commands {
 
         #[arg(long)]
         cooldown: Option<u64>,
+
+        #[arg(long)]
+        liveness_margin: Option<f32>,
+
+        #[arg(long)]
+        confirm_frames: Option<u32>,
+
+        #[arg(long)]
+        min_face_size: Option<f32>,
     },
 }
 
@@ -131,6 +147,9 @@ async fn main() -> Result<()> {
             model_version,
             threshold,
             cooldown,
+            liveness_margin,
+            confirm_frames,
+            min_face_size,
         }) => {
             run_stream(
                 device,
@@ -146,6 +165,9 @@ async fn main() -> Result<()> {
                 model_version,
                 threshold,
                 cooldown,
+                liveness_margin,
+                confirm_frames,
+                min_face_size,
             )
             .await?;
         }
@@ -200,6 +222,9 @@ async fn run_stream(
     model_version_opt: Option<String>,
     similarity_threshold: f32,
     cooldown_opt: Option<u64>,
+    liveness_margin_opt: Option<f32>,
+    confirm_frames_opt: Option<u32>,
+    min_face_size_opt: Option<f32>,
 ) -> Result<()> {
     let cooldown_secs = cooldown_opt
         .or_else(|| {
@@ -209,16 +234,42 @@ async fn run_stream(
         })
         .unwrap_or(300);
 
+    let liveness_margin = liveness_margin_opt
+        .or_else(|| {
+            env::var("LIVENESS_PASS_MARGIN")
+                .ok()
+                .and_then(|v| v.parse::<f32>().ok())
+        })
+        .unwrap_or(engine_vision::DEFAULT_PASS_MARGIN);
+
+    let confirm_frames = confirm_frames_opt
+        .or_else(|| {
+            env::var("CONFIRM_FRAMES")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+        })
+        .unwrap_or(3);
+
+    let min_face_size = min_face_size_opt
+        .or_else(|| {
+            env::var("MIN_FACE_SIZE")
+                .ok()
+                .and_then(|v| v.parse::<f32>().ok())
+        })
+        .unwrap_or(80.0);
+
     println!("--------------------------------------------------");
     println!(" Smart Absensi MJPEG Stream & AI Engine (Rust)");
-    println!(" Device    : {}", device);
-    println!(" Resolusi  : {}x{}", width, height);
-    println!(" Server    : http://0.0.0.0:{}", port);
-    println!(" Stream    : http://<BOARD_IP>:{}/stream", port);
-    println!(" Snapshot  : http://<BOARD_IP>:{}/snapshot.jpg", port);
-    println!(" AI Vision : {}", if vision_enabled { "AKTIF" } else { "NONAKTIF" });
-    println!(" Liveness  : {}", if liveness_enabled { "AKTIF" } else { "NONAKTIF" });
-    println!(" Cooldown  : {} detik (flag / RECOGNITION_COOLDOWN_SEC / default 300s)", cooldown_secs);
+    println!(" Device         : {}", device);
+    println!(" Resolusi       : {}x{}", width, height);
+    println!(" Server         : http://0.0.0.0:{}", port);
+    println!(" Stream         : http://<BOARD_IP>:{}/stream", port);
+    println!(" Snapshot       : http://<BOARD_IP>:{}/snapshot.jpg", port);
+    println!(" AI Vision      : {}", if vision_enabled { "AKTIF" } else { "NONAKTIF" });
+    println!(" Liveness       : {} (Margin: {:.3})", if liveness_enabled { "AKTIF" } else { "NONAKTIF" }, liveness_margin);
+    println!(" Konfirmasi     : {} frame berturut-turut (dengan Spoof Veto)", confirm_frames);
+    println!(" Min Face Size  : {:.0}px", min_face_size);
+    println!(" Cooldown       : {} detik", cooldown_secs);
     println!("--------------------------------------------------");
 
     let hub = FrameHub::new();
@@ -338,7 +389,16 @@ async fn run_stream(
                     let liveness_res = if liveness_enabled {
                         if let Some(liv_p) = liveness_path {
                             info!("Memuat model Anti-Spoofing: {:?}", liv_p);
-                            LivenessDetector::load(&liv_p).ok()
+                            match LivenessDetector::load(&liv_p) {
+                                Ok(mut ld) => {
+                                    ld.pass_margin = liveness_margin;
+                                    Some(ld)
+                                }
+                                Err(e) => {
+                                    warn!("Gagal memuat liveness.onnx: {:#}", e);
+                                    None
+                                }
+                            }
                         } else {
                             warn!("Model liveness.onnx tidak ditemukan. Berjalan tanpa liveness.");
                             None
@@ -356,184 +416,261 @@ async fn run_stream(
                             let tokio_handle = tokio::runtime::Handle::current();
                             let engine_start = Instant::now();
                             let initial_cooldowns_ai = initial_cooldowns;
+                            let confirm_frames_ai = confirm_frames;
+                            let min_face_size_ai = min_face_size;
+                            let cooldown_secs_ai = cooldown_secs;
 
                             std::thread::Builder::new()
                                 .name("ai-vision-worker".to_string())
                                 .spawn(move || {
                                     info!("AI Vision Worker thread aktif (decoupled).");
                                     let mut cooldown_map: HashMap<String, Instant> = initial_cooldowns_ai;
+                                    let mut tracking_map: HashMap<String, TrackedStudent> = HashMap::new();
 
                                     while running_ai.load(Ordering::Relaxed) {
                                         let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
-                                            Ok(AiFrame::Rgb { data, width, height }) => {
-                                                // Zero-copy / zero-decode path: raw RGB dari YUYV langsung digunakan!
-                                                (data, width, height)
-                                            }
-                                            Ok(AiFrame::Jpeg { data, width, height }) => {
-                                                // Decode JPEG HANYA jika frame berasal dari kamera hardware MJPEG
-                                                match image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg) {
-                                                    Ok(dyn_img) => (Bytes::from(dyn_img.to_rgb8().into_raw()), width, height),
-                                                    Err(e) => {
-                                                        debug!("AI worker lewati frame tak terbaca: {:#}", e);
-                                                        continue;
-                                                    }
-                                                }
-                                            }
-                                            Err(_) => continue,
-                                        };
+                                             Ok(AiFrame::Rgb { data, width, height }) => {
+                                                 // Zero-copy / zero-decode path: raw RGB dari YUYV langsung digunakan!
+                                                 (data, width, height)
+                                             }
+                                             Ok(AiFrame::Jpeg { data, width, height }) => {
+                                                 // Decode JPEG HANYA jika frame berasal dari kamera hardware MJPEG
+                                                 match image::load_from_memory_with_format(&data, image::ImageFormat::Jpeg) {
+                                                     Ok(dyn_img) => (Bytes::from(dyn_img.to_rgb8().into_raw()), width, height),
+                                                     Err(e) => {
+                                                         debug!("AI worker lewati frame tak terbaca: {:#}", e);
+                                                         continue;
+                                                     }
+                                                 }
+                                             }
+                                             Err(_) => continue,
+                                         };
 
-                                        let start_ai = Instant::now();
+                                         let start_ai = Instant::now();
 
-                                        let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
-                                            Ok(f) => f,
-                                            Err(e) => {
-                                                warn!("Face detector error: {:#}", e);
-                                                continue;
-                                            }
-                                        };
+                                         let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
+                                             Ok(f) => f,
+                                             Err(e) => {
+                                                 warn!("Face detector error: {:#}", e);
+                                                 continue;
+                                             }
+                                         };
 
-                                        let mut current_boxes = Vec::new();
+                                         let mut current_boxes = Vec::new();
 
-                                        for face in &faces {
-                                            // Evaluasi Liveness
-                                            let mut is_real = true;
-                                            let mut liveness_prob = 1.0f32;
-                                            if let Some(ref mut liveness) = liveness_ai {
-                                                match liveness.evaluate(&frame_rgb, w as usize, h as usize, (w * 3) as usize, &face.bbox) {
-                                                    Ok(res) => {
-                                                        liveness_prob = res.prob_real;
-                                                        is_real = res.is_real;
-                                                        if !res.is_real {
-                                                            println!(
-                                                                "⚠️ [SPOOF DITOLAK] Wajah ditolak liveness: prob={:.2} (logit_diff={:.2})",
-                                                                res.prob_real, res.logit_diff
-                                                            );
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        debug!("Gagal evaluasi liveness: {:#}", e);
-                                                    }
-                                                }
-                                            }
+                                         for face in &faces {
+                                             let bx = face.bbox[0];
+                                             let by = face.bbox[1];
+                                             let bw = face.bbox[2];
+                                             let bh = face.bbox[3];
+                                             let cx = bx + bw / 2.0;
+                                             let cy = by + bh / 2.0;
 
-                                            if !is_real {
-                                                current_boxes.push(FaceBoxData {
-                                                    x: face.bbox[0] as i32,
-                                                    y: face.bbox[1] as i32,
-                                                    width: face.bbox[2] as i32,
-                                                    height: face.bbox[3] as i32,
-                                                    color: "#eab308".to_string(), // Yellow: Spoof
-                                                    score_text: format!("score:{:.2} liv:{:.2}", face.score, liveness_prob),
-                                                    name_text: "id:SPOOF".to_string(),
-                                                });
-                                                continue;
-                                            }
+                                             // 1. Filter ukuran wajah minimum (mengabaikan wajah/layar HP yang terlalu kecil)
+                                             if bw < min_face_size_ai || bh < min_face_size_ai {
+                                                 current_boxes.push(FaceBoxData {
+                                                     x: bx as i32,
+                                                     y: by as i32,
+                                                     width: bw as i32,
+                                                     height: bh as i32,
+                                                     color: "#6b7280".to_string(), // Gray: Too Small
+                                                     score_text: format!("size:{:.0}px", bw.min(bh)),
+                                                     name_text: "id:TooSmall".to_string(),
+                                                 });
+                                                 continue;
+                                             }
 
-                                            // Align wajah 112x112 NCHW
-                                            let aligned_tensor = match engine_vision::align_face_to_tensor_nchw(
-                                                &frame_rgb,
-                                                w as usize,
-                                                h as usize,
-                                                (w * 3) as usize,
-                                                &face.landmarks,
-                                            ) {
-                                                Some(t) => t,
-                                                None => continue,
-                                            };
+                                             // 2. Evaluasi Liveness
+                                             let mut is_real = true;
+                                             let mut liveness_prob = 1.0f32;
+                                             let mut logit_margin = 0.0f32;
+                                             if let Some(ref mut liveness) = liveness_ai {
+                                                 match liveness.evaluate(&frame_rgb, w as usize, h as usize, (w * 3) as usize, &face.bbox) {
+                                                     Ok(res) => {
+                                                         liveness_prob = res.prob_real;
+                                                         logit_margin = res.logit_diff;
+                                                         is_real = res.is_real;
+                                                         if !res.is_real {
+                                                             println!(
+                                                                 "⚠️ [SPOOF DITOLAK] Wajah ditolak liveness: margin={:+.2} (prob={:.2}, ambang={:.2})",
+                                                                 res.logit_diff, res.prob_real, liveness.pass_margin
+                                                             );
+                                                         }
+                                                     }
+                                                     Err(e) => {
+                                                         debug!("Gagal evaluasi liveness: {:#}", e);
+                                                     }
+                                                 }
+                                             }
 
-                                            // Ekstraksi 512-d ArcFace embedding
-                                            let embedding = match recognizer.extract_embedding(&aligned_tensor) {
-                                                Ok(e) => e,
-                                                Err(e) => {
-                                                    warn!("Feature extractor error: {:#}", e);
-                                                    continue;
-                                                }
-                                            };
+                                             if !is_real {
+                                                 // VETO SPOOF: Jika terdeteksi spoof, batalkan/reset konfirmasi siswa mana pun di dekat koordinat ini
+                                                 for (sid, track) in tracking_map.iter_mut() {
+                                                     let dist = ((cx - track.last_center.0).powi(2) + (cy - track.last_center.1).powi(2)).sqrt();
+                                                     if dist < 150.0 && track.consecutive_frames > 0 {
+                                                         println!(
+                                                             "🚫 [VETO SPOOF] Spoof terdeteksi di ({:.0}, {:.0})! Reset konfirmasi siswa {} (sebelumnya {}/{} frame)",
+                                                             cx, cy, sid, track.consecutive_frames, confirm_frames_ai
+                                                         );
+                                                         track.consecutive_frames = 0;
+                                                     }
+                                                 }
 
-                                            // Pencocokan Cosine Similarity
-                                            let mut best_student: Option<(&str, &str, f32)> = None;
-                                            for t in templates_ai.iter() {
-                                                let sim = FaceRecognizer::cosine_similarity(&embedding, &t.embedding);
-                                                if sim >= similarity_threshold {
-                                                    if let Some((_, _, best_sim)) = best_student {
-                                                        if sim > best_sim {
-                                                            best_student = Some((&t.student_id, &t.name, sim));
-                                                        }
-                                                    } else {
-                                                        best_student = Some((&t.student_id, &t.name, sim));
-                                                    }
-                                                }
-                                            }
+                                                 current_boxes.push(FaceBoxData {
+                                                     x: bx as i32,
+                                                     y: by as i32,
+                                                     width: bw as i32,
+                                                     height: bh as i32,
+                                                     color: "#eab308".to_string(), // Yellow: Spoof
+                                                     score_text: format!("sc:{:.2} m:{:+.1}", face.score, logit_margin),
+                                                     name_text: "id:SPOOF".to_string(),
+                                                 });
+                                                 continue;
+                                             }
 
-                                            let (box_color, name_label) = if let Some((_, name, _)) = best_student {
-                                                ("#22c55e".to_string(), format!("id:{}", name)) // Green
-                                            } else {
-                                                ("#f97316".to_string(), "id:Unknown".to_string()) // Orange
-                                            };
+                                             // 3. Align wajah 112x112 NCHW
+                                             let aligned_tensor = match engine_vision::align_face_to_tensor_nchw(
+                                                 &frame_rgb,
+                                                 w as usize,
+                                                 h as usize,
+                                                 (w * 3) as usize,
+                                                 &face.landmarks,
+                                             ) {
+                                                 Some(t) => t,
+                                                 None => continue,
+                                             };
 
-                                            current_boxes.push(FaceBoxData {
-                                                x: face.bbox[0] as i32,
-                                                y: face.bbox[1] as i32,
-                                                width: face.bbox[2] as i32,
-                                                height: face.bbox[3] as i32,
-                                                color: box_color,
-                                                score_text: format!("score:{:.2} liv:{:.2}", face.score, liveness_prob),
-                                                name_text: name_label,
-                                            });
+                                             // 4. Ekstraksi 512-d ArcFace embedding
+                                             let embedding = match recognizer.extract_embedding(&aligned_tensor) {
+                                                 Ok(e) => e,
+                                                 Err(e) => {
+                                                     warn!("Feature extractor error: {:#}", e);
+                                                     continue;
+                                                 }
+                                             };
 
-                                            if let Some((student_id, name, score)) = best_student {
-                                                let now = Instant::now();
-                                                let on_cooldown = if let Some(&last_time) = cooldown_map.get(student_id) {
-                                                    now.duration_since(last_time).as_secs() < cooldown_secs
-                                                } else {
-                                                    false
-                                                };
+                                             // 5. Pencocokan Cosine Similarity
+                                             let mut best_student: Option<(&str, &str, f32)> = None;
+                                             for t in templates_ai.iter() {
+                                                 let sim = FaceRecognizer::cosine_similarity(&embedding, &t.embedding);
+                                                 if sim >= similarity_threshold {
+                                                     if let Some((_, _, best_sim)) = best_student {
+                                                         if sim > best_sim {
+                                                             best_student = Some((&t.student_id, &t.name, sim));
+                                                         }
+                                                     } else {
+                                                         best_student = Some((&t.student_id, &t.name, sim));
+                                                     }
+                                                 }
+                                             }
 
-                                                if !on_cooldown {
-                                                    cooldown_map.insert(student_id.to_string(), now);
-                                                    let now_dt = chrono::Local::now();
-                                                    let display_time = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
-                                                    let utc_captured_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-                                                    let att_uuid = uuid::Uuid::new_v4().to_string();
+                                             if let Some((student_id, name, score)) = best_student {
+                                                 let now = Instant::now();
 
-                                                    println!(
-                                                        "🎯 [ABSENSI] Teridentifikasi: {} (ID: {}) | Kemiripan: {:.1}% | Liveness: {:.2}",
-                                                        name, student_id, score * 100.0, liveness_prob
-                                                    );
+                                                 // 6. Update tracking konfirmasi multi-frame
+                                                 let track = tracking_map.entry(student_id.to_string()).or_insert_with(|| TrackedStudent {
+                                                     consecutive_frames: 0,
+                                                     last_center: (cx, cy),
+                                                     last_seen: now,
+                                                 });
 
-                                                    let log_item = AttendanceLogItem {
-                                                        student_id: student_id.to_string(),
-                                                        name: name.to_string(),
-                                                        captured_at: display_time,
-                                                        direction: "in".to_string(),
-                                                    };
-                                                    if let Ok(mut hist) = recent_history_ai.lock() {
-                                                        hist.insert(0, log_item);
-                                                        if hist.len() > 20 {
-                                                            hist.truncate(20);
-                                                        }
-                                                    }
+                                                 let dt = now.duration_since(track.last_seen);
+                                                 let dist = ((cx - track.last_center.0).powi(2) + (cy - track.last_center.1).powi(2)).sqrt();
+                                                 if dt.as_millis() <= 2000 && dist <= 150.0 {
+                                                     track.consecutive_frames += 1;
+                                                 } else {
+                                                     track.consecutive_frames = 1;
+                                                 }
+                                                 track.last_center = (cx, cy);
+                                                 track.last_seen = now;
 
-                                                    let record = OutboxRecord {
-                                                        id: att_uuid,
-                                                        student_id: student_id.to_string(),
-                                                        captured_at: utc_captured_at,
-                                                        direction: "in".to_string(),
-                                                        score: score as f64,
-                                                        liveness_score: liveness_prob as f64,
-                                                        time_source: "rtc".to_string(),
-                                                        synced: 0,
-                                                    };
+                                                 let count = track.consecutive_frames;
+                                                 let is_confirmed = count >= confirm_frames_ai;
 
-                                                    let db_insert = db_ai.clone();
-                                                    tokio_handle.spawn(async move {
-                                                        if let Err(e) = db_insert.insert_attendance(&record).await {
-                                                            error!("Gagal menyimpan absensi ke outbox: {:#}", e);
-                                                        }
-                                                    });
-                                                }
-                                            }
-                                        }
+                                                 let (box_color, name_label) = if is_confirmed {
+                                                     ("#22c55e".to_string(), format!("id:{}", name)) // Green: Confirmed
+                                                 } else {
+                                                     ("#38bdf8".to_string(), format!("id:{} [{}/{}]", name, count, confirm_frames_ai)) // Sky blue: Verifying
+                                                 };
+
+                                                 current_boxes.push(FaceBoxData {
+                                                     x: bx as i32,
+                                                     y: by as i32,
+                                                     width: bw as i32,
+                                                     height: bh as i32,
+                                                     color: box_color,
+                                                     score_text: format!("sc:{:.2} m:{:+.1}", score, logit_margin),
+                                                     name_text: name_label,
+                                                 });
+
+                                                 if !is_confirmed {
+                                                     println!(
+                                                         "⏳ [VERIFIKASI] {} ({}/{} frame) | Kemiripan: {:.1}% | Margin: {:+.2} (prob: {:.2})",
+                                                         name, count, confirm_frames_ai, score * 100.0, logit_margin, liveness_prob
+                                                     );
+                                                 } else {
+                                                     let on_cooldown = if let Some(&last_time) = cooldown_map.get(student_id) {
+                                                         now.duration_since(last_time).as_secs() < cooldown_secs_ai
+                                                     } else {
+                                                         false
+                                                     };
+
+                                                     if !on_cooldown {
+                                                         cooldown_map.insert(student_id.to_string(), now);
+                                                         let now_dt = chrono::Local::now();
+                                                         let display_time = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                                                         let utc_captured_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                                                         let att_uuid = uuid::Uuid::new_v4().to_string();
+
+                                                         println!(
+                                                             "🎯 [ABSENSI TERCATAT] {} (ID: {}) | Kemiripan: {:.1}% | Liveness Margin: {:+.2} (prob: {:.2}) | Terkonfirmasi {} frame",
+                                                             name, student_id, score * 100.0, logit_margin, liveness_prob, confirm_frames_ai
+                                                         );
+
+                                                         let log_item = AttendanceLogItem {
+                                                             student_id: student_id.to_string(),
+                                                             name: name.to_string(),
+                                                             captured_at: display_time,
+                                                             direction: "in".to_string(),
+                                                         };
+                                                         if let Ok(mut hist) = recent_history_ai.lock() {
+                                                             hist.insert(0, log_item);
+                                                             if hist.len() > 20 {
+                                                                 hist.truncate(20);
+                                                             }
+                                                         }
+
+                                                         let record = OutboxRecord {
+                                                             id: att_uuid,
+                                                             student_id: student_id.to_string(),
+                                                             captured_at: utc_captured_at,
+                                                             direction: "in".to_string(),
+                                                             score: score as f64,
+                                                             liveness_score: liveness_prob as f64,
+                                                             time_source: "rtc".to_string(),
+                                                             synced: 0,
+                                                         };
+
+                                                         let db_insert = db_ai.clone();
+                                                         tokio_handle.spawn(async move {
+                                                             if let Err(e) = db_insert.insert_attendance(&record).await {
+                                                                 error!("Gagal menyimpan absensi ke outbox: {:#}", e);
+                                                             }
+                                                         });
+                                                     }
+                                                 }
+                                             } else {
+                                                 current_boxes.push(FaceBoxData {
+                                                     x: bx as i32,
+                                                     y: by as i32,
+                                                     width: bw as i32,
+                                                     height: bh as i32,
+                                                     color: "#f97316".to_string(), // Orange: Unknown
+                                                     score_text: format!("sc:{:.2} m:{:+.1}", face.score, logit_margin),
+                                                     name_text: "id:Unknown".to_string(),
+                                                 });
+                                             }
+                                         }
 
                                         let elapsed_ai = start_ai.elapsed().as_secs_f32().max(0.001);
                                         let ai_fps = 1.0 / elapsed_ai;

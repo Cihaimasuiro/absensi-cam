@@ -15,9 +15,13 @@ class RecordHeartbeat
     public function execute(Device $device, array $data): void
     {
         $reportedIp = $data['ip_address'] ?? null;
-        $ip = (!$reportedIp || $reportedIp === '127.0.0.1')
-            ? (request()->ip() ?: $device->ip_address)
-            : $reportedIp;
+        $candidateIp = ($reportedIp && $reportedIp !== '127.0.0.1')
+            ? $reportedIp
+            : request()->ip();
+
+        $ip = ($candidateIp && $candidateIp !== '127.0.0.1')
+            ? $candidateIp
+            : ($device->ip_address ?: '127.0.0.1');
 
         $device->update([
             'fw_version'        => $data['fw_version'],

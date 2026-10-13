@@ -484,6 +484,13 @@ async fn run_stream(
                                             faces: current_boxes,
                                             history: history_snapshot,
                                         });
+
+                                        // Thermal pacing: allow CPU cores to cool down between neural network inferences
+                                        if faces.is_empty() {
+                                            std::thread::sleep(Duration::from_millis(80));
+                                        } else {
+                                            std::thread::sleep(Duration::from_millis(50));
+                                        }
                                     }
                                 })
                                 .expect("Failed to spawn AI vision worker");

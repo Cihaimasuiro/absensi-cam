@@ -14,14 +14,7 @@ class RecordHeartbeat
      */
     public function execute(Device $device, array $data): void
     {
-        $reportedIp = $data['ip_address'] ?? null;
-        $candidateIp = ($reportedIp && $reportedIp !== '127.0.0.1')
-            ? $reportedIp
-            : request()->ip();
-
-        $ip = ($candidateIp && $candidateIp !== '127.0.0.1')
-            ? $candidateIp
-            : ($device->ip_address ?: '127.0.0.1');
+        $ip = $this->resolveDeviceIp($data['ip_address'] ?? null, $device->ip_address);
 
         $device->update([
             'fw_version'        => $data['fw_version'],
@@ -32,5 +25,19 @@ class RecordHeartbeat
             'ip_address'        => $ip,
             'status'            => 'online',
         ]);
+    }
+
+    private function resolveDeviceIp(?string $reportedIp, ?string $fallbackIp): ?string
+    {
+        if ($reportedIp && !in_array($reportedIp, ['127.0.0.1', '::1'], true)) {
+            return $reportedIp;
+        }
+
+        $remoteIp = request()->ip();
+        if ($remoteIp && !in_array($remoteIp, ['127.0.0.1', '::1'], true)) {
+            return $remoteIp;
+        }
+
+        return $fallbackIp;
     }
 }

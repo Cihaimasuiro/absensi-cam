@@ -14,13 +14,8 @@ class RoleSeeder extends Seeder
      */
     public function run(): void
     {
-        $superAdmin = Role::firstOrCreate(['name' => 'super_admin']);
-        $admin      = Role::firstOrCreate(['name' => 'admin']);
-        $user       = Role::firstOrCreate(['name' => 'user']);
-
-        $userModel = \App\Domain\User\Models\User::where('email', 'admin@smartabsen.local')->first();
-        if ($userModel) {
-            $userModel->assignRole($superAdmin);
-        }
+        Role::firstOrCreate(['name' => 'super_admin']);
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'user']);
     }
 }

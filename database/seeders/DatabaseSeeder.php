@@ -15,19 +15,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $this->call(RoleSeeder::class);
+        $this->call(SchoolSeeder::class);
 
         if (!app()->environment('production')) {
-            User::firstOrCreate(
-                ['email' => 'admin@smartabsen.local'],
+            $adminEmail = env('ADMIN_DEFAULT_EMAIL', 'admin@smartabsen.local');
+            $adminUser = User::firstOrCreate(
+                ['email' => $adminEmail],
                 [
                     'name'     => 'Admin Smart Absen',
                     'password' => 'password',
                 ]
             );
-        }
 
-        $this->call(RoleSeeder::class);
-        $this->call(SchoolSeeder::class);
+            if (!$adminUser->hasRole('super_admin')) {
+                $adminUser->assignRole('super_admin');
+            }
+        }
     }
 }

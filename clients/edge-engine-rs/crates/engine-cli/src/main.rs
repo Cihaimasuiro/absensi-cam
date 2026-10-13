@@ -2,61 +2,18 @@ use anyhow::Result;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use engine_core::{models::OutboxRecord, EdgeDb};
-use engine_server::FrameHub;
+use engine_server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
 use engine_sync::SyncWorker;
 use engine_vision::{FaceDetector, FaceRecognizer, LivenessDetector};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
-#[derive(Clone, Debug)]
-struct FaceBox {
-    bbox: [i32; 4],
-    color: (u8, u8, u8),
-    score_text: String,
-    name_text: String,
-    expires: Instant,
-}
 
-fn draw_face_box(rgb: &mut [u8], width: usize, height: usize, fb: &FaceBox) {
-    let [x, y, w, h] = fb.bbox;
-    // 1. Gambar bounding box 2px
-    engine_vision::draw_rect(rgb, width, height, &fb.bbox, fb.color, 2);
-
-    // 2. Teks score & liveness: "score:0.94 liv:0.99"
-    if !fb.score_text.is_empty() {
-        let text_y = (y + h - 18).max(y + 2);
-        engine_vision::draw_text(
-            rgb,
-            width,
-            height,
-            x + 2,
-            text_y,
-            &fb.score_text,
-            fb.color,
-            Some((0, 0, 0)),
-        );
-    }
-
-    // 3. Teks nama / ID: "id:Ahmad" atau "id:Unknown"
-    if !fb.name_text.is_empty() {
-        let text_y = (y + h - 9).max(y + 11);
-        engine_vision::draw_text(
-            rgb,
-            width,
-            height,
-            x + 2,
-            text_y,
-            &fb.name_text,
-            fb.color,
-            Some((0, 0, 0)),
-        );
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -251,10 +208,16 @@ async fn run_stream(
 
     let hub = FrameHub::new();
     let hub_clone = hub.clone();
+    let overlay_hub = OverlayHub::new();
+    let overlay_hub_ai = overlay_hub.clone();
     let running = Arc::new(AtomicBool::new(true));
     let running_clone = running.clone();
-    let overlay_boxes = Arc::new(RwLock::new(Vec::<FaceBox>::new()));
-    let overlay_boxes_ai = overlay_boxes.clone();
+
+    let recent_history = Arc::new(std::sync::Mutex::new(Vec::<AttendanceLogItem>::new()));
+    let recent_history_ai = recent_history.clone();
+
+    let cam_fps_shared = Arc::new(AtomicU32::new(300)); // 30.0 * 10
+    let cam_fps_shared_ai = cam_fps_shared.clone();
 
     // 1. Inisialisasi Database SQLite
     let embed_key_bytes = embed_key_opt
@@ -279,8 +242,8 @@ async fn run_stream(
         println!("[Database] Catatan: ENROLLMENT_EMBED_KEY tidak terdeteksi. Template wajah terenkripsi tidak dapat dimuat.");
     }
 
-    // 2. Setup AI Pipeline Channel
-    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<(Vec<u8>, u32, u32)>(1);
+    // 2. Setup Decoupled AI Pipeline Channel (kapasitas 1, non-blocking)
+    let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<(Bytes, u32, u32)>(1);
 
     if vision_enabled {
         let base_dirs = vec![
@@ -332,17 +295,29 @@ async fn run_stream(
                             let db_ai = db.clone();
                             let mut liveness_ai = liveness_res;
                             let tokio_handle = tokio::runtime::Handle::current();
+                            let engine_start = Instant::now();
 
                             std::thread::Builder::new()
                                 .name("ai-vision-worker".to_string())
                                 .spawn(move || {
-                                    info!("AI Vision Worker thread aktif & memproses frame.");
+                                    info!("AI Vision Worker thread aktif (decoupled).");
                                     let mut cooldown_map: HashMap<String, Instant> = HashMap::new();
 
                                     while running_ai.load(Ordering::Relaxed) {
-                                        let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(50)) {
+                                        let (frame_bytes, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
                                             Ok(f) => f,
                                             Err(_) => continue,
+                                        };
+
+                                        let start_ai = Instant::now();
+
+                                        // Decode JPEG ke RGB HANYA di background thread AI worker ini!
+                                        let frame_rgb = match image::load_from_memory_with_format(&frame_bytes, image::ImageFormat::Jpeg) {
+                                            Ok(dyn_img) => dyn_img.to_rgb8().into_raw(),
+                                            Err(e) => {
+                                                debug!("AI worker lewati frame tak terbaca: {:#}", e);
+                                                continue;
+                                            }
                                         };
 
                                         let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
@@ -353,14 +328,6 @@ async fn run_stream(
                                             }
                                         };
 
-                                        if faces.is_empty() {
-                                            if let Ok(mut lock) = overlay_boxes_ai.write() {
-                                                lock.clear();
-                                            }
-                                            continue;
-                                        }
-
-                                        println!("👁️ [AI Vision] {} wajah terdeteksi", faces.len());
                                         let mut current_boxes = Vec::new();
 
                                         for face in &faces {
@@ -383,12 +350,14 @@ async fn run_stream(
                                             }
 
                                             if !is_real {
-                                                current_boxes.push(FaceBox {
-                                                    bbox: [face.bbox[0] as i32, face.bbox[1] as i32, face.bbox[2] as i32, face.bbox[3] as i32],
-                                                    color: (255, 255, 0), // Kuning: Spoof
+                                                current_boxes.push(FaceBoxData {
+                                                    x: face.bbox[0] as i32,
+                                                    y: face.bbox[1] as i32,
+                                                    width: face.bbox[2] as i32,
+                                                    height: face.bbox[3] as i32,
+                                                    color: "#eab308".to_string(), // Yellow: Spoof
                                                     score_text: format!("score:{:.2} liv:{:.2}", face.score, liveness_prob),
                                                     name_text: "id:SPOOF".to_string(),
-                                                    expires: Instant::now() + Duration::from_millis(600),
                                                 });
                                                 continue;
                                             }
@@ -430,17 +399,19 @@ async fn run_stream(
                                             }
 
                                             let (box_color, name_label) = if let Some((_, name, _)) = best_student {
-                                                ((0, 255, 0), format!("id:{}", name))
+                                                ("#22c55e".to_string(), format!("id:{}", name)) // Green
                                             } else {
-                                                ((0, 200, 255), "id:Unknown".to_string())
+                                                ("#f97316".to_string(), "id:Unknown".to_string()) // Orange
                                             };
 
-                                            current_boxes.push(FaceBox {
-                                                bbox: [face.bbox[0] as i32, face.bbox[1] as i32, face.bbox[2] as i32, face.bbox[3] as i32],
+                                            current_boxes.push(FaceBoxData {
+                                                x: face.bbox[0] as i32,
+                                                y: face.bbox[1] as i32,
+                                                width: face.bbox[2] as i32,
+                                                height: face.bbox[3] as i32,
                                                 color: box_color,
                                                 score_text: format!("score:{:.2} liv:{:.2}", face.score, liveness_prob),
                                                 name_text: name_label,
-                                                expires: Instant::now() + Duration::from_millis(600),
                                             });
 
                                             if let Some((student_id, name, score)) = best_student {
@@ -461,6 +432,19 @@ async fn run_stream(
                                                         "🎯 [ABSENSI] Teridentifikasi: {} (ID: {}) | Kemiripan: {:.1}% | Liveness: {:.2}",
                                                         name, student_id, score * 100.0, liveness_prob
                                                     );
+
+                                                    let log_item = AttendanceLogItem {
+                                                        student_id: student_id.to_string(),
+                                                        name: name.to_string(),
+                                                        captured_at: captured_at.clone(),
+                                                        direction: "in".to_string(),
+                                                    };
+                                                    if let Ok(mut hist) = recent_history_ai.lock() {
+                                                        hist.insert(0, log_item);
+                                                        if hist.len() > 20 {
+                                                            hist.truncate(20);
+                                                        }
+                                                    }
 
                                                     let record = OutboxRecord {
                                                         id: att_id,
@@ -483,9 +467,23 @@ async fn run_stream(
                                             }
                                         }
 
-                                        if let Ok(mut lock) = overlay_boxes_ai.write() {
-                                            *lock = current_boxes;
-                                        }
+                                        let elapsed_ai = start_ai.elapsed().as_secs_f32().max(0.001);
+                                        let ai_fps = 1.0 / elapsed_ai;
+                                        let uptime_sec = engine_start.elapsed().as_secs();
+                                        let hrs = uptime_sec / 3600;
+                                        let mins = (uptime_sec % 3600) / 60;
+                                        let secs = uptime_sec % 60;
+                                        let cam_fps_val = cam_fps_shared_ai.load(Ordering::Relaxed) as f32 / 10.0;
+                                        let status = format!("Aktif: {:02}:{:02}:{:02} | Camera: {:.1} FPS | AI: {:.1} FPS", hrs, mins, secs, cam_fps_val, ai_fps);
+
+                                        let history_snapshot = recent_history_ai.lock().map(|h| h.clone()).unwrap_or_default();
+                                        overlay_hub_ai.publish(OverlayState {
+                                            status,
+                                            frame_width: w,
+                                            frame_height: h,
+                                            faces: current_boxes,
+                                            history: history_snapshot,
+                                        });
                                     }
                                 })
                                 .expect("Failed to spawn AI vision worker");
@@ -507,60 +505,34 @@ async fn run_stream(
     #[cfg(target_os = "linux")]
     {
         let tx_frame_clone = tx_frame.clone();
-        let overlay_capture = overlay_boxes.clone();
-        let engine_start = Instant::now();
-        let mut fps_counter: u32 = 0;
-        let mut last_fps_check = Instant::now();
-        let mut current_fps: f32 = 0.0;
+        let hub_clone = hub.clone();
+        let cam_fps_clone = cam_fps_shared.clone();
+        let mut frame_count: u32 = 0;
+        let mut last_fps_time = Instant::now();
 
-        engine_vision::camera::linux::spawn_capture_thread_with_rgb(
+        engine_vision::camera::linux::spawn_capture_thread_decoupled(
             device,
             width,
             height,
             running_clone,
-            move |frame_bytes| {
-                hub_clone.publish(Bytes::copy_from_slice(frame_bytes));
-            },
-            Some(move |rgb_slice: &[u8], w: u32, h: u32| {
-                // Non-blocking try_send: jika AI worker sedang sibuk, lewati frame agar tidak lag
-                tx_frame_clone.try_send((rgb_slice.to_vec(), w, h)).ok();
-            }),
-            Some(move |rgb: &mut [u8], w: u32, h: u32| {
-                fps_counter += 1;
-                let elapsed = last_fps_check.elapsed();
+            move |frame_bytes, _format, _w, _h| {
+                // 1. Publikasikan frame hardware MJPEG langsung ke HTTP streamer (0% CPU decoding)
+                let b = Bytes::copy_from_slice(frame_bytes);
+                hub_clone.publish(b.clone());
+
+                frame_count += 1;
+                let elapsed = last_fps_time.elapsed();
                 if elapsed.as_secs_f32() >= 1.0 {
-                    current_fps = fps_counter as f32 / elapsed.as_secs_f32();
-                    fps_counter = 0;
-                    last_fps_check = Instant::now();
+                    let fps = frame_count as f32 / elapsed.as_secs_f32();
+                    cam_fps_clone.store((fps * 10.0) as u32, Ordering::Relaxed);
+                    frame_count = 0;
+                    last_fps_time = Instant::now();
                 }
 
-                // 1. Status Bar: "Aktif: HH:MM:SS | FPS: XX.X"
-                let uptime_sec = engine_start.elapsed().as_secs();
-                let hrs = uptime_sec / 3600;
-                let mins = (uptime_sec % 3600) / 60;
-                let secs = uptime_sec % 60;
-                let status_str = format!("Aktif: {:02}:{:02}:{:02} | FPS: {:.1}", hrs, mins, secs, current_fps);
-                engine_vision::draw_text(
-                    rgb,
-                    w as usize,
-                    h as usize,
-                    10,
-                    12,
-                    &status_str,
-                    (0, 200, 255),
-                    Some((0, 0, 0)),
-                );
-
-                // 2. Bounding Box & Label Wajah
-                if let Ok(boxes) = overlay_capture.read() {
-                    let now = Instant::now();
-                    for b in boxes.iter() {
-                        if now < b.expires {
-                            draw_face_box(rgb, w as usize, h as usize, b);
-                        }
-                    }
-                }
-            }),
+                // 2. Berikan ke AI worker HANYA jika channel kosong (non-blocking, tidak menahan stream)
+                tx_frame_clone.try_send((b, width, height)).ok();
+            },
+            None::<fn(&[u8], engine_vision::camera::linux::PixelFormat, u32, u32)>,
         );
     }
 
@@ -568,9 +540,9 @@ async fn run_stream(
     {
         info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
         let tx_frame_clone = tx_frame.clone();
-        let overlay_capture = overlay_boxes.clone();
         let hub_mock = hub_clone.clone();
         let running_mock = running_clone.clone();
+        let cam_fps_mock = cam_fps_shared.clone();
 
         let test_img_candidates = [
             PathBuf::from("test_face.png"),
@@ -581,7 +553,6 @@ async fn run_stream(
         ];
 
         let mut base_rgb = vec![128u8; (width * height * 3) as usize];
-        let mut loaded = false;
         for cand in &test_img_candidates {
             if cand.exists() {
                 if let Ok(dyn_img) = image::open(cand) {
@@ -594,73 +565,36 @@ async fn run_stream(
                         image::imageops::FilterType::Triangle,
                     );
                     base_rgb = resized.into_raw();
-                    loaded = true;
                     break;
                 }
             }
-        }
-        if !loaded {
-            warn!("test_face.png tidak ditemukan. Menggunakan fallback frame netral.");
         }
 
         std::thread::Builder::new()
             .name("mock-camera-feeder".to_string())
             .spawn(move || {
-                info!("Simulated camera feeder thread aktif (15 FPS).");
+                info!("Simulated camera feeder thread aktif (30 FPS).");
                 let mut jpeg_buf = Vec::with_capacity((width * height / 4) as usize);
-                let mut frame_rgb = vec![0u8; (width * height * 3) as usize];
-                let engine_start = Instant::now();
-                let mut fps_counter: u32 = 0;
-                let mut last_fps_check = Instant::now();
-                let mut current_fps: f32 = 0.0;
+                let mut frame_count: u32 = 0;
+                let mut last_fps_time = Instant::now();
 
                 while running_mock.load(Ordering::Relaxed) {
-                    frame_rgb.copy_from_slice(&base_rgb);
+                    if engine_vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
+                        let b = Bytes::copy_from_slice(&jpeg_buf);
+                        hub_mock.publish(b.clone());
+                        tx_frame_clone.try_send((b, width, height)).ok();
+                    }
 
-                    // Kirim ke AI worker channel (non-blocking)
-                    tx_frame_clone.try_send((frame_rgb.clone(), width, height)).ok();
-
-                    fps_counter += 1;
-                    let elapsed = last_fps_check.elapsed();
+                    frame_count += 1;
+                    let elapsed = last_fps_time.elapsed();
                     if elapsed.as_secs_f32() >= 1.0 {
-                        current_fps = fps_counter as f32 / elapsed.as_secs_f32();
-                        fps_counter = 0;
-                        last_fps_check = Instant::now();
+                        let fps = frame_count as f32 / elapsed.as_secs_f32();
+                        cam_fps_mock.store((fps * 10.0) as u32, Ordering::Relaxed);
+                        frame_count = 0;
+                        last_fps_time = Instant::now();
                     }
 
-                    // 1. Status Bar
-                    let uptime_sec = engine_start.elapsed().as_secs();
-                    let hrs = uptime_sec / 3600;
-                    let mins = (uptime_sec % 3600) / 60;
-                    let secs = uptime_sec % 60;
-                    let status_str = format!("Aktif: {:02}:{:02}:{:02} | FPS: {:.1}", hrs, mins, secs, current_fps);
-                    engine_vision::draw_text(
-                        &mut frame_rgb,
-                        width as usize,
-                        height as usize,
-                        10,
-                        12,
-                        &status_str,
-                        (0, 200, 255),
-                        Some((0, 0, 0)),
-                    );
-
-                    // 2. Bounding Box & Labels
-                    if let Ok(boxes) = overlay_capture.read() {
-                        let now = Instant::now();
-                        for b in boxes.iter() {
-                            if now < b.expires {
-                                draw_face_box(&mut frame_rgb, width as usize, height as usize, b);
-                            }
-                        }
-                    }
-
-                    // Encode JPEG & publish ke FrameHub
-                    if engine_vision::encode_rgb_to_jpeg_into(&frame_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
-                        hub_mock.publish(Bytes::copy_from_slice(&jpeg_buf));
-                    }
-
-                    std::thread::sleep(Duration::from_millis(66)); // ~15 FPS
+                    std::thread::sleep(Duration::from_millis(33)); // ~30 FPS
                 }
             })
             .expect("Failed to spawn mock camera feeder thread");
@@ -668,7 +602,7 @@ async fn run_stream(
 
     // Jalankan Axum HTTP stream server
     tokio::select! {
-        res = engine_server::start_stream_server(port, hub) => {
+        res = engine_server::start_stream_server(port, hub, overlay_hub) => {
             if let Err(e) = res {
                 error!("Stream server error: {:#}", e);
             }

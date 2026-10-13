@@ -10,6 +10,8 @@ pub use detector::{FaceDetection, FaceDetector};
 pub use liveness::{LivenessDetector, LivenessResult};
 pub use recognizer::{init_onnx_runtime, FaceRecognizer, REFERENCE_POINTS};
 pub use overlay::{draw_rect, draw_text};
+#[cfg(target_os = "linux")]
+pub use camera::linux::PixelFormat;
 
 /// Convert a single YUV triplet (BT.601) into RGB8
 #[inline(always)]

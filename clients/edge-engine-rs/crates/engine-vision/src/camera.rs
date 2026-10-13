@@ -369,6 +369,118 @@ pub mod linux {
         }
     }
 
+    /// Spawns camera capture thread in decoupled mode:
+    /// Always negotiates MJPEG for maximum hardware frame rates (30 FPS),
+    /// sends raw compressed frames straight to streaming viewers (0% CPU decoding overhead),
+    /// and feeds frames to the AI worker without stalling the capture loop.
+    pub fn spawn_capture_thread_decoupled<F, A>(
+        device_path: String,
+        width: u32,
+        height: u32,
+        running: Arc<AtomicBool>,
+        mut on_stream_frame: F,
+        mut on_ai_frame: Option<A>,
+    ) -> std::thread::JoinHandle<()>
+    where
+        F: FnMut(&[u8], PixelFormat, u32, u32) + Send + 'static,
+        A: FnMut(&[u8], PixelFormat, u32, u32) + Send + 'static,
+    {
+        std::thread::Builder::new()
+            .name("v4l2-capture".to_string())
+            .spawn(move || {
+                info!("Starting V4L2 capture thread on {}", device_path);
+                // ALWAYS prefer MJPEG: camera hardware compression runs at 30 FPS with ~0% CPU
+                let mut camera = match Camera::open_with_format(&device_path, width, height, false) {
+                    Ok(cam) => cam,
+                    Err(e) => {
+                        error!("Failed to open V4L2 camera {}: {:#}", device_path, e);
+                        return;
+                    }
+                };
+
+                let w = camera.width;
+                let h = camera.height;
+                let stride = if camera.bytesperline >= w * 2 {
+                    camera.bytesperline as usize
+                } else {
+                    (w * 2) as usize
+                };
+                let pixel_format = camera.pixel_format;
+
+                println!(
+                    "[Camera] Terhubung ke {} (Resolusi: {}x{}, Format: {:?}, Stride: {} bytes)",
+                    device_path, w, h, pixel_format, stride
+                );
+
+                let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
+                    vec![0u8; (w * h * 3) as usize]
+                } else {
+                    Vec::new()
+                };
+                let mut jpeg_buf = if pixel_format == PixelFormat::Yuyv {
+                    Vec::with_capacity((w * h / 4) as usize)
+                } else {
+                    Vec::new()
+                };
+
+                let mut frame_count: u64 = 0;
+                let mut last_fps_time = std::time::Instant::now();
+
+                while running.load(Ordering::Relaxed) {
+                    let capture_res = camera.capture_frame(500, |frame| {
+                        match pixel_format {
+                            PixelFormat::Mjpeg => {
+                                // 1. Direct hardware MJPEG pass-through to HTTP stream (0% CPU decoding)
+                                on_stream_frame(frame, PixelFormat::Mjpeg, w, h);
+
+                                // 2. Pass raw JPEG bytes to AI worker (no decoding on capture thread!)
+                                if let Some(ref mut ai_cb) = on_ai_frame {
+                                    ai_cb(frame, PixelFormat::Mjpeg, w, h);
+                                }
+                            }
+                            PixelFormat::Yuyv => {
+                                if !yuyv_to_rgb_stride(frame, w as usize, h as usize, stride, &mut rgb_buf) {
+                                    warn!("Truncated or malformed YUYV frame (len={}), skipping", frame.len());
+                                    return;
+                                }
+
+                                if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 75, &mut jpeg_buf) {
+                                    error!("JPEG encode failed: {:#}", e);
+                                    return;
+                                }
+
+                                on_stream_frame(&jpeg_buf, PixelFormat::Yuyv, w, h);
+
+                                if let Some(ref mut ai_cb) = on_ai_frame {
+                                    ai_cb(&rgb_buf, PixelFormat::Yuyv, w, h);
+                                }
+                            }
+                        }
+                    });
+
+                    match capture_res {
+                        Ok(Some(())) => {
+                            frame_count += 1;
+                            let elapsed = last_fps_time.elapsed();
+                            if elapsed.as_secs() >= 5 {
+                                let fps = frame_count as f64 / elapsed.as_secs_f64();
+                                println!("[Camera Live] FPS: {:.1} (Format: {:?})", fps, pixel_format);
+                                frame_count = 0;
+                                last_fps_time = std::time::Instant::now();
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            error!("Error capturing frame: {:#}", e);
+                            std::thread::sleep(Duration::from_millis(50));
+                        }
+                    }
+                }
+                info!("V4L2 capture thread stopped.");
+            })
+            .expect("Failed to spawn camera capture thread")
+    }
+
     /// Spawns a dedicated OS capture thread that owns the Camera raw pointers
     /// Spawns camera capture thread feeding JPEG frames into on_frame callback.
     pub fn spawn_capture_thread<F>(

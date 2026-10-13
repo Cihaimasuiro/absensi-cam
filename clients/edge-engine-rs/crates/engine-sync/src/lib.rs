@@ -635,6 +635,7 @@ pub async fn run_device_initiated_pairing(
         let mut loop_count = 0u64;
 
         loop {
+            notify_systemd("WATCHDOG=1\n");
             tokio::time::sleep(poll_interval).await;
             loop_count += 1;
 

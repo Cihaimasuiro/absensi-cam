@@ -274,6 +274,7 @@ async fn snapshot_handler(State(state): State<AppState>) -> Response {
             [
                 (header::CONTENT_TYPE, "image/jpeg"),
                 (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
+                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
             ],
             frame,
         )
@@ -281,6 +282,7 @@ async fn snapshot_handler(State(state): State<AppState>) -> Response {
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
+            [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
             "No camera frame available yet",
         )
             .into_response()
@@ -311,30 +313,38 @@ async fn stream_handler(State(state): State<AppState>) -> Response {
                 "multipart/x-mixed-replace; boundary=frame",
             ),
             (header::CACHE_CONTROL, "no-cache, private"),
+            (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
         ],
         body,
     )
         .into_response()
 }
 
-async fn status_handler(State(state): State<AppState>) -> Json<OverlayState> {
-    Json(state.overlay_hub.latest())
+async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    (
+        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        Json(state.overlay_hub.latest()),
+    )
 }
 
-async fn history_handler(State(state): State<AppState>) -> Json<Vec<AttendanceLogItem>> {
-    Json(state.overlay_hub.latest().history)
+async fn history_handler(State(state): State<AppState>) -> impl IntoResponse {
+    (
+        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        Json(state.overlay_hub.latest().history),
+    )
 }
 
-async fn events_handler(
-    State(state): State<AppState>,
-) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
+async fn events_handler(State(state): State<AppState>) -> impl IntoResponse {
     let rx = state.overlay_hub.subscribe();
-    let stream = WatchStream::new(rx).map(|overlay| {
+    let stream = WatchStream::new(rx).map(|overlay| -> Result<Event, std::convert::Infallible> {
         let json_str = serde_json::to_string(&overlay).unwrap_or_else(|_| "{}".to_string());
         Ok(Event::default().data(json_str))
     });
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    (
+        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        Sse::new(stream).keep_alive(KeepAlive::default()),
+    )
 }
 
 pub async fn start_stream_server(

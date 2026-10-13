@@ -725,6 +725,8 @@ async fn run_stream(
         let mut cam_frame_count: u32 = 0;
         let mut last_fps_time = Instant::now();
 
+        let overlay_hub_draw = overlay_hub.clone();
+
         engine_vision::camera::linux::spawn_capture_thread_decoupled(
             device,
             width,
@@ -760,6 +762,53 @@ async fn run_stream(
                     },
                 };
                 tx_frame_clone.try_send(ai_frame).ok();
+            }),
+            Some(move |rgb: &mut [u8], w: u32, h: u32| {
+                let state = overlay_hub_draw.latest();
+
+                // 1. Gambar status banner di pojok kiri atas (Uptime, Camera FPS, AI FPS)
+                if !state.status.is_empty() {
+                    engine_vision::draw_text(
+                        rgb,
+                        w as usize,
+                        h as usize,
+                        10,
+                        10,
+                        &state.status,
+                        (56, 189, 248), // Sky blue (#38bdf8)
+                        Some((0, 0, 0)),
+                    );
+                }
+
+                for face in &state.faces {
+                    let bbox = [face.x, face.y, face.width, face.height];
+                    let color = engine_vision::parse_hex_color(&face.color);
+                    engine_vision::draw_rect(rgb, w as usize, h as usize, &bbox, color, 2);
+
+                    let score_y = (face.y + face.height - 24).max(0);
+                    engine_vision::draw_text(
+                        rgb,
+                        w as usize,
+                        h as usize,
+                        face.x + 4,
+                        score_y,
+                        &face.score_text,
+                        color,
+                        Some((0, 0, 0)),
+                    );
+
+                    let name_y = (face.y + face.height - 10).max(0);
+                    engine_vision::draw_text(
+                        rgb,
+                        w as usize,
+                        h as usize,
+                        face.x + 4,
+                        name_y,
+                        &face.name_text,
+                        color,
+                        Some((0, 0, 0)),
+                    );
+                }
             }),
         );
     }
@@ -879,6 +928,9 @@ async fn run_sync(
     } else {
         PathBuf::from(".env")
     };
+
+    // Beritahu systemd bahwa daemon telah aktif (mencegah timeout saat menunggu persetujuan pairing)
+    engine_sync::notify_systemd("READY=1\n");
 
     let (api_token, embed_key_b64) = engine_sync::ensure_authenticated_or_pair(
         &api_url,

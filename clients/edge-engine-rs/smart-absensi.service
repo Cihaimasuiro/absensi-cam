@@ -1,0 +1,15 @@
+[Unit]
+Description=Smart Absensi Edge Vision & Camera Stream (Rust)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/smart-absensi/edge-engine
+EnvironmentFile=/opt/smart-absensi/edge-engine/.env
+ExecStart=/usr/local/bin/smart-absensi-sync stream --device /dev/video0 --port 5000 --db /opt/smart-absensi/edge-engine/local_edge.db
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

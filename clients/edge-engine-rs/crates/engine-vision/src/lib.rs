@@ -9,7 +9,7 @@ pub use alignment::align_face_to_tensor_nchw;
 pub use detector::{FaceDetection, FaceDetector};
 pub use liveness::{LivenessDetector, LivenessResult, DEFAULT_PASS_MARGIN};
 pub use recognizer::{init_onnx_runtime, FaceRecognizer, REFERENCE_POINTS};
-pub use overlay::{draw_rect, draw_text};
+pub use overlay::{draw_rect, draw_text, parse_hex_color};
 pub use camera::PixelFormat;
 
 /// Convert a single YUV triplet (BT.601) into RGB8

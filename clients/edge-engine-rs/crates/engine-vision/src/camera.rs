@@ -375,7 +375,7 @@ pub mod linux {
     /// - For YUYV: converts to RGB once, passes raw RGB directly to AI worker (0% JPEG decoding overhead),
     ///   and encodes JPEG on-demand (only when stream viewers are connected, paced to ~15 FPS to cut CPU load by 50%).
     ///   When idle, only encodes 1 frame every 2s for snapshot preview.
-    pub fn spawn_capture_thread_decoupled<F, A, V>(
+    pub fn spawn_capture_thread_decoupled<F, A, V, O>(
         device_path: String,
         width: u32,
         height: u32,
@@ -383,11 +383,13 @@ pub mod linux {
         has_viewers: V,
         mut on_stream_frame: F,
         mut on_ai_frame: Option<A>,
+        mut on_draw_overlay: Option<O>,
     ) -> std::thread::JoinHandle<()>
     where
         F: FnMut(&[u8], PixelFormat, u32, u32) + Send + 'static,
         A: FnMut(&[u8], PixelFormat, u32, u32) + Send + 'static,
         V: Fn() -> bool + Send + 'static,
+        O: FnMut(&mut [u8], u32, u32) + Send + 'static,
     {
         std::thread::Builder::new()
             .name("v4l2-capture".to_string())
@@ -470,6 +472,9 @@ pub mod linux {
                                 };
 
                                 if should_encode {
+                                    if let Some(ref mut draw_cb) = on_draw_overlay {
+                                        draw_cb(&mut rgb_buf, w, h);
+                                    }
                                     if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 60, &mut jpeg_buf) {
                                         error!("JPEG encode failed: {:#}", e);
                                         return;

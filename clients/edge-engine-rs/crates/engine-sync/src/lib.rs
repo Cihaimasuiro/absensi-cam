@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use engine_core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload, OutboxRecord};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::time::Duration;
 use tracing::{error, info, warn};
 
@@ -461,6 +462,306 @@ pub fn notify_systemd(state: &str) {
 #[cfg(not(unix))]
 pub fn notify_systemd(_state: &str) {}
 
+// ── Device-Initiated Pairing (TV / IoT Style) ────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct PairingInitRequest {
+    pub hostname: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mac_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_address: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PairingInitResponse {
+    pub pairing_code: String,
+    pub poll_token: String,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PairingPollRequest {
+    pub poll_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PairingPollResponse {
+    pub status: String,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default)]
+    pub pairing_code: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub token: Option<String>,
+    #[serde(default)]
+    pub device_id: Option<String>,
+    #[serde(default)]
+    pub device_code: Option<String>,
+    #[serde(default)]
+    pub embed_key: Option<String>,
+    #[serde(default)]
+    pub model_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairedCredentials {
+    pub url: String,
+    pub token: String,
+    pub device_id: String,
+    pub device_code: String,
+    pub embed_key: String,
+    pub model_version: Option<String>,
+}
+
+pub fn detect_mac_address() -> Option<String> {
+    for iface in &["eth0", "wlan0", "en0", "end0", "wlp2s0", "wlan1"] {
+        let path = format!("/sys/class/net/{}/address", iface);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let mac = content.trim().to_string();
+            if !mac.is_empty() && mac != "00:00:00:00:00:00" {
+                return Some(mac);
+            }
+        }
+    }
+    None
+}
+
+pub fn detect_hostname() -> String {
+    if let Ok(h) = std::env::var("HOSTNAME") {
+        if !h.trim().is_empty() {
+            return h.trim().to_string();
+        }
+    }
+    if let Ok(content) = std::fs::read_to_string("/etc/hostname") {
+        let h = content.trim();
+        if !h.is_empty() {
+            return h.to_string();
+        }
+    }
+    "orangepilite2".to_string()
+}
+
+pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Result<()> {
+    if let Some(parent) = env_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+
+    let tmp_path = env_path.with_extension("tmp");
+    let content = format!(
+        "SMART_ABSENSI_URL={}\nSMART_ABSENSI_TOKEN={}\nSMART_ABSENSI_DEVICE_ID={}\nENROLLMENT_EMBED_KEY={}\nMODEL_VERSION={}\n",
+        creds.url,
+        creds.token,
+        creds.device_code,
+        creds.embed_key,
+        creds.model_version.as_deref().unwrap_or("v1.0-yunet")
+    );
+
+    std::fs::write(&tmp_path, &content)
+        .with_context(|| format!("Gagal menulis file konfigurasi sementara {:?}", tmp_path))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        let _ = std::fs::set_permissions(&tmp_path, perms);
+    }
+
+    std::fs::rename(&tmp_path, env_path)
+        .with_context(|| format!("Gagal memindahkan file konfigurasi ke {:?}", env_path))?;
+
+    info!("Konfigurasi tersimpan secara atomik ke {:?} (permission 0600)", env_path);
+    Ok(())
+}
+
+pub async fn run_device_initiated_pairing(
+    client: &reqwest::Client,
+    server_url: &str,
+    env_path: &Path,
+    model_version_opt: Option<&str>,
+) -> Result<PairedCredentials> {
+    let clean_url = server_url.trim().trim_end_matches('/');
+    let hostname = detect_hostname();
+    let mac = detect_mac_address();
+
+    loop {
+        info!("Mengirim permintaan pairing ke server: {}/api/v1/devices/pairing/request", clean_url);
+        let init_req = PairingInitRequest {
+            hostname: hostname.clone(),
+            mac_address: mac.clone(),
+            model_version: model_version_opt.map(|s| s.to_string()),
+            ip_address: None,
+        };
+
+        let init_res = match client
+            .post(&format!("{}/api/v1/devices/pairing/request", clean_url))
+            .json(&init_req)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Gagal menghubungi server ({:?}). Mencoba lagi dalam 5 detik...", e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+
+        if !init_res.status().is_success() {
+            let status = init_res.status();
+            let body = init_res.text().await.unwrap_or_default();
+            warn!("Server mengembalikan status HTTP {}: {}. Menunggu 5 detik...", status, body);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            continue;
+        }
+
+        let init: PairingInitResponse = init_res.json().await?;
+        info!("================================================================");
+        info!(" [MODE PAIRING PERANGKAT]");
+        info!(" Kode Pairing : {}", init.pairing_code);
+        info!(" MAC Address  : {}", mac.as_deref().unwrap_or("Tidak terdeteksi"));
+        info!(" Hostname     : {}", hostname);
+        info!(" Petunjuk     : Buka Dashboard Admin -> Menu Perangkat -> Setujui");
+        info!("================================================================");
+
+        let poll_interval = Duration::from_secs(init.interval.max(2));
+        let mut loop_count = 0u64;
+
+        loop {
+            tokio::time::sleep(poll_interval).await;
+            loop_count += 1;
+
+            let poll_req = PairingPollRequest {
+                poll_token: init.poll_token.clone(),
+            };
+
+            let poll_res = match client
+                .post(&format!("{}/api/v1/devices/pairing/poll", clean_url))
+                .json(&poll_req)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    if loop_count % 5 == 0 {
+                        warn!("Gagal polling server ({:?}). Tetap mencoba...", e);
+                    }
+                    continue;
+                }
+            };
+
+            let status = poll_res.status();
+            if status == reqwest::StatusCode::GONE {
+                warn!("Kode pairing {} kedaluwarsa atau sudah pernah diklaim. Mengulang permohonan baru...", init.pairing_code);
+                break;
+            }
+
+            if status == reqwest::StatusCode::FORBIDDEN {
+                warn!("Permintaan pairing ditolak oleh administrator. Mencoba permohonan baru dalam 10 detik...");
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                break;
+            }
+
+            if !status.is_success() {
+                if loop_count % 5 == 0 {
+                    warn!("Status HTTP {} saat polling: {:?}", status, poll_res.text().await.unwrap_or_default());
+                }
+                continue;
+            }
+
+            let poll_body: PairingPollResponse = poll_res.json().await?;
+            if poll_body.status == "pending" {
+                if loop_count % 4 == 0 {
+                    info!("Menunggu persetujuan admin... (Kode: {})", init.pairing_code);
+                }
+                continue;
+            }
+
+            if poll_body.status == "approved" {
+                let token = poll_body.token.context("Token tidak ada dalam respons pairing")?;
+                let device_code = poll_body.device_code.context("Device code tidak ada dalam respons pairing")?;
+                let embed_key = poll_body.embed_key.unwrap_or_else(|| "t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=".to_string());
+                let url = poll_body.url.unwrap_or_else(|| clean_url.to_string());
+
+                let creds = PairedCredentials {
+                    url,
+                    token,
+                    device_id: poll_body.device_id.unwrap_or_else(|| device_code.clone()),
+                    device_code,
+                    embed_key,
+                    model_version: poll_body.model_version,
+                };
+
+                write_env_atomically(env_path, &creds)?;
+                info!("🎉 Perangkat BERHASIL dipasangkan! Melanjutkan ke mode operasional normal...");
+                return Ok(creds);
+            }
+        }
+    }
+}
+
+pub async fn ensure_authenticated_or_pair(
+    api_url: &str,
+    api_token: &str,
+    embed_key_opt: Option<String>,
+    env_path: &Path,
+    model_version: &str,
+) -> Result<(String, Option<String>)> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()?;
+
+    let mut current_token = api_token.trim().to_string();
+    let mut current_embed_key = embed_key_opt;
+
+    // 1. Jika token kosong: otomatis masuk mode auto-pairing
+    if current_token.is_empty() {
+        info!("Token API tidak ditemukan. Memasuki mode Device-Initiated Auto-Pairing...");
+        let creds = run_device_initiated_pairing(&client, api_url, env_path, Some(model_version)).await?;
+        current_token = creds.token;
+        current_embed_key = Some(creds.embed_key);
+        return Ok((current_token, current_embed_key));
+    }
+
+    // 2. Jika token ada: verifikasi ke server dengan heartbeat singkat
+    let test_hb = client
+        .post(&format!("{}/api/v1/devices/heartbeat", api_url.trim_end_matches('/')))
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", current_token))
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header(reqwest::header::ACCEPT, "application/json")
+        .json(&serde_json::json!({
+            "fw_version": "v1.0.0-rust",
+            "model_version": model_version,
+            "cpu_temp": 0.0,
+            "ram_free_mb": 0,
+            "disk_free_mb": 0,
+            "fps": 0.0,
+            "outbox_len": 0,
+            "serial_ok": false,
+            "ip_address": "127.0.0.1"
+        }))
+        .send()
+        .await;
+
+    if let Ok(resp) = test_hb {
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            warn!("⚠️ Token saat ini tidak valid atau telah dicabut (HTTP 401). Memasuki mode Device-Initiated Auto-Pairing ulang...");
+            let creds = run_device_initiated_pairing(&client, api_url, env_path, Some(model_version)).await?;
+            current_token = creds.token;
+            current_embed_key = Some(creds.embed_key);
+        }
+    }
+
+    Ok((current_token, current_embed_key))
+}
+
 // ── Unit & Integration Tests ─────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -638,5 +939,85 @@ mod tests {
         let unsynced = worker.db.get_unsynced_attendance(50).await.unwrap();
         assert_eq!(unsynced.len(), 1, "Record harus tetap unsynced untuk retry");
         assert_eq!(unsynced[0].id, "att-err-1");
+    }
+
+    #[test]
+    fn test_write_env_atomically() {
+        let temp_env = std::env::temp_dir().join(format!(
+            "test_env_{}.env",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+
+        let creds = PairedCredentials {
+            url: "http://192.168.1.100:8000".to_string(),
+            token: "test-sanctum-token".to_string(),
+            device_id: "dev-0001".to_string(),
+            device_code: "dev-0001".to_string(),
+            embed_key: "test-key-32-bytes".to_string(),
+            model_version: Some("v1.0-yunet".to_string()),
+        };
+
+        write_env_atomically(&temp_env, &creds).unwrap();
+        assert!(temp_env.exists());
+        let content = std::fs::read_to_string(&temp_env).unwrap();
+        assert!(content.contains("SMART_ABSENSI_TOKEN=test-sanctum-token"));
+        assert!(content.contains("SMART_ABSENSI_DEVICE_ID=dev-0001"));
+        let _ = std::fs::remove_file(temp_env);
+    }
+
+    #[tokio::test]
+    async fn test_run_device_initiated_pairing_flow() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            // 1. Accept request for init
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"pairing_code":"839-204","poll_token":"test-poll-token-123","expires_in":600,"interval":1}"#;
+                let response = format!(
+                    "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+
+            // 2. Accept poll -> return approved
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"status":"approved","token":"sanctum-token-abc","device_id":"dev-0001","device_code":"dev-0001","embed_key":"test-key","model_version":"v0.2.0","url":"http://127.0.0.1:8000"}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let temp_env = std::env::temp_dir().join(format!(
+            "test_pairing_{}.env",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+
+        let client = reqwest::Client::new();
+        let creds = run_device_initiated_pairing(&client, &api_url, &temp_env, Some("v0.2.0"))
+            .await
+            .unwrap();
+
+        assert_eq!(creds.token, "sanctum-token-abc");
+        assert_eq!(creds.device_code, "dev-0001");
+        assert!(temp_env.exists());
+        let _ = std::fs::remove_file(temp_env);
     }
 }

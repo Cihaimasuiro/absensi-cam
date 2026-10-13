@@ -16,6 +16,75 @@
 </div>
 
 <div>
+    @if(isset($pendingPairings) && $pendingPairings->isNotEmpty())
+        {{-- Pending Pairing Requests (Device-Initiated) --}}
+        <div class="card p-0 mb-md overflow-hidden border border-amber-300">
+            <div class="px-md py-xs bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                <div class="text-[13px] font-semibold text-amber-900 flex items-center gap-xs">
+                    <i data-lucide="radio" class="w-4 h-4 text-amber-600"></i>
+                    Perangkat Menunggu Persetujuan ({{ $pendingPairings->count() }})
+                </div>
+                <div class="text-[11px] text-amber-800">
+                    Cocokkan MAC address dengan stiker fisik pada perangkat
+                </div>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Kode</th>
+                        <th>Hostname</th>
+                        <th>MAC Address (Stiker)</th>
+                        <th>IP Address</th>
+                        <th>Waktu</th>
+                        <th>Penetapan Lokasi</th>
+                        <th class="text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($pendingPairings as $pairing)
+                        <tr>
+                            <td class="font-mono font-bold text-[13px] text-ink">{{ $pairing->pairing_code }}</td>
+                            <td class="font-medium text-ink">{{ $pairing->hostname }}</td>
+                            <td class="font-mono text-[12px] text-ink">{{ $pairing->mac_address ?? '-' }}</td>
+                            <td class="font-mono text-[12px] text-ink-muted">
+                                {{ $pairing->ip_address ?? '-' }}
+                                @if($pairing->ip_address === $clientIp)
+                                    <span class="text-[10px] text-amber-700 font-semibold">(LAN Anda)</span>
+                                @endif
+                            </td>
+                            <td class="text-caption text-ink-muted">{{ $pairing->created_at->diffForHumans() }}</td>
+                            <td>
+                                <form id="approve-form-{{ $pairing->id }}" method="POST" action="{{ route('devices.pairing.approve', $pairing) }}" class="flex items-center gap-xs">
+                                    @csrf
+                                    <input type="text" name="name" value="{{ $pairing->hostname }}" placeholder="Nama perangkat" class="form-input py-1 px-2 text-[12px] w-36" required>
+                                    <select name="building_id" class="form-input py-1 px-2 text-[12px] w-36" required>
+                                        <option value="">Pilih Gedung...</option>
+                                        @foreach($buildings as $building)
+                                            <option value="{{ $building->id }}">{{ $building->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </form>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-xs">
+                                    <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn-primary py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
+                                        <i data-lucide="check" class="w-3 h-3"></i> Setujui
+                                    </button>
+                                    <form method="POST" action="{{ route('devices.pairing.reject', $pairing) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="btn-danger py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
+                                            <i data-lucide="x" class="w-3 h-3"></i> Tolak
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     {{-- Device Table --}}
     <div class="card p-0 overflow-hidden">
         <table class="data-table">

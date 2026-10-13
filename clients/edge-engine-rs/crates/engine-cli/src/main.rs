@@ -861,21 +861,38 @@ async fn run_sync(
         .or_else(|| env::var("SMART_ABSENSI_URL").ok())
         .unwrap_or_else(|| "http://127.0.0.1:8000".to_string());
 
-    let api_token = api_token_opt
+    let api_token_raw = api_token_opt
         .or_else(|| env::var("SMART_ABSENSI_TOKEN").ok())
         .unwrap_or_default();
 
-    let embed_key_b64 = embed_key_opt
+    let embed_key_raw = embed_key_opt
         .or_else(|| env::var("ENROLLMENT_EMBED_KEY").ok());
+
+    let model_version = model_version_opt
+        .or_else(|| env::var("MODEL_VERSION").ok())
+        .unwrap_or_else(|| "v1.0-yunet".to_string());
+
+    let env_path = if Path::new("/opt/smart-absensi/edge-engine/.env").exists() {
+        PathBuf::from("/opt/smart-absensi/edge-engine/.env")
+    } else if Path::new("/opt/smart-absensi/edge-engine").exists() {
+        PathBuf::from("/opt/smart-absensi/edge-engine/.env")
+    } else {
+        PathBuf::from(".env")
+    };
+
+    let (api_token, embed_key_b64) = engine_sync::ensure_authenticated_or_pair(
+        &api_url,
+        &api_token_raw,
+        embed_key_raw,
+        &env_path,
+        &model_version,
+    )
+    .await?;
 
     let embed_key_bytes = embed_key_b64.and_then(|k| {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD.decode(k).ok()
     });
-
-    let model_version = model_version_opt
-        .or_else(|| env::var("MODEL_VERSION").ok())
-        .unwrap_or_else(|| "v1.0-yunet".to_string());
 
     info!("Membuka database SQLite pada: {}", db_path);
     let db = EdgeDb::init(&db_path).await?;

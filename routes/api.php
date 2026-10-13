@@ -5,6 +5,8 @@ use App\Http\Controllers\API\V1\Device\DeviceConfigController;
 use App\Http\Controllers\API\V1\Device\DeviceHeartbeatController;
 use App\Http\Controllers\API\V1\Device\DeviceLogController;
 use App\Http\Controllers\API\V1\Device\DevicePairController;
+use App\Http\Controllers\API\V1\Device\DevicePairingPollController;
+use App\Http\Controllers\API\V1\Device\DevicePairingRequestController;
 use App\Http\Controllers\API\V1\Enrollment\TemplateController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,10 +27,19 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
 
-    // --- Device Pairing (public, strict rate limit: 5/min per IP) ---
+    // --- Device Pairing (legacy public, strict rate limit: 5/min per IP) ---
     Route::post('devices/pair', DevicePairController::class)
         ->middleware(['throttle:5,1'])
         ->name('api.v1.devices.pair');
+
+    // --- Device-Initiated Pairing (public, throttled per IP) ---
+    Route::post('devices/pairing/request', DevicePairingRequestController::class)
+        ->middleware(['throttle:5,10'])
+        ->name('api.v1.devices.pairing.request');
+
+    Route::post('devices/pairing/poll', DevicePairingPollController::class)
+        ->middleware(['throttle:60,1'])
+        ->name('api.v1.devices.pairing.poll');
 
     // --- Device API (requires Sanctum token with 'device' ability) ---
     Route::middleware(['auth:sanctum', 'ability:device'])->group(function () {

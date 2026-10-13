@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Device\Actions\ApproveDevicePairingRequest;
 use App\Domain\Device\Models\Device;
+use App\Domain\Device\Models\DevicePairingRequest;
 use App\Domain\School\Models\Building;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -10,7 +12,7 @@ use Illuminate\Support\Str;
 
 class DeviceController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $devices = Device::with('building:id,name')
             ->select(['id', 'name', 'device_code', 'building_id', 'fw_version', 'model_version',
@@ -20,7 +22,37 @@ class DeviceController extends Controller
 
         $buildings = Building::active()->select(['id', 'name'])->orderBy('name')->get();
 
-        return view('devices.index', compact('devices', 'buildings'));
+        $clientIp = $request->ip();
+        $pendingPairings = DevicePairingRequest::pending()
+            ->orderByDesc('created_at')
+            ->get()
+            ->sortByDesc(fn($p) => ($p->ip_address === $clientIp ? 1 : 0));
+
+        return view('devices.index', compact('devices', 'buildings', 'pendingPairings', 'clientIp'));
+    }
+
+    /** Setujui permintaan pairing device-initiated */
+    public function approvePairing(
+        Request $request,
+        DevicePairingRequest $pairingRequest,
+        ApproveDevicePairingRequest $action
+    ) {
+        $validated = $request->validate([
+            'building_id' => ['required', 'exists:buildings,id'],
+            'name'        => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $device = $action->execute($pairingRequest, $validated, auth()->user());
+
+        return back()->with('success', "Perangkat {$device->name} ({$device->device_code}) berhasil disetujui. Mesin akan segera aktif otomatis.");
+    }
+
+    /** Tolak permintaan pairing device-initiated */
+    public function rejectPairing(DevicePairingRequest $pairingRequest)
+    {
+        $pairingRequest->update(['status' => 'rejected']);
+
+        return back()->with('success', "Permintaan pairing ({$pairingRequest->pairing_code}) telah ditolak.");
     }
 
     /** Create a device and generate an API token instantly */

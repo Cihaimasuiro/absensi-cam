@@ -52,7 +52,7 @@ class DevicePairDev extends Command
             $embedKey
         );
 
-        $envPath = base_path('clients/edge-engine/.env');
+        $envPath = base_path('clients/edge-engine-rs/.env');
         File::put($envPath, $envContent);
 
         $this->info('✅ Device paired for development!');

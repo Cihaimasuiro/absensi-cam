@@ -49,6 +49,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/', [DeviceController::class, 'store'])->name('store');
         Route::put('/{device}', [DeviceController::class, 'update'])->name('update');
         Route::post('/{device}/reset-token', [DeviceController::class, 'resetToken'])->name('reset-token');
+        Route::post('/pairing/{pairingRequest}/approve', [DeviceController::class, 'approvePairing'])->name('pairing.approve');
+        Route::post('/pairing/{pairingRequest}/reject', [DeviceController::class, 'rejectPairing'])->name('pairing.reject');
         Route::delete('/{device}/revoke', [DeviceController::class, 'revoke'])->name('revoke');
         Route::delete('/{device}', [DeviceController::class, 'destroy'])->name('destroy');
     });

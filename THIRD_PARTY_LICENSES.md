@@ -30,6 +30,16 @@ The production edge engine is written in native Rust and compiles to a single st
 | `OpenCV` | Computer Vision Library (`opencv-python-headless`) | Apache 2.0 | https://opencv.org/ |
 | `NumPy` | Scientific Computing Library | BSD | https://numpy.org/ |
 
+### 3. Edge Fleet Launcher Prototype (`clients/launcher`)
+
+| Component / Asset | Description | License | Copyright / Source |
+| :--- | :--- | :--- | :--- |
+| `eframe` / `egui` | Immediate mode GUI framework | MIT / Apache 2.0 | https://github.com/emilk/egui |
+| ArtCraft UI Style Reference | Brutalist dark UI tokens & widgets design reference | MIT / Apache 2.0 | Copyright (c) 2026 ArtCraft Team (https://github.com/storytold/artcraft) |
+| Inter Font (`Inter-Variable.ttf`) | UI Body Typography | SIL Open Font License 1.1 | Copyright (c) 2016-2024 Rasmus Andersson (https://rsms.me/inter/) |
+| Geist Mono (`GeistMono-Variable.ttf`) | Telemetry & Status HUD Typography | SIL Open Font License 1.1 | Copyright (c) 2023 Vercel, Inc. (https://vercel.com/font) |
+| Archivo (`Archivo-Variable.ttf`) | Display Headings Typography | SIL Open Font License 1.1 | Copyright (c) 2012-2023 Omnibus-Type (https://fonts.google.com/specimen/Archivo) |
+
 ## AI Models
 
 > [!WARNING]

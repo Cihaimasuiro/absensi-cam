@@ -15,8 +15,8 @@ Tujuan spike ini adalah menguji estetika dan ergonomi antarmuka grafis native Ru
 | :--- | :--- | :--- |
 | **Estetika Dark Mode** | Palet zinc/dark-surface (`#121318` & `#1a1c24`) | Cukup bersih dan ringkas. |
 | **Kerapatan (Density)** | Padding 12px, font 11–14px, filter bar | Mendekati gaya dashboard teknis ringkas (ArtCraft-like). |
-| **Tipografi** | Font bawaan egui | Sedikit kaku/game-like jika belum menggunakan custom font TTF (misal: Inter). |
-| **Footprint & Build** | Kompilasi instan (< 1s), binary mandiri | Zero webview dependency, resource memori < 35MB RSS. |
+| **Tipografi** | Font embedded (Inter, Geist Mono, Archivo) | Tidak kaku lagi; proporsional untuk body dan mono untuk label status. |
+| **Footprint & Build** | Binary mandiri, zero webview | Terukur via `Get-Process WorkingSet`: ~338 MB pada Debug build (overhead driver wgpu DX12 buffer di Windows). |
 
 ---
 

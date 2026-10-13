@@ -1,4 +1,6 @@
-use eframe::egui::{self, Color32, RichText, Vec2};
+mod theme;
+
+use eframe::egui::{self, Color32, FontFamily, FontId, RichText, Vec2};
 
 #[derive(Debug, Clone, PartialEq)]
 enum DeviceStatus {
@@ -27,6 +29,18 @@ enum FilterTab {
     Pending,
 }
 
+fn format_relative_time(seconds: u64) -> String {
+    if seconds < 60 {
+        format!("{seconds}s ago")
+    } else if seconds < 3600 {
+        format!("{}m ago", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{}h ago", seconds / 3600)
+    } else {
+        format!("{}d ago", seconds / 86400)
+    }
+}
+
 struct LauncherApp {
     server_url: String,
     search_query: String,
@@ -36,7 +50,10 @@ struct LauncherApp {
 }
 
 impl LauncherApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Configure custom fonts & dark brutalist tokens
+        theme::configure_theme(&cc.egui_ctx);
+
         Self {
             server_url: "http://192.168.1.100:8000".to_string(),
             search_query: String::new(),
@@ -112,40 +129,55 @@ impl LauncherApp {
 
 impl eframe::App for LauncherApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Set dark aesthetics
-        let mut visuals = egui::Visuals::dark();
-        visuals.panel_fill = Color32::from_rgb(18, 19, 24);
-        visuals.window_fill = Color32::from_rgb(24, 25, 32);
-        visuals.extreme_bg_color = Color32::from_rgb(12, 13, 17);
-        ui.ctx().set_visuals(visuals);
-
-        ui.add_space(8.0);
+        ui.add_space(10.0);
 
         // Header Top Bar
         ui.horizontal(|ui| {
-            ui.heading(
-                RichText::new("ABSENSI-CAM // FLEET LAUNCHER")
-                    .size(15.0)
-                    .strong()
-                    .color(Color32::from_rgb(225, 230, 240)),
+            // Archivo display font for title
+            let display_font = FontId::new(16.0, FontFamily::Name("display".into()));
+            ui.label(
+                RichText::new("ABSENSI-CAM")
+                    .font(display_font)
+                    .color(theme::INK),
+            );
+
+            // Subtitle with Geist Mono
+            ui.label(
+                RichText::new("// FLEET LAUNCHER")
+                    .font(FontId::monospace(12.0))
+                    .color(theme::INK_MUTED),
+            );
+
+            // Mock Data Tag
+            ui.label(
+                RichText::new(" MOCK DATA ")
+                    .font(FontId::monospace(10.0))
+                    .color(theme::PENDING_FG)
+                    .background_color(theme::PENDING_BG),
             );
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("⚙ Settings").clicked() {}
-                if ui.button("⟳ Rescan LAN").clicked() {}
+                if ui
+                    .add(egui::Button::new(RichText::new("⚙ Settings").size(12.0)).min_size(Vec2::new(80.0, 28.0)))
+                    .clicked()
+                {}
+                if ui
+                    .add(egui::Button::new(RichText::new("⟳ Scan LAN").size(12.0)).min_size(Vec2::new(80.0, 28.0)))
+                    .clicked()
+                {}
                 ui.label(
-                    RichText::new(format!("Server: {}", self.server_url))
-                        .size(12.0)
-                        .color(Color32::from_rgb(140, 150, 170)),
+                    RichText::new(format!("Target: {}", self.server_url))
+                        .font(FontId::monospace(11.0))
+                        .color(theme::INK_DIM),
                 );
             });
         });
 
-        ui.add_space(8.0);
+        ui.add_space(10.0);
         ui.separator();
-        ui.add_space(8.0);
+        ui.add_space(10.0);
 
-        // Filter Tabs & Search
+        // Filter Tabs & Search Bar
         ui.horizontal(|ui| {
             let all_cnt = self.devices.len();
             let online_cnt = self
@@ -164,88 +196,99 @@ impl eframe::App for LauncherApp {
                 .filter(|d| d.status == DeviceStatus::PendingPairing)
                 .count();
 
-            if ui
-                .selectable_label(self.active_tab == FilterTab::All, format!("All ({all_cnt})"))
-                .clicked()
-            {
-                self.active_tab = FilterTab::All;
-            }
-            if ui
-                .selectable_label(
-                    self.active_tab == FilterTab::Online,
-                    format!("Online ({online_cnt})"),
-                )
-                .clicked()
-            {
-                self.active_tab = FilterTab::Online;
-            }
-            if ui
-                .selectable_label(
-                    self.active_tab == FilterTab::Offline,
-                    format!("Offline ({offline_cnt})"),
-                )
-                .clicked()
-            {
-                self.active_tab = FilterTab::Offline;
-            }
-            if ui
-                .selectable_label(
-                    self.active_tab == FilterTab::Pending,
-                    format!("Pending ({pending_cnt})"),
-                )
-                .clicked()
-            {
-                self.active_tab = FilterTab::Pending;
+            // Custom styled filter pill buttons
+            let tabs = [
+                (FilterTab::All, format!("All ({all_cnt})")),
+                (FilterTab::Online, format!("Online ({online_cnt})")),
+                (FilterTab::Offline, format!("Offline ({offline_cnt})")),
+                (FilterTab::Pending, format!("Pending ({pending_cnt})")),
+            ];
+
+            for (tab, label) in tabs {
+                let is_active = self.active_tab == tab;
+                let text = RichText::new(label)
+                    .font(FontId::monospace(11.0))
+                    .color(if is_active { theme::INK } else { theme::INK_MUTED });
+
+                let btn = egui::Button::new(text)
+                    .fill(if is_active {
+                        theme::CONTROLS
+                    } else {
+                        Color32::TRANSPARENT
+                    })
+                    .stroke(if is_active {
+                        egui::Stroke::new(1.0, theme::LINE_STRONG)
+                    } else {
+                        theme::hairline()
+                    })
+                    .corner_radius(theme::RADIUS)
+                    .min_size(Vec2::new(76.0, 28.0));
+
+                if ui.add(btn).clicked() {
+                    self.active_tab = tab;
+                }
             }
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.search_query)
-                        .hint_text("Search host, IP, or MAC...")
-                        .desired_width(220.0),
+                        .hint_text("Search hostname, IP, or MAC...")
+                        .font(FontId::proportional(12.0))
+                        .desired_width(240.0)
+                        .margin(egui::Margin::symmetric(8, 6)),
                 );
             });
         });
 
-        ui.add_space(10.0);
+        ui.add_space(12.0);
 
         // Device Cards Scroll Area
         let filtered = self.filtered_devices();
         let mut new_selection: Option<String> = None;
+
         if filtered.is_empty() {
             ui.vertical_centered(|ui| {
-                ui.add_space(40.0);
+                ui.add_space(50.0);
                 ui.label(
                     RichText::new("No devices found matching filter.")
                         .size(13.0)
-                        .color(Color32::from_rgb(130, 140, 160)),
+                        .color(theme::INK_MUTED),
                 );
             });
         } else {
             let current_selected = self.selected_device_id.clone();
             egui::ScrollArea::vertical()
-                .max_height(ui.available_height() - 32.0)
+                .max_height(ui.available_height() - 36.0)
                 .show(ui, |ui| {
                     for dev in filtered {
+                        let is_selected = current_selected.as_deref() == Some(&dev.id);
+
                         egui::Frame::group(ui.style())
-                            .fill(Color32::from_rgb(26, 28, 36))
-                            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(45, 48, 60)))
-                            .inner_margin(egui::Margin::same(12))
-                            .corner_radius(egui::CornerRadius::same(6))
+                            .fill(if is_selected {
+                                Color32::from_rgb(30, 33, 44)
+                            } else {
+                                theme::PANEL
+                            })
+                            .stroke(if is_selected {
+                                egui::Stroke::new(1.0, theme::ACCENT)
+                            } else {
+                                theme::hairline()
+                            })
+                            .inner_margin(egui::Margin::symmetric(14, 12))
+                            .corner_radius(theme::RADIUS)
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    let is_selected = current_selected.as_deref() == Some(&dev.id);
-                                    // Left: Hostname, IP, info
+                                    // Left: Hostname & Details
                                     ui.vertical(|ui| {
                                         ui.horizontal(|ui| {
-                                            let label = ui.selectable_label(
+                                            let host_btn = ui.selectable_label(
                                                 is_selected,
                                                 RichText::new(&dev.hostname)
+                                                    .font(FontId::proportional(14.0))
                                                     .strong()
-                                                    .size(14.0)
-                                                    .color(Color32::from_rgb(240, 243, 250)),
+                                                    .color(theme::INK),
                                             );
-                                            if label.clicked() {
+                                            if host_btn.clicked() {
                                                 new_selection = Some(dev.id.clone());
                                             }
 
@@ -253,83 +296,126 @@ impl eframe::App for LauncherApp {
                                             let (badge_text, badge_color, badge_bg) = match dev.status {
                                                 DeviceStatus::Online => (
                                                     "ONLINE",
-                                                    Color32::from_rgb(52, 211, 153),
-                                                    Color32::from_rgb(16, 45, 35),
+                                                    theme::ONLINE_FG,
+                                                    theme::ONLINE_BG,
                                                 ),
                                                 DeviceStatus::Offline => (
                                                     "OFFLINE",
-                                                    Color32::from_rgb(248, 113, 113),
-                                                    Color32::from_rgb(48, 20, 24),
+                                                    theme::OFFLINE_FG,
+                                                    theme::OFFLINE_BG,
                                                 ),
                                                 DeviceStatus::PendingPairing => (
                                                     "PENDING",
-                                                    Color32::from_rgb(251, 191, 36),
-                                                    Color32::from_rgb(48, 38, 16),
+                                                    theme::PENDING_FG,
+                                                    theme::PENDING_BG,
                                                 ),
                                             };
 
                                             ui.label(
                                                 RichText::new(format!(" {badge_text} "))
-                                                    .size(10.0)
+                                                    .font(FontId::monospace(10.0))
                                                     .strong()
                                                     .color(badge_color)
                                                     .background_color(badge_bg),
                                             );
                                         });
 
-                                        ui.add_space(2.0);
-                                        ui.label(
-                                            RichText::new(format!(
-                                                "IP: {}  •  MAC: {}  •  Engine: {}",
-                                                dev.ip_address, dev.mac_address, dev.engine_version
-                                            ))
-                                            .size(11.0)
-                                            .color(Color32::from_rgb(140, 150, 170)),
-                                        );
+                                        ui.add_space(4.0);
+                                        // Monospace IP, MAC, and Version
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                RichText::new(format!("IP: {}", dev.ip_address))
+                                                    .font(FontId::monospace(11.0))
+                                                    .color(theme::INK_MUTED),
+                                            );
+                                            ui.label(
+                                                RichText::new("•")
+                                                    .size(10.0)
+                                                    .color(theme::INK_DIM),
+                                            );
+                                            ui.label(
+                                                RichText::new(format!("MAC: {}", dev.mac_address))
+                                                    .font(FontId::monospace(11.0))
+                                                    .color(theme::INK_MUTED),
+                                            );
+                                            ui.label(
+                                                RichText::new("•")
+                                                    .size(10.0)
+                                                    .color(theme::INK_DIM),
+                                            );
+                                            ui.label(
+                                                RichText::new(format!("Engine: {}", dev.engine_version))
+                                                    .font(FontId::monospace(11.0))
+                                                    .color(theme::INK_MUTED),
+                                            );
+                                        });
                                     });
 
-                                    // Right: Actions & telemetry
+                                    // Right: Actions & Telemetry
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
+                                            // Action Buttons with larger hit targets (min 30px height)
                                             match dev.status {
                                                 DeviceStatus::Online => {
-                                                    if ui.button("Open Stream").clicked() {}
-                                                    if ui.button("Inspect").clicked() {}
+                                                    let btn = egui::Button::new(
+                                                        RichText::new("Open Stream").size(12.0),
+                                                    )
+                                                    .min_size(Vec2::new(96.0, 30.0));
+                                                    if ui.add(btn).clicked() {}
+
+                                                    let inspect_btn = egui::Button::new(
+                                                        RichText::new("Inspect").size(12.0),
+                                                    )
+                                                    .min_size(Vec2::new(72.0, 30.0));
+                                                    if ui.add(inspect_btn).clicked() {}
                                                 }
                                                 DeviceStatus::PendingPairing => {
-                                                    if ui.button("✔ Approve & Pair").clicked() {}
+                                                    let approve_btn = egui::Button::new(
+                                                        RichText::new("✔ Approve & Pair")
+                                                            .size(12.0)
+                                                            .color(theme::ONLINE_FG),
+                                                    )
+                                                    .min_size(Vec2::new(120.0, 30.0));
+                                                    if ui.add(approve_btn).clicked() {}
                                                 }
                                                 DeviceStatus::Offline => {
-                                                    if ui.button("Ping").clicked() {}
+                                                    let ping_btn = egui::Button::new(
+                                                        RichText::new("Ping").size(12.0),
+                                                    )
+                                                    .min_size(Vec2::new(64.0, 30.0));
+                                                    if ui.add(ping_btn).clicked() {}
                                                 }
                                             }
 
                                             // Temp indicator
                                             if dev.status == DeviceStatus::Online {
+                                                let temp_color = if dev.temperature_c > 70.0 {
+                                                    theme::OFFLINE_FG
+                                                } else {
+                                                    theme::ONLINE_FG
+                                                };
                                                 ui.label(
                                                     RichText::new(format!("{:.1}°C", dev.temperature_c))
-                                                        .size(12.0)
-                                                        .color(if dev.temperature_c > 70.0 {
-                                                            Color32::from_rgb(248, 113, 113)
-                                                        } else {
-                                                            Color32::from_rgb(52, 211, 153)
-                                                        }),
+                                                        .font(FontId::monospace(12.0))
+                                                        .color(temp_color),
                                                 );
                                             }
 
+                                            // Humanized relative time (e.g. "23m ago", "2s ago")
                                             ui.label(
-                                                RichText::new(format!("{}s ago", dev.last_seen_sec))
-                                                    .size(11.0)
-                                                    .color(Color32::from_rgb(110, 120, 140)),
+                                                RichText::new(format_relative_time(dev.last_seen_sec))
+                                                    .font(FontId::monospace(11.0))
+                                                    .color(theme::INK_DIM),
                                             );
                                         },
                                     );
                                 });
                             });
-                        ui.add_space(6.0);
+                        ui.add_space(8.0);
                     }
                 });
+
             if let Some(id) = new_selection {
                 self.selected_device_id = Some(id);
             }
@@ -341,15 +427,16 @@ impl eframe::App for LauncherApp {
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("Fleet Engine: aarch64 (Rust) | Outbox: v1 | App: launcher-v0.1.0")
-                        .size(11.0)
-                        .color(Color32::from_rgb(100, 110, 130)),
+                    RichText::new("Engine: aarch64 (Rust) | Outbox: v1 | App: launcher-v0.1.0-alpha")
+                        .font(FontId::monospace(10.0))
+                        .color(theme::INK_DIM),
                 );
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        RichText::new("● Server Connected")
-                            .size(11.0)
-                            .color(Color32::from_rgb(52, 211, 153)),
+                        RichText::new("○ Server: Not Connected (Local Mock Mode)")
+                            .font(FontId::monospace(10.0))
+                            .color(theme::PENDING_FG),
                     );
                 });
             });

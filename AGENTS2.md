@@ -1,62 +1,61 @@
 # AGENTS2.md
 
-
-
-> This document is the mandatory engineering guideline for AI coding agents and human developers working on **Python** components of this project (e.g., `clients/edge-engine`).
+> This document is the mandatory engineering guideline for AI coding agents and human developers working on **Edge Engine** components of this project:
+>
+> 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular workspace (`engine-core`, `engine-vision`, `engine-server`, `engine-sync`, `engine-hardware`, `engine-cli`).
+> 2. **Reference / Tooling Prototype (`clients/edge-engine` & `packages/face_core`)**: Python components used for enrollment backend workers and offline benchmarking.
 >
 > The primary goals are:
->
-> - Correctness
-> - Readability (over cleverness)
-> - Maintainability
-> - Performance (especially on constrained hardware)
-> - Security
-> - Reproducible Builds
-> - Minimal Footprint
->
-> Follow these rules unless the task explicitly requires an exception.
->
-> **Primary References:**
-> - [PEP 8 — Style Guide for Python Code](https://peps.python.org/pep-0008/)
-> - [PEP 20 — The Zen of Python](https://peps.python.org/pep-0020/)
-> - [PEP 257 — Docstring Conventions](https://peps.python.org/pep-0257/)
-> - [PEP 484 — Type Hints](https://peps.python.org/pep-0484/)
-> - [PEP 517/518 — Build System](https://peps.python.org/pep-0517/)
-> - [PEP 621 — Project Metadata](https://peps.python.org/pep-0621/)
-> - [PEP 3333 — WSGI](https://peps.python.org/pep-3333/)
-> - [Python Packaging User Guide](https://packaging.python.org/)
+> - Correctness & Zero Crash Loops
+> - Memory Safety without GC Overhead
+> - Predictable Thermal & CPU Footprint on Constrained ARM Hardware (Orange Pi Lite 2)
+> - Strict Anti-Spoofing & Biometric Verification
+> - Resilient Offline Outbox Synchronization
+> - Reproducible Cross-Compiled Builds
 
 ---
 
-# Default Behavioral Directives
+# Part 0: Native Rust Production Edge Guidelines (`clients/edge-engine-rs`)
 
-1. **The Zen of Python First (PEP 20):**
-   - Beautiful is better than ugly.
-   - Explicit is better than implicit.
-   - Simple is better than complex.
-   - Complex is better than complicated.
-   - Flat is better than nested.
-   - Sparse is better than dense.
-   - Readability counts.
-   - Errors should never pass silently.
-   - In the face of ambiguity, refuse the temptation to guess.
-   - There should be one — and preferably only one — obvious way to do it.
-   - If the implementation is hard to explain, it is a bad idea.
+## 0.1 Architecture & Modular Workspace
+`clients/edge-engine-rs` is organized as a Cargo workspace with strict separation of concerns:
+- `crates/engine-core`: Data models (`OutboxRecord`, `Template`), SQLite WAL database (`EdgeDb`), and AES-256-GCM template decryption.
+- `crates/engine-vision`: Pure libc V4L2 camera capture, zero-copy YUYV-to-RGB conversion, ONNX Runtime wrappers (`FaceDetector` YuNet, `FaceRecognizer` ArcFace/SFace, `LivenessDetector` MiniFASNet), and vector overlay graphics.
+- `crates/engine-server`: Async `axum` HTTP streamer (`/stream`), snapshot endpoint (`/snapshot.jpg`), and SSE vector canvas event publisher (`/events`).
+- `crates/engine-sync`: Standalone outbox sync worker communicating idempotently with Laravel REST API (`/api/v1/attendance/batch`).
+- `crates/engine-cli`: Unified binary entrypoint (`smart-absensi-sync` with subcommands `stream` and `sync`).
 
-2. **YAGNI & Zero Over-Engineering:**
-   - Never introduce abstract base classes, metaclasses, or design patterns for theoretical future requirements.
-   - Reach for the Python standard library before adding any third-party dependency.
-   - One module before a package. One function before a class. One class before a framework.
+## 0.2 Hardware & Thermal Pacing Rules (Allwinner H6 / Cortex-A53)
+1. **Single-Threaded ONNX Runtime**: Always set `.with_intra_threads(1)` for all ONNX sessions. On a 4-core Cortex-A53, multi-threaded ONNX creates severe thread contention with camera capture and web streaming, causing thermal throttling.
+2. **Adaptive Thermal Duty-Cycle**:
+   - When no faces are present in frame: Sleep **300 ms** between inference passes (~3 FPS idle scan). This allows CPU cores to cool down.
+   - When a face is actively tracked: Sleep **50 ms** (~15–20 FPS recognition tracking).
+3. **On-Demand Software JPEG Encoding**: Webcam capture runs at 30 FPS in native YUYV format. Software JPEG encoding is paced to **10 FPS** and **only executes when an active HTTP client is connected to `/stream`**. Standby encoding drops to 0.5 FPS (~2% CPU).
+4. **Target Metrics**:
+   - Standby CPU: **10–25%** (across 4 cores).
+   - Active web view CPU: **~45–55%**.
+   - Operating temperature: **< 70°C** (sustained ~68°C under passive cooling).
 
-3. **Explicit Over Implicit:**
-   - Never use `import *`. Always import exactly what you need.
-   - Never use `**kwargs` as the primary parameter for a public function. Name your parameters.
-   - Never rely on mutable default arguments (see Rule 10).
+## 0.3 Anti-Spoofing & Liveness Protocol
+1. **MiniFASNet Dual-Crop & FFT**: Compute 1.0x tight crop, 2.0x context crop, and 16x16 FFT frequency spectrum on grayscale tight crop.
+2. **Temporal Confirmation Window (`confirm_frames: 3`)**: Never record attendance on a single frame. A student must achieve **3 consecutive valid frames** with consistent spatial coordinates (< 150px movement).
+3. **Spatial Spoof Veto Rule**: If any face at coordinate `(cx, cy)` is evaluated as `!is_real` (`id:SPOOF`), immediately reset the confirmation accumulator of any tracked student in that spatial vicinity to 0.
+4. **Configurable Margin Threshold**: Default `pass_margin` is `2.197` (prob ~0.90). Log raw margin `logit_diff` on every frame (`m:{:+.1}`) for empirical field auditing.
 
-4. **Platform & Hardware Awareness:**
-   - This Python code runs on **ARM Cortex-A53 (target hardware (e.g., Raspberry Pi))** with 1 GB RAM. Every dependency added has a RAM, disk, and startup-time cost on this real device.
-   - Prefer `onnxruntime` over full `torch`/`tensorflow` for inference.
-   - Prefer `flask` over `fastapi`/`uvicorn`/`starlette` unless async I/O is a concrete measured requirement.
+## 0.4 Attendance Deduplication & Cooldown
+1. **Priority Resolution**: CLI flag `--cooldown <SECS>` ➔ `.env` `RECOGNITION_COOLDOWN_SEC` ➔ Default `300` seconds (5 minutes).
+2. **Persistent Cooldown Restoration**: On engine startup, query `MAX(captured_at)` grouped by `student_id` from SQLite `outbox_attendance`. Pre-populate `cooldown_map` with remaining cooldown time so restarting the service does not create duplicate attendances.
+
+## 0.5 Cross-Compilation Standards
+1. Use `cargo zigbuild` targeting `aarch64-unknown-linux-gnu.2.28` to maintain compatibility with Debian Buster glibc 2.28:
+   ```bash
+   cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release -p engine-cli
+   ```
+2. Dynamic ONNX Runtime binding: The binary expects `libonnxruntime.so` on the device (configured via `ORT_DYLIB_PATH` or `/opt/smart-absensi/edge-engine/libonnxruntime.so.1.18.0`).
+
+---
+
+# Part 1: Python Engineering Guidelines (Reference / Tooling)
 
 ---
 

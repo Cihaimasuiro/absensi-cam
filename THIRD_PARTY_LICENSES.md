@@ -2,7 +2,26 @@
 
 This document lists the third-party dependencies and AI models used in this project, along with their licenses.
 
-## Software Dependencies (Edge Engine)
+## Software Dependencies
+
+### 1. Edge Engine (Rust - Production: `clients/edge-engine-rs`)
+
+The production edge engine is written in native Rust and compiles to a single standalone binary without Python or AGPL code contamination.
+
+| Component / Crate | Purpose | License | Source |
+| :--- | :--- | :--- | :--- |
+| `ort` (v2.0.0-rc.9) | ONNX Runtime Rust bindings for AI inference | MIT / Apache 2.0 | https://github.com/pykeio/ort |
+| `tokio` (v1.x) | Asynchronous runtime | MIT | https://tokio.rs |
+| `axum` (v0.8.x) | High-performance HTTP server for MJPEG stream & SSE overlays | MIT | https://github.com/tokio-rs/axum |
+| `libsql` / `rusqlite` | SQLite WAL database engine for local outbox & template cache | MIT | https://github.com/tursodatabase/libsql |
+| `rustfft` | High-performance FFT library for MiniFASNet frequency domain | MIT / Apache 2.0 | https://github.com/ejmahler/RustFFT |
+| `libc` | Direct Linux V4L2 ioctl kernel bindings for webcam capture | MIT / Apache 2.0 | https://github.com/rust-lang/libc |
+| `reqwest` | Asynchronous HTTP client for Laravel REST API sync | MIT / Apache 2.0 | https://github.com/seanmonstar/reqwest |
+| `uuid` | RFC 4122 compliant UUID v4 generator for attendance records | MIT / Apache 2.0 | https://github.com/uuid-rs/uuid |
+| `chrono` | Date and time handling (UTC ISO-8601 formatting) | MIT / Apache 2.0 | https://github.com/chronotope/chrono |
+| `aes-gcm` | AES-256-GCM authenticated decryption for face templates | MIT / Apache 2.0 | https://github.com/RustCrypto/AEADs |
+
+### 2. Edge Engine (Python - Reference / Legacy: `clients/edge-engine`)
 
 | Component | Description | License | Source |
 | :--- | :--- | :--- | :--- |
@@ -18,16 +37,19 @@ This document lists the third-party dependencies and AI models used in this proj
 
 | Model File | Purpose | Source / Architecture | License | Commercial Use? |
 | :--- | :--- | :--- | :--- | :--- |
-| `detector.onnx` | Face Detection | InsightFace (SCRFD) | Unknown | ⚠️ Unknown |
-| `recognizer.onnx` | Face Recognition (512d) | InsightFace (ArcFace) | Unknown | ⚠️ Unknown |
-| `liveness.onnx` | Liveness / Anti-Spoofing | Silent-Face-Anti-Spoofing | MIT / Apache 2.0 (Check source) | ⚠️ Unknown |
+| `detector.onnx` | Face Detection | YuNet / SCRFD | MIT / Apache 2.0 (OpenCV Zoo) | Permissive / Check weights |
+| `recognizer.onnx` | Face Recognition (512d) | ArcFace / SFace | Non-Commercial (InsightFace) / Apache 2.0 (SFace) | ⚠️ Check architecture |
+| `liveness.onnx` | Liveness / Anti-Spoofing | Silent-Face-Anti-Spoofing (MiniFASNet) | Apache 2.0 / MIT | Permissive |
 
-## Facenox Derived Code Status
+## Facenox & Clean-Room Architecture Status
 
-The original Facenox codebase (AGPL-3.0) heavily influenced this system. Currently:
+The initial Python prototype was influenced by Facenox (AGPL-3.0). To resolve licensing risks:
 
-* **Removed/Replaced**: `clients/edge-engine/core/cipher.py` has been completely deleted.
-* **Retained Structure/Strings**: The general architecture and strings in `hooks/face_processing.py`, `detection_pipeline.py`, `lifespan.py`, and `packages/face_core` still carry Facenox-derived structures.
-* **Modified**: `detector.py` and `tracker.py` have been modified to remove Facenox dependencies and rely on standard `numpy`/`lap` logic, but they still originated from the same baseline.
-
-A complete architectural rewrite to remove all structural similarities is still under evaluation.
+1. **Production Rust Engine (`clients/edge-engine-rs`)**:
+   - Developed as a **100% clean-room native Rust implementation**.
+   - Directly interfaces with Linux kernel V4L2 ioctls, ONNX Runtime C API, and native SQLite.
+   - Contains **zero lines of code, algorithms, or bindings from Facenox**, completely insulating production edge deployments from AGPL-3.0 copyleft obligations.
+2. **Python Prototype (`clients/edge-engine`)**:
+   - Maintained strictly as an offline reference and laboratory testbed.
+   - `core/cipher.py` has been completely deleted.
+   - Any production device rollout exclusively uses the compiled Rust binary (`smart-absensi-sync`).

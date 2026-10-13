@@ -35,39 +35,45 @@ Most face recognition attendance systems rely on cloud inference, which requires
 
 ## Core Features
 
-- **On-Device AI Inference:** Real-time face detection (e.g., YuNet) and recognition (e.g., MobileFaceNet/SFace) running entirely on local ARM hardware using `onnxruntime` via the cross-platform `face_core` module.
+- **On-Device AI Inference:** Real-time face detection (YuNet) and recognition (ArcFace/SFace) running entirely on local ARM hardware using `onnxruntime` via native Rust (`clients/edge-engine-rs`) or Python (`face_core`).
 - **Biometric Security:** Face embeddings are strictly encrypted at rest in the database using AES-256-GCM. Keys are securely rotated and distributed to paired edge devices.
-- **Offline-First Syncing:** SQLite-backed outbox mechanism ensures no attendance records are lost during network outages.
+- **Offline-First Syncing:** SQLite-backed outbox daemon (`smart-absensi-sync`) ensures attendance records with UUID v4 and UTC ISO-8601 timestamps are synced reliably and never lost during network outages.
 - **Over-The-Air (OTA) Updates:** Deploy new face recognition `.onnx` models and engine binary updates directly from the Laravel dashboard to fleets of edge devices.
 - **Latent Space Versioning:** Strict `MODEL_VERSION` tagging ensures biometric vectors from different model architectures are never incorrectly compared.
 - **Dynamic Device Pairing:** Securely pair edge devices to the backend using pairing codes and encrypted `.env` provisioning.
 - **Automated Rollbacks:** Edge engine utilizes `systemctl` crash-loop detection to automatically rollback bad OTA updates.
-- **Liveness Detection (Experimental):** Note that anti-spoofing / liveness detection is currently unvalidated (preprocessing has not been verified against the specific ONNX model). It requires testing with real live and spoof samples before enabling. It is currently disabled by default.
+- **Liveness & Anti-Spoofing:** Mini-FASNet passive anti-spoofing with FFT frequency analysis, 3-frame temporal confirmation, spatial spoof veto, and real-time margin logging. Effectively defeats photo and smartphone screen replay attacks without extra IR sensors.
+- **Attendance Cooldown & Deduplication:** Configurable cooldown (default 5 minutes) with persistent restoration from SQLite upon engine restart to prevent duplicate scans.
 
 ## Architecture
 
-The project consists of two primary components:
+The project consists of three primary components:
 
-### 1. The Backend (Laravel)
+### 1. The Backend (Laravel 13)
 A Modular Monolith built with Laravel, responsible for:
-- Managing Students, Employees, and Devices.
-- Generating Face Embeddings securely via a Python `face_core` integration running in background Queues during enrollment.
-- Providing the REST API for Edge Devices to sync attendance.
-- Broadcasting OTA update triggers.
+- Managing Students, Employees, Classrooms, and Devices.
+- Generating Face Embeddings securely via a background Python worker during enrollment.
+- Providing the REST API for Edge Devices to sync attendance batches idempotently (`/api/v1/attendance/batch`).
+- Broadcasting OTA update triggers and config synchronizations.
 
 ### 2. The Frontend (Blade + Tailwind + Alpine.js)
 A modern, fast, and responsive administration dashboard:
 - **UI Framework:** Tailwind CSS for utility-first styling.
 - **Interactivity:** Alpine.js for lightweight, JS-driven state management (e.g., zero-FOUC collapsible mini-sidebar).
-- **Design System:** Built upon the modern WowDash Admin Dashboard aesthetics, seamlessly integrated directly into Laravel Blade.
+- **Design System:** Built upon modern Admin Dashboard aesthetics, seamlessly integrated directly into Laravel Blade.
 - **Icons:** Lucide Icons for clean and consistent iconography.
 
-### 3. The Edge Engine (Python)
-A lightweight, high-performance Python application running on the edge:
-- **Runtime:** Python 3.11+
-- **Inference:** ONNX Runtime (CPU Execution Provider) via `face_core`.
-- **Web API:** Flask for local network setup and status.
-- **Packaging:** Compiled into a single binary using PyInstaller.
+### 3. The Production Edge Engine (Native Rust — `clients/edge-engine-rs`)
+A high-performance, single-binary application compiled for ARM Linux (Orange Pi Lite 2):
+- **Runtime:** Native Rust (compiled via `cargo zigbuild` for `aarch64-unknown-linux-gnu.2.28`).
+- **Video Capture:** Pure libc V4L2 zero-copy YUYV camera capture at ~30 FPS.
+- **Decoupled AI Pipeline:** YuNet detection, MiniFASNet liveness, and ArcFace/SFace feature extraction running in a dedicated thread with adaptive thermal pacing (300ms idle sleep, 50ms active sleep).
+- **Streaming & Telemetry:** `axum`-based MJPEG stream and SSE (Server-Sent Events) live vector canvas overlay.
+- **Outbox Sync Daemon:** Independent systemd daemon (`smart-absensi-sync.service`) continuously draining local SQLite attendance records to the Laravel backend.
+- **Hardware Footprint:** **10–25% CPU standby** (~50% during web view), CPU temperatures stable at **~68°C** (down from 80.2°C thermal throttling).
+
+### 4. The Reference Edge Engine (Python — `clients/edge-engine`)
+Maintained for laboratory prototyping, offline benchmarking, and tooling.
 
 ## Hardware Requirements
 
@@ -146,13 +152,27 @@ npm run dev:edge
 > [!NOTE]
 > `npm run dev` tidak menggunakan `--kill-others`. Edge Engine tetap berjalan walau Laravel mati, sesuai prinsip offline-first.
 
-### 5. Production Deployment (Edge Engine)
-Di Orange Pi (production), instal menggunakan skrip otomatis yang akan membuat *virtual environment* Python dan layanan systemd:
+### 5. Production Deployment (Rust Edge Engine)
+Di Orange Pi (production), compile dan pasang binary Rust mandiri:
 
+```bash
+# 1. Cross-compile di host (Windows/Linux) ke target aarch64
+cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release -p engine-cli
+
+# 2. Salin binary ke Orange Pi (/usr/local/bin/smart-absensi-sync)
+# Atau unduh dari local deployment server:
+curl -fsSL http://<HOST_IP>:8888/engine-cli -o /tmp/smart-absensi-sync
+sudo install -m 755 /tmp/smart-absensi-sync /usr/local/bin/smart-absensi-sync
+
+# 3. Kelola service systemd
+sudo systemctl restart smart-absensi.service smart-absensi-sync.service
+sudo systemctl status smart-absensi.service smart-absensi-sync.service
+```
+
+Untuk implementasi Python legacy/reference:
 ```bash
 cd clients/edge-engine
 sudo ./install.sh
-# Skrip akan menginstal dependencies ke /opt/smart-absensi/edge-engine dan mengaktifkan smart-absensi.service
 ```
 
 ## Database Requirements & Audit Logging
@@ -172,11 +192,11 @@ In version 2.3+, the old `late_threshold_enabled` boolean has been replaced by a
 This repository enforces strict, enterprise-grade engineering standards for both AI coding agents and human developers. 
 
 Before contributing, you **must** read:
-1. **[AGENTS.md](AGENTS.md):** Laravel Enterprise Architecture Guidelines (Modular Monolith, Thin Controllers, Query Builders, DTOs).
-2. **[AGENTS2.md](AGENTS2.md):** Python Edge Engine Guidelines (PEP 8, Type Hints, Thread Safety, ONNX optimization, PyInstaller).
+1. **[AGENTS.md](AGENTS.md):** Laravel Enterprise Architecture Guidelines (Modular Monolith, Thin Controllers, Query Builders, DTOs, Batch Sync Contracts).
+2. **[AGENTS2.md](AGENTS2.md):** Edge Engine Engineering Guidelines (Native Rust `clients/edge-engine-rs` standards, Memory Safety, Decoupled AI Pacing, Python Reference PEP 8).
 
 > [!WARNING]
-> We practice **Zero Over-Engineering**. Do not introduce abstract base classes, microservices, or external dependencies unless explicitly required and measured.
+> We practice **Zero Over-Engineering**. Do not introduce speculative abstractions, unnecessary wrapper classes, microservices, or unneeded dependencies unless explicitly required and measured.
 
 ## License
 

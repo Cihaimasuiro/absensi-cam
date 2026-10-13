@@ -53,6 +53,12 @@
 7. **Explicit Server Sync Prohibition:**
    - **Never Execute Server Sync Automatically**: Never execute `sync_to_server.py` or run remote server sync commands automatically unless explicitly requested by the user.
 
+8. **Edge Client Integration & Batch Sync Standards (`/api/v1/attendance/batch`):**
+   - **Production Edge Runtime**: The edge terminal runs native Rust (`clients/edge-engine-rs` / `smart-absensi-sync`).
+   - **Idempotent Batch Contract**: Incoming attendance batches must provide UUID v4 `id`, RFC 3339 / ISO-8601 UTC `captured_at` (`Y-m-d\TH:i:s\Z`), `direction` ("in"|"out"), and `score`. Laravel must preserve per-record transaction isolation and `insertOrIgnore` semantics in `SyncAttendanceBatch`.
+   - **Strict Schema Stability**: Never alter edge API routes or payload schemas without backward compatibility. Poisoned records must be quarantined (`synced = -1` on edge) to prevent queue head-of-line blocking.
+   - **Report Aggregation**: Even with edge cooldowns (default 300s), DTR reports must aggregate check-in via `MIN(captured_at)` and check-out via `MAX(captured_at)` per student per day.
+
 # Laravel Enterprise Development Rules
 
 # 1. Core Architecture

@@ -1,23 +1,24 @@
 use std::sync::Arc;
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke, Visuals};
 
-pub const BG: Color32 = Color32::from_rgb(18, 19, 22);
-pub const PANEL: Color32 = Color32::from_rgb(16, 16, 20);
-pub const CONTROLS: Color32 = Color32::from_rgb(30, 31, 34);
-pub const SUNKEN: Color32 = Color32::from_rgb(6, 6, 7);
+pub const BG: Color32 = Color32::from_rgb(15, 16, 20);
+pub const PANEL: Color32 = Color32::from_rgb(20, 22, 28);
+pub const CARD_BG: Color32 = Color32::from_rgb(25, 27, 35);
+pub const CARD_PENDING_BG: Color32 = Color32::from_rgb(34, 29, 20);
+pub const CONTROLS: Color32 = Color32::from_rgb(34, 36, 44);
+pub const SUNKEN: Color32 = Color32::from_rgb(10, 11, 14);
 
-const fn alpha(r: u8, g: u8, b: u8, a: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied_const(r, g, b, a)
-}
+// Text inks with enhanced contrast
+pub const INK: Color32 = Color32::from_rgb(245, 245, 242);
+pub const INK_MUTED: Color32 = alpha(245, 245, 242, 185);
+pub const INK_DIM: Color32 = alpha(245, 245, 242, 145);
+pub const INK_FAINT: Color32 = alpha(245, 245, 242, 90);
 
-pub const INK: Color32 = Color32::from_rgb(242, 241, 238);
-pub const INK_MUTED: Color32 = alpha(242, 241, 238, 153);
-pub const INK_DIM: Color32 = alpha(242, 241, 238, 105);
+pub const LINE: Color32 = alpha(255, 255, 255, 42);
+pub const LINE_STRONG: Color32 = alpha(245, 245, 242, 110);
 
-pub const LINE: Color32 = alpha(255, 255, 255, 38);
-pub const LINE_STRONG: Color32 = alpha(242, 241, 238, 90);
-
-pub const ACCENT: Color32 = Color32::from_rgb(45, 129, 255);
+pub const ACCENT: Color32 = Color32::from_rgb(59, 130, 246);
+pub const ACCENT_BG: Color32 = Color32::from_rgb(37, 99, 235);
 
 pub const ONLINE_FG: Color32 = Color32::from_rgb(52, 211, 153);
 pub const ONLINE_BG: Color32 = alpha(16, 45, 35, 220);
@@ -30,8 +31,22 @@ pub const PENDING_BG: Color32 = alpha(48, 38, 16, 220);
 
 pub const RADIUS: CornerRadius = CornerRadius::same(3);
 
+const fn alpha(r: u8, g: u8, b: u8, a: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied_const(r, g, b, a)
+}
+
 pub fn hairline() -> Stroke {
     Stroke::new(1.0, LINE)
+}
+
+pub fn temp_color(c: f32) -> Color32 {
+    if c < 65.0 {
+        ONLINE_FG
+    } else if c < 75.0 {
+        PENDING_FG
+    } else {
+        OFFLINE_FG
+    }
 }
 
 pub fn configure_theme(ctx: &egui::Context) {
@@ -102,9 +117,9 @@ pub fn configure_theme(ctx: &egui::Context) {
     }
     visuals.widgets.inactive.bg_fill = CONTROLS;
     visuals.widgets.inactive.bg_stroke = hairline();
-    visuals.widgets.hovered.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 24);
+    visuals.widgets.hovered.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 28);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, LINE_STRONG);
-    visuals.widgets.active.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 32);
+    visuals.widgets.active.bg_fill = Color32::from_rgba_unmultiplied(255, 255, 255, 36);
     visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::WHITE);
 
     ctx.set_visuals(visuals);

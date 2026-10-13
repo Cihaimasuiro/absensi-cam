@@ -13,10 +13,10 @@ Tujuan spike ini adalah menguji estetika dan ergonomi antarmuka grafis native Ru
 
 | Parameter Evaluasi | Observasi Spike | Catatan Teknis |
 | :--- | :--- | :--- |
-| **Estetika Dark Mode** | Palet zinc/dark-surface (`#121318` & `#1a1c24`) | Cukup bersih dan ringkas. |
-| **Kerapatan (Density)** | Padding 12px, font 11–14px, filter bar | Mendekati gaya dashboard teknis ringkas (ArtCraft-like). |
-| **Tipografi** | Font embedded (Inter, Geist Mono, Archivo) | Tidak kaku lagi; proporsional untuk body dan mono untuk label status. |
-| **Footprint & Build** | Binary mandiri, zero webview | Terukur via `Get-Process WorkingSet`: ~338 MB pada Debug build (overhead driver wgpu DX12 buffer di Windows). |
+| **Estetika Dark Mode** | Palet zinc/dark-surface (`#0F1014` & `#191B23`) | Kontras kartu ditingkatkan, padding tepi jendela 20px, aksen amber untuk Pending. |
+| **Kerapatan (Density)** | Padding konsisten 20px/14px, tinggi kontrol 30px | Hirarki jelas: Pending di atas, Offline diredupkan, tombol Buka Stream (primer) vs Inspeksi (sekunder). |
+| **Tipografi & Bahasa** | Font embedded (Inter, Geist Mono, Archivo) | Bahasa Indonesia konsisten, label `CPU: xx°C` dengan ambang warna, badge `USANG` untuk versi lama. |
+| **Footprint & Build** | Binary mandiri, zero webview | Terukur via `Get-Process WorkingSet`: **53.49 MB** pada optimized release build menggunakan backend `glow` (turun dari 351 MB saat pakai wgpu/DX12). |
 
 ---
 

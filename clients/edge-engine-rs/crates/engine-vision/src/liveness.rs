@@ -29,7 +29,7 @@ impl LivenessDetector {
             .map_err(|e| anyhow::anyhow!("{e}"))?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(|e| anyhow::anyhow!("{e}"))?
-            .with_intra_threads(2)
+            .with_intra_threads(1)
             .map_err(|e| anyhow::anyhow!("{e}"))?
             .commit_from_file(model_path)
             .map_err(|e| anyhow::anyhow!("{e}"))?;

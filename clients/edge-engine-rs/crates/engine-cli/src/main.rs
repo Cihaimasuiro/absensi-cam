@@ -207,7 +207,6 @@ async fn run_stream(
     println!("--------------------------------------------------");
 
     let hub = FrameHub::new();
-    let hub_clone = hub.clone();
     let overlay_hub = OverlayHub::new();
     let overlay_hub_ai = overlay_hub.clone();
     let running = Arc::new(AtomicBool::new(true));
@@ -497,8 +496,10 @@ async fn run_stream(
 
                                         // Thermal pacing: allow CPU cores to cool down between neural network inferences
                                         if faces.is_empty() {
-                                            std::thread::sleep(Duration::from_millis(80));
+                                            // Idle scanning: 3 FPS is optimal. Gives CPU 300ms cool-down period per cycle
+                                            std::thread::sleep(Duration::from_millis(300));
                                         } else {
+                                            // Active face tracking: fast 20 FPS recognition
                                             std::thread::sleep(Duration::from_millis(50));
                                         }
                                     }

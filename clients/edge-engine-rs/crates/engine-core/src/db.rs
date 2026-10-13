@@ -101,6 +101,26 @@ impl EdgeDb {
         Ok(records)
     }
 
+    /// Ambil timestamp absensi terakhir per student_id dalam database
+    /// untuk menginisialisasi cooldown_map saat engine startup (mencegah duplikasi pasca-restart)
+    pub async fn get_recent_student_attendances(&self) -> Result<Vec<(String, String)>> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT student_id, MAX(captured_at) FROM outbox_attendance GROUP BY student_id",
+                (),
+            )
+            .await?;
+
+        let mut list = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let student_id: String = row.get(0)?;
+            let captured_at: String = row.get(1)?;
+            list.push((student_id, captured_at));
+        }
+        Ok(list)
+    }
+
     /// Tandai baris absensi sebagai tersinkronisasi (synced = 1)
     pub async fn mark_as_synced(&self, ids: &[String]) -> Result<()> {
         if ids.is_empty() {

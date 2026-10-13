@@ -100,6 +100,9 @@ enum Commands {
 
         #[arg(long, default_value_t = 0.60)]
         threshold: f32,
+
+        #[arg(long)]
+        cooldown: Option<u64>,
     },
 }
 
@@ -127,6 +130,7 @@ async fn main() -> Result<()> {
             embed_key,
             model_version,
             threshold,
+            cooldown,
         }) => {
             run_stream(
                 device,
@@ -141,6 +145,7 @@ async fn main() -> Result<()> {
                 embed_key,
                 model_version,
                 threshold,
+                cooldown,
             )
             .await?;
         }
@@ -194,7 +199,16 @@ async fn run_stream(
     embed_key_opt: Option<String>,
     model_version_opt: Option<String>,
     similarity_threshold: f32,
+    cooldown_opt: Option<u64>,
 ) -> Result<()> {
+    let cooldown_secs = cooldown_opt
+        .or_else(|| {
+            env::var("RECOGNITION_COOLDOWN_SEC")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+        })
+        .unwrap_or(300);
+
     println!("--------------------------------------------------");
     println!(" Smart Absensi MJPEG Stream & AI Engine (Rust)");
     println!(" Device    : {}", device);
@@ -204,6 +218,7 @@ async fn run_stream(
     println!(" Snapshot  : http://<BOARD_IP>:{}/snapshot.jpg", port);
     println!(" AI Vision : {}", if vision_enabled { "AKTIF" } else { "NONAKTIF" });
     println!(" Liveness  : {}", if liveness_enabled { "AKTIF" } else { "NONAKTIF" });
+    println!(" Cooldown  : {} detik (flag / RECOGNITION_COOLDOWN_SEC / default 300s)", cooldown_secs);
     println!("--------------------------------------------------");
 
     let hub = FrameHub::new();
@@ -239,6 +254,45 @@ async fn run_stream(
     println!("[Database] Memuat {} template wajah aktif.", templates.len());
     if templates.is_empty() && embed_key_bytes.is_none() {
         println!("[Database] Catatan: ENROLLMENT_EMBED_KEY tidak terdeteksi. Template wajah terenkripsi tidak dapat dimuat.");
+    }
+
+    // Inisialisasi riwayat cooldown dari SQLite agar tidak ter-reset saat engine restart
+    let mut initial_cooldowns: HashMap<String, Instant> = HashMap::new();
+    if let Ok(recent_attendances) = db.get_recent_student_attendances().await {
+        let now_utc = chrono::Utc::now();
+        for (student_id, captured_at_str) in recent_attendances {
+            let captured_utc_opt = if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&captured_at_str) {
+                Some(dt.with_timezone(&chrono::Utc))
+            } else if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(&captured_at_str, "%Y-%m-%d %H:%M:%S") {
+                let now_naive = chrono::Local::now().naive_local();
+                let elapsed = (now_naive - naive).num_seconds();
+                if elapsed >= 0 && (elapsed as u64) < cooldown_secs {
+                    let elapsed_u64 = elapsed as u64;
+                    if let Some(past_instant) = Instant::now().checked_sub(Duration::from_secs(elapsed_u64)) {
+                        initial_cooldowns.insert(student_id.clone(), past_instant);
+                    }
+                }
+                None
+            } else {
+                None
+            };
+
+            if let Some(captured_utc) = captured_utc_opt {
+                let elapsed = (now_utc - captured_utc).num_seconds();
+                if elapsed >= 0 && (elapsed as u64) < cooldown_secs {
+                    let elapsed_u64 = elapsed as u64;
+                    if let Some(past_instant) = Instant::now().checked_sub(Duration::from_secs(elapsed_u64)) {
+                        initial_cooldowns.insert(student_id.clone(), past_instant);
+                    }
+                }
+            }
+        }
+        if !initial_cooldowns.is_empty() {
+            println!(
+                "[Cooldown] Memulihkan {} siswa dalam masa cooldown aktif dari SQLite (mencegah duplikat pasca-restart).",
+                initial_cooldowns.len()
+            );
+        }
     }
 
     // 2. Setup Decoupled AI Pipeline Channel (kapasitas 1, non-blocking)
@@ -301,12 +355,13 @@ async fn run_stream(
                             let mut liveness_ai = liveness_res;
                             let tokio_handle = tokio::runtime::Handle::current();
                             let engine_start = Instant::now();
+                            let initial_cooldowns_ai = initial_cooldowns;
 
                             std::thread::Builder::new()
                                 .name("ai-vision-worker".to_string())
                                 .spawn(move || {
                                     info!("AI Vision Worker thread aktif (decoupled).");
-                                    let mut cooldown_map: HashMap<String, Instant> = HashMap::new();
+                                    let mut cooldown_map: HashMap<String, Instant> = initial_cooldowns_ai;
 
                                     while running_ai.load(Ordering::Relaxed) {
                                         let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
@@ -349,7 +404,10 @@ async fn run_stream(
                                                         liveness_prob = res.prob_real;
                                                         is_real = res.is_real;
                                                         if !res.is_real {
-                                                            debug!("Wajah ditolak: Liveness Spoof (logit_diff={:.2})", res.logit_diff);
+                                                            println!(
+                                                                "⚠️ [SPOOF DITOLAK] Wajah ditolak liveness: prob={:.2} (logit_diff={:.2})",
+                                                                res.prob_real, res.logit_diff
+                                                            );
                                                         }
                                                     }
                                                     Err(e) => {
@@ -426,7 +484,7 @@ async fn run_stream(
                                             if let Some((student_id, name, score)) = best_student {
                                                 let now = Instant::now();
                                                 let on_cooldown = if let Some(&last_time) = cooldown_map.get(student_id) {
-                                                    now.duration_since(last_time).as_secs() < 10
+                                                    now.duration_since(last_time).as_secs() < cooldown_secs
                                                 } else {
                                                     false
                                                 };

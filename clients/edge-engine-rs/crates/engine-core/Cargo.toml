@@ -6,7 +6,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-libsql = { version = "0.6", features = ["replication"] }
+libsql = { version = "0.6", default-features = false, features = ["core"] }
+libsql-sys = { version = "0.8", default-features = false, features = ["rusqlite"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

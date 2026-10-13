@@ -41,3 +41,9 @@ pub struct HeartbeatPayload {
     pub ip_address: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct TemplateRecord {
+    pub student_id: String,
+    pub name: String,
+    pub embedding: Vec<f32>,
+}

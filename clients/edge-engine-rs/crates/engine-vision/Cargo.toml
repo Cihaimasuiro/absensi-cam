@@ -11,4 +11,6 @@ nalgebra = "0.33"
 anyhow = { workspace = true }
 tracing = { workspace = true }
 libc = "0.2"
-# ort = "2.0.0-rc.4" # Uncomment saat model ONNX disiapkan
+ort = { version = "2.0.0-rc.4", default-features = false, features = ["load-dynamic", "api-24", "ndarray", "std"] }
+ndarray = "0.15"
+rustfft = "6.2"

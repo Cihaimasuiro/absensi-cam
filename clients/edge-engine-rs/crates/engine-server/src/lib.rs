@@ -129,6 +129,7 @@ pub async fn start_stream_server(port: u16, hub: FrameHub) -> anyhow::Result<()>
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/stream", get(stream_handler))
+        .route("/video_feed", get(stream_handler))
         .route("/snapshot.jpg", get(snapshot_handler))
         .with_state(hub);
 

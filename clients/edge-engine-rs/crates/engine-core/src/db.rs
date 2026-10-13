@@ -7,7 +7,7 @@ use libsql::{Builder, Connection, Database};
 use std::path::Path;
 use tracing::info;
 
-use crate::models::OutboxRecord;
+use crate::models::{OutboxRecord, TemplateRecord};
 
 pub struct EdgeDb {
     pub db: Database,
@@ -248,6 +248,90 @@ impl EdgeDb {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Tambahkan absensi baru ke tabel outbox_attendance
+    pub async fn insert_attendance(&self, record: &OutboxRecord) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO outbox_attendance (id, student_id, captured_at, direction, score, liveness_score, time_source, synced) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    record.id.as_str(),
+                    record.student_id.as_str(),
+                    record.captured_at.as_str(),
+                    record.direction.as_str(),
+                    record.score,
+                    record.liveness_score,
+                    record.time_source.as_str(),
+                    record.synced,
+                ),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Muat seluruh template wajah yang tersimpan di DB lokal
+    pub async fn load_templates(
+        &self,
+        embed_key: Option<&[u8]>,
+        model_version: &str,
+    ) -> Result<Vec<TemplateRecord>> {
+        let mut rows = self
+            .conn
+            .query("SELECT student_id, name, embedding FROM templates", ())
+            .await?;
+
+        let mut templates = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            let student_id: String = row.get(0)?;
+            let name: String = row.get(1).unwrap_or_else(|_| "Siswa".to_string());
+            let blob: Vec<u8> = row.get(2)?;
+
+            let raw_embedding = if blob.len() == 2076 {
+                if let Some(key) = embed_key {
+                    match Self::decrypt_embedding(key, &blob, &student_id, model_version) {
+                        Ok(decrypted) => decrypted,
+                        Err(e) => {
+                            tracing::warn!("Gagal mendekripsi template student {}: {:#}", student_id, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    tracing::warn!("Embedding student {} terenkripsi tapi embed_key tidak disediakan", student_id);
+                    continue;
+                }
+            } else if blob.len() == 2048 {
+                blob
+            } else {
+                tracing::warn!("Ukuran blob template student {} tidak valid (len={})", student_id, blob.len());
+                continue;
+            };
+
+            // Parse 512 float32 little endian
+            let mut embedding = Vec::with_capacity(512);
+            for chunk in raw_embedding.chunks_exact(4) {
+                let f = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                embedding.push(f);
+            }
+
+            // Normalisasi L2
+            let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+            if norm > 1e-6 {
+                for v in &mut embedding {
+                    *v /= norm;
+                }
+            }
+
+            templates.push(TemplateRecord {
+                student_id,
+                name,
+                embedding,
+            });
+        }
+
+        Ok(templates)
     }
 
     /// Dekripsi AES-256-GCM face embedding identik dengan Python database.py

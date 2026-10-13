@@ -136,6 +136,10 @@ pub mod linux {
 
     impl Camera {
         pub fn open(device_path: &str, width: u32, height: u32) -> Result<Self> {
+            Self::open_with_format(device_path, width, height, false)
+        }
+
+        pub fn open_with_format(device_path: &str, width: u32, height: u32, prefer_yuyv: bool) -> Result<Self> {
             let c_path = CString::new(device_path)?;
             let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_RDWR | libc::O_NONBLOCK, 0) };
             if fd < 0 {
@@ -152,45 +156,49 @@ pub mod linux {
             };
 
             // If init() fails, Drop for Camera will close self.fd cleanly (no double-close)
-            cam.init()?;
+            cam.init(prefer_yuyv)?;
 
             Ok(cam)
         }
 
-        fn init(&mut self) -> Result<()> {
-            // 1. Set format: First try requesting MJPEG, fallback to YUYV if unsupported
+        fn init(&mut self, prefer_yuyv: bool) -> Result<()> {
+            let (primary_fmt, fallback_fmt, primary_pixel, fallback_pixel) = if prefer_yuyv {
+                (V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_MJPEG, PixelFormat::Yuyv, PixelFormat::Mjpeg)
+            } else {
+                (V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_YUYV, PixelFormat::Mjpeg, PixelFormat::Yuyv)
+            };
+
             let mut fmt: V4l2Format = unsafe { std::mem::zeroed() };
             fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             {
                 let pix = fmt.pix_mut();
                 pix.width = self.width;
                 pix.height = self.height;
-                pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+                pix.pixelformat = primary_fmt;
                 pix.field = V4L2_FIELD_ANY;
             }
 
             let s_fmt_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
-            let mut configured_format = if s_fmt_res >= 0 && fmt.pix().pixelformat == V4L2_PIX_FMT_MJPEG {
-                Some(PixelFormat::Mjpeg)
+            let mut configured_format = if s_fmt_res >= 0 && fmt.pix().pixelformat == primary_fmt {
+                Some(primary_pixel)
             } else {
                 None
             };
 
             if configured_format.is_none() {
-                // Camera rejected MJPEG or ioctl returned non-MJPEG; explicitly request YUYV
-                let mut yuyv_fmt: V4l2Format = unsafe { std::mem::zeroed() };
-                yuyv_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                let mut alt_fmt: V4l2Format = unsafe { std::mem::zeroed() };
+                alt_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 {
-                    let pix = yuyv_fmt.pix_mut();
+                    let pix = alt_fmt.pix_mut();
                     pix.width = self.width;
                     pix.height = self.height;
-                    pix.pixelformat = V4L2_PIX_FMT_YUYV;
+                    pix.pixelformat = fallback_fmt;
                     pix.field = V4L2_FIELD_ANY;
                 }
-                let yuyv_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut yuyv_fmt) };
-                if yuyv_res >= 0 && yuyv_fmt.pix().pixelformat == V4L2_PIX_FMT_YUYV {
-                    fmt = yuyv_fmt;
-                    configured_format = Some(PixelFormat::Yuyv);
+                let alt_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut alt_fmt) };
+                if alt_res >= 0 && alt_fmt.pix().pixelformat == fallback_fmt {
+                    fmt = alt_fmt;
+                    configured_format = Some(fallback_pixel);
                 }
             }
 
@@ -362,22 +370,43 @@ pub mod linux {
     }
 
     /// Spawns a dedicated OS capture thread that owns the Camera raw pointers
-    /// and feeds frames into a callback or channel.
+    /// Spawns camera capture thread feeding JPEG frames into on_frame callback.
     pub fn spawn_capture_thread<F>(
         device_path: String,
         width: u32,
         height: u32,
         running: Arc<AtomicBool>,
-        mut on_frame: F,
+        on_frame: F,
     ) -> std::thread::JoinHandle<()>
     where
         F: FnMut(&[u8]) + Send + 'static,
+    {
+        spawn_capture_thread_with_rgb::<F, fn(&[u8], u32, u32), fn(&mut [u8], u32, u32)>(
+            device_path, width, height, running, on_frame, None, None,
+        )
+    }
+
+    /// Spawns camera capture thread feeding JPEG, raw RGB (for AI), and optional RGB overlay (for UI).
+    pub fn spawn_capture_thread_with_rgb<F, R, O>(
+        device_path: String,
+        width: u32,
+        height: u32,
+        running: Arc<AtomicBool>,
+        mut on_frame: F,
+        mut on_rgb: Option<R>,
+        mut on_overlay: Option<O>,
+    ) -> std::thread::JoinHandle<()>
+    where
+        F: FnMut(&[u8]) + Send + 'static,
+        R: FnMut(&[u8], u32, u32) + Send + 'static,
+        O: FnMut(&mut [u8], u32, u32) + Send + 'static,
     {
         std::thread::Builder::new()
             .name("v4l2-capture".to_string())
             .spawn(move || {
                 info!("Starting V4L2 capture thread on {}", device_path);
-                let mut camera = match Camera::open(&device_path, width, height) {
+                let prefer_yuyv = on_rgb.is_some() || on_overlay.is_some();
+                let mut camera = match Camera::open_with_format(&device_path, width, height, prefer_yuyv) {
                     Ok(cam) => cam,
                     Err(e) => {
                         error!("Failed to open V4L2 camera {}: {:#}", device_path, e);
@@ -399,17 +428,9 @@ pub mod linux {
                     device_path, w, h, pixel_format, stride
                 );
 
-                // Preallocated buffers for YUYV transcoding
-                let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
-                    vec![0u8; (w * h * 3) as usize]
-                } else {
-                    Vec::new()
-                };
-                let mut jpeg_buf = if pixel_format == PixelFormat::Yuyv {
-                    Vec::with_capacity((w * h / 4) as usize)
-                } else {
-                    Vec::new()
-                };
+                // Preallocated buffers for transcoding and AI pipeline
+                let mut rgb_buf = vec![0u8; (w * h * 3) as usize];
+                let mut jpeg_buf = Vec::with_capacity((w * h / 4) as usize);
 
                 let mut frame_count: u64 = 0;
                 let mut last_fps_time = std::time::Instant::now();
@@ -418,6 +439,30 @@ pub mod linux {
                     let capture_res = camera.capture_frame(500, |frame| {
                         match pixel_format {
                             PixelFormat::Mjpeg => {
+                                if on_rgb.is_some() || on_overlay.is_some() {
+                                    if let Ok(dyn_img) = image::load_from_memory_with_format(frame, image::ImageFormat::Jpeg) {
+                                        let mut rgb_img = dyn_img.to_rgb8();
+                                        let iw = rgb_img.width();
+                                        let ih = rgb_img.height();
+
+                                        if let Some(ref mut rgb_cb) = on_rgb {
+                                            rgb_cb(rgb_img.as_raw(), iw, ih);
+                                        }
+
+                                        let mut has_overlay = false;
+                                        if let Some(ref mut overlay_cb) = on_overlay {
+                                            overlay_cb(rgb_img.as_mut(), iw, ih);
+                                            has_overlay = true;
+                                        }
+
+                                        if has_overlay {
+                                            if encode_rgb_to_jpeg_into(rgb_img.as_raw(), iw, ih, 75, &mut jpeg_buf).is_ok() {
+                                                on_frame(&jpeg_buf);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
                                 on_frame(frame);
                             }
                             PixelFormat::Yuyv => {
@@ -425,6 +470,15 @@ pub mod linux {
                                     warn!("Truncated or malformed YUYV frame (len={}), skipping", frame.len());
                                     return;
                                 }
+
+                                if let Some(ref mut rgb_cb) = on_rgb {
+                                    rgb_cb(&rgb_buf, w, h);
+                                }
+
+                                if let Some(ref mut overlay_cb) = on_overlay {
+                                    overlay_cb(&mut rgb_buf, w, h);
+                                }
+
                                 if let Err(e) = encode_rgb_to_jpeg_into(&rgb_buf, w, h, 75, &mut jpeg_buf) {
                                     error!("JPEG encode failed: {:#}", e);
                                     return;

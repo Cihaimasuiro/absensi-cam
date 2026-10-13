@@ -14,13 +14,18 @@ class RecordHeartbeat
      */
     public function execute(Device $device, array $data): void
     {
+        $reportedIp = $data['ip_address'] ?? null;
+        $ip = (!$reportedIp || $reportedIp === '127.0.0.1')
+            ? (request()->ip() ?: $device->ip_address)
+            : $reportedIp;
+
         $device->update([
             'fw_version'        => $data['fw_version'],
             'model_version'     => $data['model_version'],
             'last_cpu_temp'     => $data['cpu_temp'],
             'last_outbox_len'   => $data['outbox_len'],
             'last_heartbeat_at' => now(),
-            'ip_address'        => $data['ip_address'] ?? $device->ip_address,
+            'ip_address'        => $ip,
             'status'            => 'online',
         ]);
     }

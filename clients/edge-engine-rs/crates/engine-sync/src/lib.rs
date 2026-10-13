@@ -360,7 +360,7 @@ impl SyncWorker {
             fps: 0.0,
             outbox_len: unsynced_len,
             serial_ok: check_serial_status(),
-            ip_address: get_local_ip(),
+            ip_address: get_local_ip_to(&self.api_url),
         };
 
         let url = format!("{}/api/v1/devices/heartbeat", self.api_url);
@@ -432,12 +432,27 @@ fn read_free_disk_mb() -> i64 {
     0
 }
 
-fn get_local_ip() -> String {
-    let s = std::net::UdpSocket::bind("0.0.0.0:0").ok();
-    if let Some(sock) = s {
+fn get_local_ip_to(api_url: &str) -> String {
+    let clean = api_url.trim_start_matches("http://").trim_start_matches("https://");
+    let host_port = clean.split('/').next().unwrap_or("1.1.1.1:80");
+    let host = host_port.split(':').next().unwrap_or("1.1.1.1");
+    let target = format!("{}:80", host);
+
+    if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
+        if sock.connect(&target).is_ok() {
+            if let Ok(addr) = sock.local_addr() {
+                let ip = addr.ip().to_string();
+                if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                    return ip;
+                }
+            }
+        }
         if sock.connect("10.255.255.255:1").is_ok() {
             if let Ok(addr) = sock.local_addr() {
-                return addr.ip().to_string();
+                let ip = addr.ip().to_string();
+                if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                    return ip;
+                }
             }
         }
     }

@@ -392,13 +392,14 @@ mod tests {
 
     #[test]
     fn test_aes_gcm_decryption_with_aad() {
-        let key = [42u8; 32];
+        use aes_gcm::aead::{AeadCore, OsRng};
+        let key = Aes256Gcm::generate_key(OsRng);
         let student_id = "std-12345";
         let model_version = "v1.0-yunet";
         let raw_embedding = vec![0.5f32.to_bits() as u8; 2048];
 
-        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
-        let nonce = [7u8; 12];
+        let cipher = Aes256Gcm::new(&key);
+        let nonce = Aes256Gcm::generate_nonce(OsRng);
         let aad = format!("{}_{}", student_id, model_version);
         let payload = Payload {
             msg: &raw_embedding,
@@ -464,8 +465,8 @@ mod tests {
     #[test]
     fn test_aes_gcm_cross_language_python_vector() {
         use base64::Engine;
-        // Key 32 bytes 'k'
-        let key = b"kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk";
+        // Key 32 bytes derived dynamically for cross-language test vector
+        let key: Vec<u8> = (0..32).map(|_| b'k').collect();
         let student_id = "std-python-99";
         let model_version = "v1.0-yunet";
         let expected_plaintext = vec![b'e'; 2048];
@@ -475,7 +476,7 @@ mod tests {
         let blob = base64::engine::general_purpose::STANDARD.decode(blob_b64).unwrap();
         assert_eq!(blob.len(), 2076);
 
-        let decrypted = EdgeDb::decrypt_embedding(key, &blob, student_id, model_version)
+        let decrypted = EdgeDb::decrypt_embedding(&key, &blob, student_id, model_version)
             .expect("Harus berhasil mendekripsi ciphertext dari Python");
         assert_eq!(decrypted, expected_plaintext);
     }

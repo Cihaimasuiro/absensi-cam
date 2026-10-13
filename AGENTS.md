@@ -16,6 +16,8 @@
 > - Safe evolution of the system
 >
 > Follow these rules unless the task explicitly requires an exception.
+>
+> *(For Edge Engine native Rust & Python guidelines, refer to [docs/AGENTS2.md](docs/AGENTS2.md)).*
 
 ---
 

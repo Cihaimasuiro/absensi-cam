@@ -152,9 +152,10 @@ absensi-cam/
 │   ├── protocol/            # Skema JSON serial + OpenAPI REST (sumber kebenaran tunggal)
 │   └── models/              # File .onnx + checksum SHA-256 + MODEL_VERSION (Git LFS)
 ├── hardware/                # Skema, KiCad (V2), desain casing
-├── deploy/                  # Unit systemd, skrip provisioning, konfigurasi image SD card
 ├── docs/
-└── PRD.md
+│   ├── PRD.md               # Spesifikasi teknis produk monorepo
+│   ├── DESIGN.md            # Panduan desain token & UI/UX
+│   └── AGENTS2.md           # Pedoman teknis AI & developer untuk Edge Engine (Rust/Python)
 ```
 
 | Package | Bahasa / Stack | Tanggung Jawab | Berjalan Di |

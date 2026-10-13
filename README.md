@@ -193,7 +193,9 @@ This repository enforces strict, enterprise-grade engineering standards for both
 
 Before contributing, you **must** read:
 1. **[AGENTS.md](AGENTS.md):** Laravel Enterprise Architecture Guidelines (Modular Monolith, Thin Controllers, Query Builders, DTOs, Batch Sync Contracts).
-2. **[AGENTS2.md](AGENTS2.md):** Edge Engine Engineering Guidelines (Native Rust `clients/edge-engine-rs` standards, Memory Safety, Decoupled AI Pacing, Python Reference PEP 8).
+2. **[AGENTS2.md](docs/AGENTS2.md):** Edge Engine Engineering Guidelines (Native Rust `clients/edge-engine-rs` standards, Memory Safety, Decoupled AI Pacing, Python Reference PEP 8).
+3. **[PRD.md](docs/PRD.md):** Product Requirement Document (Monorepo Specs v2.5.0).
+4. **[DESIGN.md](docs/DESIGN.md):** Design Language & Token Specifications.
 
 > [!WARNING]
 > We practice **Zero Over-Engineering**. Do not introduce speculative abstractions, unnecessary wrapper classes, microservices, or unneeded dependencies unless explicitly required and measured.

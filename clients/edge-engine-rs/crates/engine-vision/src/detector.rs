@@ -16,6 +16,7 @@ pub struct FaceDetection {
 
 pub struct FaceDetector {
     session: Session,
+    tensor: Vec<f32>,
     pub conf_threshold: f32,
     pub nms_threshold: f32,
     pub top_k: usize,
@@ -32,8 +33,11 @@ impl FaceDetector {
             .commit_from_file(model_path)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
 
+        let tensor = vec![0.0f32; 3 * 640 * 640];
+
         Ok(Self {
             session,
+            tensor,
             conf_threshold: 0.6,
             nms_threshold: 0.3,
             top_k: 5000,
@@ -52,8 +56,7 @@ impl FaceDetector {
         const NET_W: usize = 640;
         const NET_H: usize = 640;
 
-        // Prepare NCHW float32 tensor [1, 3, 640, 640] (BGR order)
-        let mut tensor = vec![0.0f32; 3 * NET_W * NET_H];
+        self.tensor.fill(0.0f32);
         let channel_stride = NET_W * NET_H;
 
         let copy_w = width.min(NET_W);
@@ -71,14 +74,14 @@ impl FaceDetector {
                     let b = image_rgb[px_offset + 2] as f32;
 
                     let idx = tensor_row_offset + x;
-                    tensor[idx] = b; // Channel 0: Blue
-                    tensor[channel_stride + idx] = g; // Channel 1: Green
-                    tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                    self.tensor[idx] = b; // Channel 0: Blue
+                    self.tensor[channel_stride + idx] = g; // Channel 1: Green
+                    self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
                 }
             }
         }
 
-        let input_value = Value::from_array(([1usize, 3, NET_H, NET_W], tensor))
+        let input_value = Value::from_array(([1usize, 3, NET_H, NET_W], self.tensor.clone()))
             .map_err(|e| anyhow::anyhow!("{e}"))?;
 
         let outputs = self
@@ -88,10 +91,11 @@ impl FaceDetector {
 
         let strides = [8usize, 16, 32];
         let mut candidates = Vec::new();
+        let thresh_sq = self.conf_threshold * self.conf_threshold;
 
         for (i, &s) in strides.iter().enumerate() {
             let cols = NET_W / s;
-            let rows = NET_H / s;
+            let rows = (copy_h / s + 1).min(NET_H / s);
 
             let (_, cls_slice) = outputs[i]
                 .try_extract_tensor::<f32>()
@@ -112,11 +116,12 @@ impl FaceDetector {
 
                     let cls_score = cls_slice[idx].clamp(0.0, 1.0);
                     let obj_score = obj_slice[idx].clamp(0.0, 1.0);
-                    let score = (cls_score * obj_score).sqrt();
+                    let prod = cls_score * obj_score;
 
-                    if score < self.conf_threshold {
+                    if prod < thresh_sq {
                         continue;
                     }
+                    let score = prod.sqrt();
 
                     let cx = (c as f32 + bbox_slice[idx * 4 + 0]) * s as f32;
                     let cy = (r as f32 + bbox_slice[idx * 4 + 1]) * s as f32;

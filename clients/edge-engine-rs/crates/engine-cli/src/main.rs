@@ -572,7 +572,7 @@ async fn run_stream(
     {
         info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
         let tx_frame_clone = tx_frame.clone();
-        let hub_mock = hub_clone.clone();
+        let hub_mock = hub.clone();
         let running_mock = running_clone.clone();
         let cam_fps_mock = cam_fps_shared.clone();
 

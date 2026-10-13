@@ -20,4 +20,5 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 chrono = { version = "0.4" }
 image = "0.25"
+uuid = { version = "1", features = ["v4"] }
 

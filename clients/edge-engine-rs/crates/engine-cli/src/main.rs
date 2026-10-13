@@ -434,8 +434,9 @@ async fn run_stream(
                                                 if !on_cooldown {
                                                     cooldown_map.insert(student_id.to_string(), now);
                                                     let now_dt = chrono::Local::now();
-                                                    let captured_at = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
-                                                    let att_id = format!("att-{}", now_dt.timestamp_millis());
+                                                    let display_time = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                                                    let utc_captured_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                                                    let att_uuid = uuid::Uuid::new_v4().to_string();
 
                                                     println!(
                                                         "🎯 [ABSENSI] Teridentifikasi: {} (ID: {}) | Kemiripan: {:.1}% | Liveness: {:.2}",
@@ -445,7 +446,7 @@ async fn run_stream(
                                                     let log_item = AttendanceLogItem {
                                                         student_id: student_id.to_string(),
                                                         name: name.to_string(),
-                                                        captured_at: captured_at.clone(),
+                                                        captured_at: display_time,
                                                         direction: "in".to_string(),
                                                     };
                                                     if let Ok(mut hist) = recent_history_ai.lock() {
@@ -456,9 +457,9 @@ async fn run_stream(
                                                     }
 
                                                     let record = OutboxRecord {
-                                                        id: att_id,
+                                                        id: att_uuid,
                                                         student_id: student_id.to_string(),
-                                                        captured_at,
+                                                        captured_at: utc_captured_at,
                                                         direction: "in".to_string(),
                                                         score: score as f64,
                                                         liveness_score: liveness_prob as f64,

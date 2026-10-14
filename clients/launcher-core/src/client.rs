@@ -67,6 +67,17 @@ impl MockApiClient {
                     temperature_c: 0.0,
                     last_seen_sec: 1420,
                 },
+                EdgeDevice {
+                    id: "dev-05".to_string(),
+                    hostname: "orangepi-gerbang-utama-lantai-dua".to_string(),
+                    ip_address: "192.168.1.60".to_string(),
+                    mac_address: "02:42:C0:A8:01:45".to_string(),
+                    pairing_code: None,
+                    status: DeviceStatus::Online,
+                    engine_version: "v0.3.0-rust".to_string(),
+                    temperature_c: 53.2,
+                    last_seen_sec: 18,
+                },
             ],
         }
     }
@@ -119,7 +130,7 @@ mod tests {
     fn test_list_and_approve() {
         let mut client = MockApiClient::new();
         let devices = client.list_devices().unwrap();
-        assert_eq!(devices.len(), 4);
+        assert_eq!(devices.len(), 5);
 
         let pending = devices.iter().find(|d| d.status == DeviceStatus::PendingPairing).unwrap();
         assert_eq!(pending.id, "dev-04");
@@ -143,7 +154,7 @@ mod tests {
 
         assert!(client.reject_device("dev-01").is_ok());
         let after_reject = client.list_devices().unwrap();
-        assert_eq!(after_reject.len(), 3);
+        assert_eq!(after_reject.len(), 4);
         assert!(after_reject.iter().all(|d| d.id != "dev-01"));
     }
 }

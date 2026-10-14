@@ -105,15 +105,15 @@ struct TableLayout {
 
 impl TableLayout {
     fn compute(available_width: f32) -> Self {
-        let col_gap = 16.0;
-        let w_status = 110.0;
-        let w_engine = 110.0;
-        let w_temp = 90.0;
-        let w_time = 110.0;
-        let w_action = 190.0;
+        let col_gap = 14.0;
+        let w_status = 100.0;
+        let w_engine = 105.0;
+        let w_temp = 85.0;
+        let w_time = 105.0;
+        let w_action = 160.0;
 
         let fixed_sum = w_status + w_engine + w_temp + w_time + w_action + (6.0 * col_gap);
-        let avail_for_fr = (available_width - fixed_sum).max(280.0);
+        let avail_for_fr = (available_width - fixed_sum).max(200.0);
         let w_device = avail_for_fr * 0.5;
         let w_address = avail_for_fr * 0.5;
 
@@ -137,7 +137,7 @@ impl TableLayout {
         Self {
             col_x,
             col_w,
-            total_w: cur - col_gap,
+            total_w: available_width.max(cur - col_gap),
         }
     }
 }
@@ -514,16 +514,16 @@ impl eframe::App for LauncherApp {
 
                                     ui.add_space(4.0);
 
-                                    // Waktu permintaan & kedaluwarsa
+                                    // Waktu permintaan & kedaluwarsa (format_relative_time_id sudah berakhiran 'lalu')
                                     let rel_time = format_relative_time_id(dev.last_seen_sec);
                                     ui.label(
-                                        RichText::new(format!("Meminta {rel_time} lalu · kedaluwarsa 09:48"))
+                                        RichText::new(format!("Meminta {rel_time} · kedaluwarsa 09:48"))
                                             .font(theme::font_caption())
                                             .color(theme::TEKS_REDUP),
                                     );
                                 });
 
-                                // Kolom Kanan: Pilihan Gedung (dengan label & border 1px #3A403B),
+                                // Kolom Kanan: Pilihan Gedung (border 1px #3A403B, tinggi serasi 36px),
                                 // Tombol Padat Amber "Setujui", Tombol Teks Merah "Tolak"
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     // Tombol teks merah "Tolak"
@@ -558,20 +558,14 @@ impl eframe::App for LauncherApp {
 
                                     ui.add_space(16.0);
 
-                                    // Pilihan Gedung: berlabel "Gedung" dan border 1px #3A403B, tinggi serasi (36px)
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new("Gedung:")
-                                                .font(theme::font_caption())
-                                                .color(theme::TEKS_REDUP),
-                                        );
-                                        ui.add_space(4.0);
-
+                                    // Pilihan Gedung: border 1px #3A403B, tinggi serasi 36px, tanpa label terbalik agar tidak menabrak teks kode di kiri
+                                    ui.scope(|ui| {
+                                        ui.spacing_mut().interact_size.y = 34.0;
                                         egui::Frame::new()
                                             .fill(theme::PERMUKAAN)
                                             .stroke(Stroke::new(1.0, theme::OUTLINE_TOMBOL))
                                             .corner_radius(theme::RADIUS_SM)
-                                            .inner_margin(egui::Margin::symmetric(8, 4))
+                                            .inner_margin(egui::Margin::symmetric(10, 2))
                                             .show(ui, |ui| {
                                                 egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
                                                     .selected_text(
@@ -831,7 +825,7 @@ impl eframe::App for LauncherApp {
 
                     // Daftar Baris Tabel dalam ScrollArea
                     egui::ScrollArea::vertical()
-                        .max_height(ui.available_height() - 40.0)
+                        .max_height((ui.available_height() - 56.0).max(120.0))
                         .show(ui, |ui| {
                             for dev in &table_devices {
                                 let is_offline = dev.status == DeviceStatus::Offline;
@@ -864,7 +858,7 @@ impl eframe::App for LauncherApp {
                                     );
                                 }
 
-                                // 1. Kolom Status (110px)
+                                // 1. Kolom Status (100px)
                                 let cell_status = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[0], row_rect.top()),
                                     Vec2::new(layout.col_w[0], 56.0),
@@ -884,16 +878,19 @@ impl eframe::App for LauncherApp {
                                     );
                                 });
 
-                                // 2. Kolom Perangkat (1.4fr)
+                                // 2. Kolom Perangkat (1.4fr): truncate dengan elipsis jika nama sangat panjang
                                 let cell_device = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[1], row_rect.top()),
                                     Vec2::new(layout.col_w[1], 56.0),
                                 );
                                 child_cell(ui, cell_device, |ui| {
-                                    ui.label(
-                                        RichText::new(&dev.hostname)
-                                            .font(theme::font_body_medium())
-                                            .color(text_color),
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&dev.hostname)
+                                                .font(theme::font_body_medium())
+                                                .color(text_color),
+                                        )
+                                        .truncate(),
                                     );
                                 });
 
@@ -904,20 +901,26 @@ impl eframe::App for LauncherApp {
                                 );
                                 child_cell(ui, cell_addr, |ui| {
                                     ui.vertical(|ui| {
-                                        ui.label(
-                                            RichText::new(&dev.ip_address)
-                                                .font(theme::font_technical())
-                                                .color(text_color),
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&dev.ip_address)
+                                                    .font(theme::font_technical())
+                                                    .color(text_color),
+                                            )
+                                            .truncate(),
                                         );
-                                        ui.label(
-                                            RichText::new(&dev.mac_address)
-                                                .font(theme::font_technical_sm())
-                                                .color(theme::TEKS_REDUP),
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&dev.mac_address)
+                                                    .font(theme::font_technical_sm())
+                                                    .color(theme::TEKS_REDUP),
+                                            )
+                                            .truncate(),
                                         );
                                     });
                                 });
 
-                                // 4. Kolom Engine (110px): versi usang tanpa chip
+                                // 4. Kolom Engine (105px): versi usang tanpa chip
                                 let cell_engine = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[3], row_rect.top()),
                                     Vec2::new(layout.col_w[3], 56.0),
@@ -938,7 +941,7 @@ impl eframe::App for LauncherApp {
                                     }
                                 });
 
-                                // 5. Kolom Suhu CPU (90px)
+                                // 5. Kolom Suhu CPU (85px)
                                 let cell_temp = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[4], row_rect.top()),
                                     Vec2::new(layout.col_w[4], 56.0),
@@ -956,7 +959,7 @@ impl eframe::App for LauncherApp {
                                     );
                                 });
 
-                                // 6. Kolom Terakhir (110px)
+                                // 6. Kolom Terakhir (105px)
                                 let cell_time = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[5], row_rect.top()),
                                     Vec2::new(layout.col_w[5], 56.0),
@@ -970,7 +973,7 @@ impl eframe::App for LauncherApp {
                                     );
                                 });
 
-                                // 7. Kolom Aksi (190px): outline button (lebar sama 110px, tinggi 36) + tombol 3 titik
+                                // 7. Kolom Aksi (160px): outline button (lebar 100px, tinggi 36) + tombol 3 titik (lebar 36) = total 144px
                                 let cell_action = Rect::from_min_size(
                                     Pos2::new(row_rect.left() + layout.col_x[6], row_rect.top()),
                                     Vec2::new(layout.col_w[6], 56.0),
@@ -990,7 +993,7 @@ impl eframe::App for LauncherApp {
                                             "Ping"
                                         };
 
-                                        // Outline transparan, stroke #3A403B, lebar sama persis 110.0px
+                                        // Outline transparan, stroke #3A403B, lebar 100.0px (muat rapi bersama tombol ⋮ 36px di kolom 160px)
                                         let main_btn = egui::Button::new(
                                             RichText::new(main_btn_text)
                                                 .font(theme::font_body())
@@ -999,7 +1002,7 @@ impl eframe::App for LauncherApp {
                                         .fill(Color32::TRANSPARENT)
                                         .stroke(Stroke::new(1.0, theme::OUTLINE_TOMBOL))
                                         .corner_radius(theme::RADIUS_SM)
-                                        .min_size(Vec2::new(110.0, 36.0));
+                                        .min_size(Vec2::new(100.0, 36.0));
 
                                         if ui.add(main_btn).clicked() {
                                             if dev.status == DeviceStatus::Online {
@@ -1030,11 +1033,21 @@ impl eframe::App for LauncherApp {
                                             }
                                         }
 
-                                        // Popover Menu ~180px, rata kanan di bawah tombol titik tiga, tutup saat klik di luar
+                                        // Popover Menu ~180px, rata kanan di bawah/atas tombol titik tiga, tutup saat klik di luar
                                         if self.active_menu_device_id.as_deref() == Some(&dev.id) {
                                             let menu_width = 180.0;
-                                            let menu_pos = Pos2::new(dots_rect.right() - menu_width, dots_rect.bottom() + 4.0);
-                                            let menu_bounds = Rect::from_min_size(menu_pos, Vec2::new(menu_width, 140.0));
+                                            let menu_height = 140.0;
+                                            let space_below = ui.clip_rect().bottom() - dots_rect.bottom();
+
+                                            // Buka ke atas bila ruang di bawah kurang dari tinggi menu (~140px + 48px padding)
+                                            let menu_y = if space_below < (menu_height + 48.0) {
+                                                dots_rect.top() - menu_height - 4.0
+                                            } else {
+                                                dots_rect.bottom() + 4.0
+                                            };
+
+                                            let menu_pos = Pos2::new(dots_rect.right() - menu_width, menu_y);
+                                            let menu_bounds = Rect::from_min_size(menu_pos, Vec2::new(menu_width, menu_height));
 
                                             // Deteksi klik di luar popover untuk menutup otomatis
                                             if ui.input(|i| i.pointer.any_pressed()) {
@@ -1178,14 +1191,33 @@ impl eframe::App for LauncherApp {
                     ui.add_space(8.0);
 
                     ui.horizontal(|ui| {
-                        let total_devices = self.devices.len();
-                        ui.label(
-                            RichText::new(format!(
+                        let registered_count = self
+                            .devices
+                            .iter()
+                            .filter(|d| d.status != DeviceStatus::PendingPairing)
+                            .count();
+                        let pending_count = self
+                            .devices
+                            .iter()
+                            .filter(|d| d.status == DeviceStatus::PendingPairing)
+                            .count();
+
+                        let footer_scan_text = if pending_count > 0 {
+                            format!(
+                                "Dipindai {} · {} perangkat terdaftar · {} menunggu",
+                                self.last_scanned_time, registered_count, pending_count
+                            )
+                        } else {
+                            format!(
                                 "Dipindai {} · {} perangkat terdaftar",
-                                self.last_scanned_time, total_devices
-                            ))
-                            .font(theme::font_caption())
-                            .color(theme::TEKS_REDUP),
+                                self.last_scanned_time, registered_count
+                            )
+                        };
+
+                        ui.label(
+                            RichText::new(footer_scan_text)
+                                .font(theme::font_caption())
+                                .color(theme::TEKS_REDUP),
                         );
 
                         // Notifikasi toast (warna netral/terang, BUKAN amber)
@@ -1230,8 +1262,8 @@ impl eframe::App for LauncherApp {
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size(Vec2::new(1080.0, 680.0))
-            .with_min_inner_size(Vec2::new(880.0, 520.0))
+            .with_inner_size(Vec2::new(1180.0, 700.0))
+            .with_min_inner_size(Vec2::new(1080.0, 620.0))
             .with_title("Absensi-Cam · Perangkat"),
         ..Default::default()
     };
@@ -1267,15 +1299,15 @@ mod tests {
     fn test_launcher_filter_tabs() {
         let client = MockApiClient::new();
         let devices = client.list_devices().unwrap();
-        assert_eq!(devices.len(), 4);
+        assert_eq!(devices.len(), 5);
 
         let registered_count = devices.iter().filter(|d| d.status != DeviceStatus::PendingPairing).count();
         let online_count = devices.iter().filter(|d| d.status == DeviceStatus::Online).count();
         let offline_count = devices.iter().filter(|d| d.status == DeviceStatus::Offline).count();
         let pending_count = devices.iter().filter(|d| d.status == DeviceStatus::PendingPairing).count();
 
-        assert_eq!(registered_count, 3);
-        assert_eq!(online_count, 2);
+        assert_eq!(registered_count, 4);
+        assert_eq!(online_count, 3);
         assert_eq!(offline_count, 1);
         assert_eq!(pending_count, 1);
     }
@@ -1283,15 +1315,15 @@ mod tests {
     #[test]
     fn test_table_layout_alignment() {
         let layout = TableLayout::compute(1000.0);
-        assert_eq!(layout.col_w[0], 110.0); // Status
-        assert_eq!(layout.col_w[3], 110.0); // Engine
-        assert_eq!(layout.col_w[4], 90.0);  // Suhu CPU
-        assert_eq!(layout.col_w[5], 110.0); // Terakhir
-        assert_eq!(layout.col_w[6], 190.0); // Aksi
+        assert_eq!(layout.col_w[0], 100.0); // Status
+        assert_eq!(layout.col_w[3], 105.0); // Engine
+        assert_eq!(layout.col_w[4], 85.0);  // Suhu CPU
+        assert_eq!(layout.col_w[5], 105.0); // Terakhir
+        assert_eq!(layout.col_w[6], 160.0); // Aksi
 
         // Kolom 1 dan 2 harus proporsional dan sama lebar
         assert_eq!(layout.col_w[1], layout.col_w[2]);
         // Jarak antar kolom konsisten
-        assert_eq!(layout.col_x[1], layout.col_x[0] + layout.col_w[0] + 16.0);
+        assert_eq!(layout.col_x[1], layout.col_x[0] + layout.col_w[0] + 14.0);
     }
 }

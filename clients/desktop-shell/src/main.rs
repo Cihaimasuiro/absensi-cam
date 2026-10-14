@@ -4,8 +4,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-#[tauri::command]
-fn check_server_health() -> Result<bool, String> {
+fn ping_server() -> Result<bool, String> {
     let addr = "127.0.0.1:8000"
         .parse()
         .map_err(|e| format!("Alamat host tidak valid: {e}"))?;
@@ -36,6 +35,13 @@ fn check_server_health() -> Result<bool, String> {
     } else {
         Err("Status server bukan 200 OK".to_string())
     }
+}
+
+#[tauri::command]
+async fn check_server_health() -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(ping_server)
+        .await
+        .map_err(|e| format!("Runtime error: {e}"))?
 }
 
 fn main() {

@@ -8,13 +8,16 @@ Dokumen ini mendokumentasikan prosedur keamanan rotasi kunci enkripsi embedding 
 
 Kunci bawaan contoh (`t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=`) sempat tercatat pada riwayat commit Git publik (`4b96a97`, `08214d7`, `ec35962`, dan `92b05dc`). Kunci tersebut dianggap **bocor/compromised**.
 
-### Status Data Saat Ini
-Pemeriksaan pada database saat audit menunjukkan:
+### Pemeriksaan Data di Server Aktual (PENTING)
+> [!WARNING]
+> Pengecekan `FaceTemplate::count()` pada database mesin pengembangan lokal **tidak mencerminkan** kondisi server operasional/sekolah (misal di `192.168.10.66`). Jika Orange Pi sudah pernah beroperasi dan mengenali wajah, template wajah terenkripsi **sudah ada di database server tersebut**.
+
+Sebelum mengubah kunci di server operasional, jalankan perintah ini langsung di terminal server yang bersangkutan:
 ```bash
 php artisan tinker --execute="echo 'FaceTemplate count: ' . \App\Domain\Enrollment\Models\FaceTemplate::count();"
-# Output: FaceTemplate count: 0
 ```
-Tidak ada data wajah nyata di database yang dienkripsi menggunakan kunci lama. Namun, kunci baru wajib digenerate untuk lingkungan staging dan produksi.
+- Jika hasilnya `> 0`: **JANGAN** langsung mengubah `ENROLLMENT_EMBED_KEY` di server karena template wajah lama akan gagal didekripsi (autentikasi wajah gagal total). Jalankan prosedur enkripsi ulang pada Bagian 4 terlebih dahulu.
+- Jika hasilnya `= 0`: Kunci baru dapat langsung dipasang di file `.env` server.
 
 ---
 
@@ -26,34 +29,36 @@ Jalankan perintah berikut di terminal server:
 ```bash
 openssl rand -base64 32
 ```
-*Contoh output:*
-```text
-K8u3mF4x+vN9z1qP7yR8LwNcB5WxYJ2HhDbjPvC4RnE=
-```
+*Output akan menghasilkan string 32-byte acak berkode Base64.*
 
 ---
 
-## 3. Penyimpanan Kunci (Aturan Keamanan)
+## 3. Penyimpanan & Transmisi Kunci (Aturan Keamanan)
 
 1. **Hanya di File `.env` Server**:
    Simpan kunci di file `.env` pada server Laravel:
    ```ini
-   ENROLLMENT_EMBED_KEY="K8u3mF4x+vN9z1qP7yR8LwNcB5WxYJ2HhDbjPvC4RnE="
+   ENROLLMENT_EMBED_KEY="<hasil dari: openssl rand -base64 32>"
    ```
 2. **Dilarang Commit ke Git**:
-   File `.env` sudah masuk dalam `.gitignore`. Jangan pernah menuliskan kunci literal di dalam file kode sumber, migrasi, atau template seeder.
+   File `.env` sudah masuk dalam `.gitignore`. Jangan pernah menuliskan kunci literal di dalam file kode sumber, dokumen, migrasi, atau template seeder.
 3. **Pengambilan di Kode**:
    Aplikasi membaca kunci secara eksklusif lewat `config('app.enrollment_embed_key')`. Pemanggilan `env()` di luar file konfigurasi dilarang karena akan menghasilkan `null` saat `config:cache` aktif.
-4. **Pemberian ke Perangkat Edge**:
-   Perangkat edge (Orange Pi) tidak perlu diisi kunci secara manual. Kunci akan ditransmisikan secara terenkripsi saat proses pairing disetujui oleh Administrator via endpoint `/api/v1/devices/pairing/poll`.
+4. **Keamanan Transmisi ke Perangkat Edge (Wajib HTTPS di Produksi)**:
+   > [!CAUTION]
+   > Kunci enkripsi dan API Token Sanctum **TIDAK dienkripsi lapis kedua** saat proses pairing; keduanya dikirim sebagai teks biasa dalam payload JSON respons `POST /api/v1/devices/pairing/poll`.
+   >
+   > Satu-satunya pelindung payload tersebut saat transit adalah **lapisan TLS (HTTPS)**.
+   > - Pada lingkungan **PRODUKSI**: Server **WAJIB** menggunakan HTTPS (`PAIRING_ALLOW_HTTP=false`).
+   > - Flag `PAIRING_ALLOW_HTTP=true` **HANYA** boleh diaktifkan sementara untuk uji coba di jaringan tertutup LAN lokal tanpa TLS. Siapa pun yang melakukan packet sniffing di LAN tanpa TLS berpotensi membaca token dan kunci ini.
 
 ---
 
-## 4. Langkah Enkripsi Ulang Data Wajah (Jika Ada Data Eksisting)
+## 4. Langkah Enkripsi Ulang Data Wajah (Jika Ada Data Eksisting di Server)
 
-Jika di masa mendatang kunci perlu dirotasi saat database sudah memiliki data wajah (`FaceTemplate`):
+Jika server sudah memiliki data wajah terdaftar:
 
-1. **Buat Kunci Baru** dan simpan sementara sebagai `ENROLLMENT_EMBED_KEY_NEW` di `.env`.
+1. **Buat Kunci Baru** dan simpan sementara sebagai `ENROLLMENT_EMBED_KEY_NEW` di file `.env` server.
 2. **Jalankan Skrip Rotasi**:
    Iterasi setiap baris di tabel `face_templates`:
    - Dekripsi `embedding_enc` menggunakan kunci lama (`config('app.enrollment_embed_key')`) dengan AAD `${student_id}_${model_version}`.
@@ -61,8 +66,8 @@ Jika di masa mendatang kunci perlu dirotasi saat database sudah memiliki data wa
    - Simpan ciphertext + tag baru ke kolom `embedding_enc`.
 3. **Ganti Kunci Aktif**:
    Ubah `ENROLLMENT_EMBED_KEY` di `.env` menjadi kunci baru, lalu hapus `ENROLLMENT_EMBED_KEY_NEW`.
-4. **Re-Pairing / Update Klien Edge**:
-   Kirimkan perintah re-sync atau lakukan re-pairing pada seluruh perangkat Orange Pi yang terhubung agar menyimpan kunci baru di file konfigurasi lokal `/opt/smart-absensi/edge-engine/.env`.
+4. **Re-Pairing Perangkat Edge**:
+   Lakukan pairing ulang atau update file `/opt/smart-absensi/edge-engine/.env` di setiap Orange Pi agar kunci lokal perangkat sinkron dengan kunci baru di server.
 
 ---
 

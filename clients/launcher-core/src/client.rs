@@ -1,11 +1,12 @@
 use crate::device::{DeviceStatus, EdgeDevice};
+use crate::error::ApiError;
 
 pub trait ApiClient {
-    fn list_devices(&self) -> Result<Vec<EdgeDevice>, String>;
-    fn approve_device(&mut self, id: &str) -> Result<(), String>;
-    fn reject_device(&mut self, id: &str) -> Result<(), String>;
-    fn rename_device(&mut self, id: &str, new_hostname: &str) -> Result<(), String>;
-    fn forget_device(&mut self, id: &str) -> Result<(), String>;
+    fn list_devices(&self) -> Result<Vec<EdgeDevice>, ApiError>;
+    fn approve_device(&mut self, id: &str) -> Result<(), ApiError>;
+    fn reject_device(&mut self, id: &str) -> Result<(), ApiError>;
+    fn rename_device(&mut self, id: &str, new_hostname: &str) -> Result<(), ApiError>;
+    fn forget_device(&mut self, id: &str) -> Result<(), ApiError>;
 }
 
 #[derive(Debug, Clone)]
@@ -84,40 +85,40 @@ impl MockApiClient {
 }
 
 impl ApiClient for MockApiClient {
-    fn list_devices(&self) -> Result<Vec<EdgeDevice>, String> {
+    fn list_devices(&self) -> Result<Vec<EdgeDevice>, ApiError> {
         Ok(self.devices.clone())
     }
 
-    fn approve_device(&mut self, id: &str) -> Result<(), String> {
+    fn approve_device(&mut self, id: &str) -> Result<(), ApiError> {
         if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
             dev.status = DeviceStatus::Online;
             dev.pairing_code = None;
             Ok(())
         } else {
-            Err(format!("Perangkat '{id}' tidak ditemukan"))
+            Err(ApiError::NotFound(id.to_string()))
         }
     }
 
-    fn reject_device(&mut self, id: &str) -> Result<(), String> {
+    fn reject_device(&mut self, id: &str) -> Result<(), ApiError> {
         let initial_len = self.devices.len();
         self.devices.retain(|d| d.id != id);
         if self.devices.len() < initial_len {
             Ok(())
         } else {
-            Err(format!("Perangkat '{id}' tidak ditemukan"))
+            Err(ApiError::NotFound(id.to_string()))
         }
     }
 
-    fn rename_device(&mut self, id: &str, new_hostname: &str) -> Result<(), String> {
+    fn rename_device(&mut self, id: &str, new_hostname: &str) -> Result<(), ApiError> {
         if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
             dev.hostname = new_hostname.to_string();
             Ok(())
         } else {
-            Err(format!("Perangkat '{id}' tidak ditemukan"))
+            Err(ApiError::NotFound(id.to_string()))
         }
     }
 
-    fn forget_device(&mut self, id: &str) -> Result<(), String> {
+    fn forget_device(&mut self, id: &str) -> Result<(), ApiError> {
         self.reject_device(id)
     }
 }

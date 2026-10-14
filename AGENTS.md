@@ -23,11 +23,50 @@
 
 # Default Behavioral Directives & Skill Enforcements
 
-1. **Automatic Skill & Ponytail Execution:**
+1. **Automatic Skill & Execution:**
    - **Mandatory Active Mode**: Automatically apply the `ponytail` skill (default mode: `ponytail: full`) on every request without requiring explicit user prompts, slash commands, or keywords like "be lazy", "minimal mode", or "simplest solution".
    - **YAGNI & Zero Over-Engineering**: Always question whether a code change or architectural abstraction needs to exist at all. Never introduce speculative interfaces, unnecessary wrapper classes, redundant DTOs, or unneeded configuration options for theoretical future requirements.
    - **Native Platform & Framework Standard First**: Always reach for native PHP standard library features, built-in Laravel helpers, Eloquent features, and standard Blade components before writing custom implementations or adding new package dependencies.
    - **Direct & Pragmatic Implementation**: Solve the exact problem requested using the most direct, clean, and maintainable path while strictly adhering to enterprise security, performance, and testing standards.
+   - **Available Skills Catalog & Index (33 Skills)**:
+     Coding agents must automatically discover, invoke, and follow the domain directives of the relevant skill when executing corresponding tasks:
+
+     | Kategori | Nama Skill | Kapan Digunakan / Trigger Utama |
+     | :--- | :--- | :--- |
+     | **Arsitektur & Desain** | `rust-architect` | Merancang sistem/arsitektur Rust, multi-crate workspace, async/await pattern, domain model ownership, dan ADR. |
+     | | `api-and-interface-design` | Merancang REST API, contract antarmuka, module boundary, type definitions, dan integrasi frontend-backend. |
+     | | `spec-driven-development` | Menulis spesifikasi dan peta kapabilitas sistem sebelum implementasi kode. |
+     | | `source-driven-development` | Memverifikasi implementasi berdasarkan dokumentasi resmi framework/library dan sumber otoritatif. |
+     | **Kualitas & Rekayasa Kode** | `test-driven-development` | Menerapkan siklus Red-Green-Refactor, membuat unit/integration test sebelum/saat perbaikan bug atau fitur baru. |
+     | | `code-review-and-quality` | Review multi-dimensi (kebenaran, arsitektur, keamanan, performa) sebelum perubahan digabungkan. |
+     | | `code-simplification` | Refaktor kode kompleks menjadi lebih bersih, ringkas, dan mudah dipelihara tanpa mengubah fungsionalitas. |
+     | | `incremental-implementation` | Memecah perubahan besar yang menyentuh banyak file menjadi langkah-langkah bounded dan aman. |
+     | | `debugging-and-error-recovery`| Investigasi akar masalah secara sistematis saat ada bug, panic, atau test failure. |
+     | **Reverse Engineering & Biner** | `reverse-engineer-anything` | Analisis mendalam executable biner (PE/ELF/Mach-O), dekompilasi, APK, ADB Android, dan protokol jaringan. |
+     | **Keamanan & Performa** | `security-and-hardening` | Audit dan proteksi terhadap injection, validasi input mutasi, session, enkripsi, dan data sensitif. |
+     | | `security-audit` | Evaluasi kerentanan keamanan kode, dependency, dan kepatuhan privasi data. |
+     | | `performance-optimization` | Mengatasi bottleneck query (N+1), optimasi database, caching, memory profiling, dan latency. |
+     | | `observability-and-instrumentation` | Penambahan log terstruktur, metriks telemetri, tracing, dan audit trail operasional. |
+     | **Antarmuka & Browser** | `frontend-ui-engineering` | Membangun UI/UX desktop (egui) dan web yang bersih, responsif, aksesibel, dan bebas visual bloat. |
+     | | `browser-testing-with-devtools` | Pengujian visual, console logging, profil network, dan validasi DOM via Chrome DevTools. |
+     | **Ekosistem Ponytail (YAGNI)** | `ponytail` | Menerapkan solusi paling minimalis, ringkas, mengutamakan stdlib/fitur bawaan platform, dan menolak over-engineering. |
+     | | `ponytail-review` | Review diff khusus mendeteksi abstraksi berlebih, boilerplate, dan dependency yang tidak perlu. |
+     | | `ponytail-audit` | Audit seluruh basis kode untuk menemukan akumulasi kompleksitas yang bisa dihapus. |
+     | | `ponytail-debt` | Melacak dan merekap catatan utang teknis deliberate shortcuts (`ponytail: ...`). |
+     | | `ponytail-gain` | Menampilkan ringkasan metrik dampak penyederhanaan kode (baris berkurang, performa naik). |
+     | | `ponytail-help` | Panduan referensi cepat perintah dan level intensitas ponytail. |
+     | **Alur Kerja & Operasional** | `git-workflow-and-versioning`| Praktik git branching, atomic commit, release semantic versioning, dan penyelesaian konflik. |
+     | | `ci-cd-and-automation` | Setup workflow otomatisasi build, pipeline CI/CD, dan quality gates. |
+     | | `shipping-and-launch` | Checklist kesiapan rilis produksi, rollback plan, dan verifikasi deployment. |
+     | | `deprecation-and-migration` | Strategi transisi aman saat mengganti atau menghapus API/komponen lama. |
+     | | `planning-and-task-breakdown` | Dekomposisi tugas besar menjadi langkah-langkah bounded terurut yang mudah dieksekusi. |
+     | | `context-engineering` | Optimasi konteks sesi, aturan kerja, dan eliminasi degradasi penalaran agent. |
+     | | `using-agent-skills` | Penemuan dan orkestrasi pemilihan skill yang tepat untuk setiap jenis kebutuhan. |
+     | **Klarifikasi & Eksplorasi** | `interview-me` | Wawancara terstruktur satu per satu untuk menggali kebutuhan inti user yang belum terspesifikasi. |
+     | | `idea-refine` | Mengembangkan ide mentah menjadi konsep teknis yang tajam dan tervalidasi. |
+     | | `doubt-driven-development` | Adversarial review independen untuk memverifikasi keputusan teknis berisiko tinggi. |
+     | | `documentation-and-adrs` | Pencatatan keputusan arsitektural penting (ADR) dan dokumentasi kontekstual sistem. |
+
 
 2. **Strict Adherence to Senior Architecture:**
    - Preserve 100% of the existing guidelines in `AGENTS.md`, `CLAUDE.md`, and `README.md`.

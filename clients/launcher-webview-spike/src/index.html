@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Launcher WebView Spike</title>
+  <style>
+    :root {
+      --bg: #0F1014;
+      --card-bg: #191B23;
+      --border: #2A2D3A;
+      --ink: #F5F5F2;
+      --ink-muted: #B4B8C8;
+      --accent: #3B82F6;
+      --approve: #10804C;
+      --reject: #F87171;
+      --pending: #FBBF24;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      padding: 16px;
+      user-select: none;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .status-badge {
+      font-size: 11px;
+      background: #1C2333;
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    .test-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .test-box label {
+      display: block;
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-bottom: 6px;
+    }
+    .test-box input {
+      width: 100%;
+      background: #101216;
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      outline: none;
+    }
+    .test-box input:focus {
+      border-color: var(--accent);
+    }
+    .device-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .device-card.pending {
+      border-color: var(--pending);
+      background: #1E1A14;
+    }
+    .device-info h4 {
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .device-meta {
+      font-size: 12px;
+      color: var(--ink-muted);
+      font-family: monospace;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .btn-approve {
+      background: var(--approve);
+      border: none;
+      color: #fff;
+    }
+    .btn-approve:hover {
+      background: #14995B;
+    }
+    .btn-reject {
+      background: transparent;
+      border: 1px solid var(--reject);
+      color: var(--reject);
+    }
+    .btn-reject:hover {
+      background: rgba(248, 113, 113, 0.15);
+    }
+    .footer-status {
+      margin-top: 16px;
+      font-size: 11px;
+      color: var(--ink-muted);
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">HTML/CSS WEBVIEW SPIKE (wry)</div>
+    <div class="status-badge" id="ipc-badge">IPC: Aktif</div>
+  </div>
+
+  <div class="test-box">
+    <label for="focus-input">Uji Fokus Keyboard & Ketik (Butir c):</label>
+    <input type="text" id="focus-input" placeholder="Ketik teks di sini untuk menguji fokus keyboard webview..." />
+  </div>
+
+  <div id="device-container">
+    <p style="color: var(--ink-muted); font-size: 12px;">Memuat data perangkat dari Rust launcher-core...</p>
+  </div>
+
+  <div class="footer-status" id="footer-status">
+    Status: Menunggu respon IPC awal...
+  </div>
+
+  <script>
+    function sendIpc(cmd, id) {
+      const payload = { cmd: cmd };
+      if (id) payload.id = id;
+      
+      const statusEl = document.getElementById('footer-status');
+      statusEl.textContent = "Mengirim perintah IPC: " + JSON.stringify(payload);
+      
+      if (window.ipc) {
+        window.ipc.postMessage(JSON.stringify(payload));
+      } else {
+        console.error("window.ipc tidak tersedia");
+      }
+    }
+
+    window.renderDevices = function(devices) {
+      const container = document.getElementById('device-container');
+      const statusEl = document.getElementById('footer-status');
+      
+      if (!devices || devices.length === 0) {
+        container.innerHTML = '<p style="color: var(--ink-muted); font-size: 12px;">Tidak ada perangkat terdaftar di MockApiClient.</p>';
+        statusEl.textContent = "Status: Daftar kosong (0 perangkat)";
+        return;
+      }
+
+      let html = '';
+      devices.forEach(dev => {
+        const isPending = dev.status === 'PendingPairing';
+        const cardClass = isPending ? 'device-card pending' : 'device-card';
+        const statusText = isPending ? '[MENUNGGU]' : (dev.status === 'Online' ? '[ONLINE]' : '[OFFLINE]');
+        
+        html += `
+          <div class="${cardClass}">
+            <div class="device-info">
+              <h4>${dev.hostname} <span style="font-size: 11px; color: ${isPending ? 'var(--pending)' : '#34D399'}">${statusText}</span></h4>
+              <div class="device-meta">IP: ${dev.ip_address} &bull; MAC: ${dev.mac_address} &bull; Mesin: ${dev.engine_version}</div>
+            </div>
+            <div class="actions">
+              ${isPending ? `<button class="btn-approve" onclick="sendIpc('approve', '${dev.id}')">Setujui</button>` : ''}
+              <button class="btn-reject" onclick="sendIpc('reject', '${dev.id}')">Tolak</button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      statusEl.textContent = "Status: Daftar diperbarui dari Rust (" + devices.length + " perangkat)";
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Send initial request to fetch devices
+      setTimeout(() => {
+        sendIpc('list_devices');
+      }, 50);
+    });
+  </script>
+</body>
+</html>

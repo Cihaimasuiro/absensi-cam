@@ -1,7 +1,7 @@
 mod theme;
 
 use std::time::{Duration, Instant};
-use eframe::egui::{self, Color32, FontFamily, FontId, RichText, Vec2};
+use eframe::egui::{self, Color32, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, Vec2};
 use launcher_core::{
     format_relative_time_id, ApiClient, DeviceStatus, EdgeDevice, FilterTab, MockApiClient,
 };
@@ -11,16 +11,20 @@ const LATEST_ENGINE_VERSION: &str = "v0.3.0-rust";
 struct LauncherApp {
     client: MockApiClient,
     server_url: String,
+    server_connected: bool,
     search_query: String,
     active_tab: FilterTab,
     devices: Vec<EdgeDevice>,
-    selected_device_id: Option<String>,
     is_scanning: bool,
     scan_started_at: Option<Instant>,
     last_scanned_time: String,
     notification: Option<(String, Instant)>,
     rename_device_id: Option<String>,
     rename_input: String,
+    selected_building: String,
+    buildings: Vec<String>,
+    active_menu_device_id: Option<String>,
+    simulated_server_error: bool,
 }
 
 impl LauncherApp {
@@ -31,22 +35,30 @@ impl LauncherApp {
 
         Self {
             client,
-            server_url: "http://192.168.1.100:8000".to_string(),
+            server_url: "http://192.168.1.4:8000".to_string(),
+            server_connected: true,
             search_query: String::new(),
             active_tab: FilterTab::All,
+            devices,
             is_scanning: false,
             scan_started_at: None,
-            last_scanned_time: "10:42 WIB".to_string(),
+            last_scanned_time: "10:42".to_string(),
             notification: None,
             rename_device_id: None,
             rename_input: String::new(),
-            devices,
-            selected_device_id: None,
+            selected_building: "Gedung Utama".to_string(),
+            buildings: vec![
+                "Gedung Utama".to_string(),
+                "Gedung Lab".to_string(),
+                "Gedung Timur".to_string(),
+            ],
+            active_menu_device_id: None,
+            simulated_server_error: false,
         }
     }
 
-    fn filtered_devices(&self) -> Vec<&EdgeDevice> {
-        let mut list: Vec<&EdgeDevice> = self
+    fn filtered_devices(&self) -> Vec<EdgeDevice> {
+        let mut list: Vec<EdgeDevice> = self
             .devices
             .iter()
             .filter(|d| match self.active_tab {
@@ -70,9 +82,10 @@ impl LauncherApp {
                             .contains(&q)
                 }
             })
+            .cloned()
             .collect();
 
-        // Hierarchy rule: Pending devices ALWAYS float to the top
+        // Hierarchy rule: pending devices float to top
         list.sort_by_key(|d| match d.status {
             DeviceStatus::PendingPairing => 0,
             DeviceStatus::Online => 1,
@@ -82,6 +95,109 @@ impl LauncherApp {
         list
     }
 }
+
+// -----------------------------------------------------------------------------
+// Custom UI Helpers (Painter-based components as requested)
+// -----------------------------------------------------------------------------
+
+/// Gambar titik status 8px: online = penuh hijau, offline = cincin 2px merah
+fn draw_status_dot(ui: &mut egui::Ui, is_online: bool) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(10.0, 10.0), Sense::hover());
+    let center = rect.center();
+    let painter = ui.painter();
+    if is_online {
+        painter.circle_filled(center, 4.0, theme::HIJAU_ONLINE);
+    } else {
+        painter.circle_stroke(center, 4.0, Stroke::new(2.0, theme::MERAH_OFFLINE));
+    }
+}
+
+/// Tombol tiga titik digambar dengan painter (circle_filled), TANPA glif teks
+fn draw_three_dots_button(ui: &mut egui::Ui) -> Response {
+    let size = Vec2::new(36.0, 36.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let is_hovered = response.hovered();
+        let is_active = response.is_pointer_button_down_on();
+
+        let border_stroke = if is_active {
+            Stroke::new(1.0, theme::TEKS)
+        } else if is_hovered {
+            Stroke::new(1.0, theme::TEKS_REDUP)
+        } else {
+            Stroke::new(1.0, theme::OUTLINE_TOMBOL)
+        };
+
+        let bg_color = if is_hovered || is_active {
+            theme::PERMUKAAN
+        } else {
+            Color32::TRANSPARENT
+        };
+
+        painter.rect(rect, theme::RADIUS_SM, bg_color, border_stroke, StrokeKind::Inside);
+
+        let dot_color = if is_hovered || is_active {
+            theme::TEKS
+        } else {
+            theme::TEKS_REDUP
+        };
+
+        let center = rect.center();
+        painter.circle_filled(Pos2::new(center.x, center.y - 5.0), 1.5, dot_color);
+        painter.circle_filled(center, 1.5, dot_color);
+        painter.circle_filled(Pos2::new(center.x, center.y + 5.0), 1.5, dot_color);
+    }
+    response
+}
+
+/// Tab sebagai teks dengan garis bawah 2px untuk yang aktif, jumlah berwarna redup
+fn draw_tab_item(ui: &mut egui::Ui, label: &str, count: usize, is_active: bool) -> bool {
+    let text_font = theme::font_body();
+    let count_font = theme::font_caption();
+
+    let text_color = if is_active {
+        theme::TEKS
+    } else {
+        theme::TEKS_REDUP
+    };
+    let count_color = theme::TEKS_REDUP;
+
+    let galley_label = ui.painter().layout_no_wrap(label.to_string(), text_font, text_color);
+    let galley_count = ui.painter().layout_no_wrap(format!(" {count}"), count_font, count_color);
+
+    let total_width = galley_label.size().x + galley_count.size().x;
+    let height = 30.0;
+
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(total_width, height), Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let y_pos = rect.top() + (height - galley_label.size().y) / 2.0 - 2.0;
+        let label_pos = Pos2::new(rect.left(), y_pos);
+        painter.galley(label_pos, galley_label, text_color);
+
+        let count_pos = Pos2::new(label_pos.x + rect.width() - galley_count.size().x, y_pos + 1.0);
+        painter.galley(count_pos, galley_count, count_color);
+
+        // Garis bawah 2px untuk yang aktif
+        if is_active {
+            painter.line_segment(
+                [
+                    Pos2::new(rect.left(), rect.bottom() - 1.0),
+                    Pos2::new(rect.right(), rect.bottom() - 1.0),
+                ],
+                Stroke::new(2.0, theme::TEKS),
+            );
+        }
+    }
+
+    response.clicked()
+}
+
+// -----------------------------------------------------------------------------
+// eframe App Implementation
+// -----------------------------------------------------------------------------
 
 impl eframe::App for LauncherApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -95,80 +211,292 @@ impl eframe::App for LauncherApp {
                     self.devices = self.client.list_devices().unwrap_or_default();
                     let count = self.devices.len();
                     self.notification = Some((
-                        format!("Pindai LAN selesai: {count} perangkat terdeteksi"),
+                        format!("Pindai jaringan selesai: {count} perangkat terdeteksi"),
                         Instant::now(),
                     ));
                 } else {
-                    ui.ctx().request_repaint_after(Duration::from_millis(100));
+                    ui.ctx().request_repaint_after(Duration::from_millis(60));
                 }
             }
         }
 
-        // Enforce 20px perimeter padding around entire application window
-        egui::Frame::new()
-            .fill(theme::BG)
-            .inner_margin(egui::Margin::symmetric(20, 16))
-            .show(ui, |ui| {
-                // 1. Header Top Bar
-                ui.horizontal(|ui| {
-                    let display_font = FontId::new(16.0, FontFamily::Name("display".into()));
-                    ui.label(
-                        RichText::new("ABSENSI-CAM")
-                            .font(display_font)
-                            .color(theme::INK),
-                    );
+        let mut approved_id: Option<String> = None;
+        let mut rejected_id: Option<String> = None;
+        let mut forget_id: Option<String> = None;
+        let mut copy_notification: Option<String> = None;
+        let mut trigger_rename: Option<(String, String)> = None;
 
-                    // Honest simulation tag
+        // Padding halaman: 40 (kiri-kanan) x 28 (atas-bawah)
+        egui::Frame::new()
+            .fill(theme::LATAR)
+            .inner_margin(egui::Margin {
+                left: 40,
+                right: 40,
+                top: 28,
+                bottom: 28,
+            })
+            .show(ui, |ui| {
+                // -----------------------------------------------------------------
+                // 1. Header
+                // judul "Perangkat" 22px semibold + teks redup "Absensi-Cam · armada edge";
+                // kanan: titik status server + teks, dan tombol outline "Pindai jaringan"
+                // -----------------------------------------------------------------
+                ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(" DATA SIMULASI ")
-                            .font(FontId::monospace(10.0))
-                            .strong()
-                            .color(theme::PENDING_FG)
-                            .background_color(theme::PENDING_BG),
+                        RichText::new("Perangkat")
+                            .font(theme::font_title())
+                            .color(theme::TEKS),
+                    );
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new("Absensi-Cam · armada edge")
+                            .font(theme::font_body())
+                            .color(theme::TEKS_REDUP),
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Scan LAN button
+                        // Tombol outline "Pindai jaringan" (tinggi 36, radius 6)
                         let scan_text = if self.is_scanning {
                             "Memindai..."
                         } else {
-                            "Pindai LAN"
+                            "Pindai jaringan"
                         };
-                        let scan_btn = egui::Button::new(
-                            RichText::new(scan_text).font(FontId::proportional(12.0)),
-                        )
-                        .min_size(Vec2::new(96.0, 30.0));
 
-                        if ui.add(scan_btn).clicked() && !self.is_scanning {
+                        let scan_btn = egui::Button::new(
+                            RichText::new(scan_text)
+                                .font(theme::font_body())
+                                .color(if self.is_scanning {
+                                    theme::TEKS_REDUP
+                                } else {
+                                    theme::TEKS
+                                }),
+                        )
+                        .min_size(Vec2::new(130.0, 36.0))
+                        .corner_radius(theme::RADIUS_SM);
+
+                        let btn_resp = ui.add_enabled(!self.is_scanning, scan_btn);
+                        if btn_resp.clicked() && !self.is_scanning {
                             self.is_scanning = true;
                             self.scan_started_at = Some(Instant::now());
-                            self.notification = Some((
-                                "Memindai subnet LAN 192.168.1.0/24...".to_string(),
-                                Instant::now(),
-                            ));
                         }
 
-                        // Consistent label: "Server:"
-                        ui.label(
-                            RichText::new(format!("Server: {}", self.server_url))
-                                .font(FontId::monospace(11.0))
-                                .color(theme::INK_MUTED),
-                        );
+                        ui.add_space(16.0);
+
+                        // Titik status server + teks
+                        ui.horizontal(|ui| {
+                            draw_status_dot(ui, self.server_connected && !self.simulated_server_error);
+                            ui.add_space(6.0);
+                            let server_text = if self.server_connected && !self.simulated_server_error {
+                                format!("server: {}", self.server_url)
+                            } else {
+                                "server tidak terjangkau".to_string()
+                            };
+                            ui.label(
+                                RichText::new(server_text)
+                                    .font(theme::font_caption())
+                                    .color(theme::TEKS_REDUP),
+                            );
+                        });
                     });
                 });
 
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(10.0);
+                // -----------------------------------------------------------------
+                // Keadaan: Banner Tipis (Memindai / Server Putus / Token Habis)
+                // -----------------------------------------------------------------
+                if self.is_scanning {
+                    ui.add_space(12.0);
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new("Memindai subnet LAN 192.168.1.0/24...")
+                                .font(theme::font_caption())
+                                .color(theme::TEKS_REDUP),
+                        );
+                        ui.add_space(4.0);
+                        let progress = if let Some(started) = self.scan_started_at {
+                            (started.elapsed().as_secs_f32() / 1.5).min(1.0)
+                        } else {
+                            0.0
+                        };
+                        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 2.0), Sense::hover());
+                        let painter = ui.painter();
+                        painter.rect_filled(rect, 0.0, theme::GARIS);
+                        let fill_rect = Rect::from_min_size(rect.min, Vec2::new(rect.width() * progress, 2.0));
+                        painter.rect_filled(fill_rect, 0.0, theme::AMBER);
+                    });
+                }
 
-                // 2. Filter Tabs & Search Bar (Uniform 30px height, High-Contrast Active Tab)
+                if self.simulated_server_error {
+                    ui.add_space(12.0);
+                    egui::Frame::new()
+                        .fill(theme::PERMUKAAN)
+                        .stroke(Stroke::new(1.0, theme::MERAH_OFFLINE))
+                        .corner_radius(theme::RADIUS_SM)
+                        .inner_margin(egui::Margin::symmetric(14, 10))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("Server tidak terjangkau atau token sesi telah habis.")
+                                        .font(theme::font_body())
+                                        .color(theme::TEKS),
+                                );
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.button(RichText::new("Ubah URL").font(theme::font_caption())).clicked() {
+                                        // Aksi ubah URL
+                                    }
+                                    if ui.button(RichText::new("Coba lagi").font(theme::font_caption())).clicked() {
+                                        self.simulated_server_error = false;
+                                    }
+                                });
+                            });
+                        });
+                }
+
+                // -----------------------------------------------------------------
+                // Jarak antar bagian: 24px
+                // -----------------------------------------------------------------
+                ui.add_space(24.0);
+
+                // -----------------------------------------------------------------
+                // 2. Blok "Menunggu persetujuan"
+                // Muncul hanya jika ada; bila lebih dari satu, tumpuk.
+                // Bingkai 1px amber, radius 6, latar #1B1912, tanpa garis tebal di satu sisi.
+                // -----------------------------------------------------------------
+                let pending_devices: Vec<EdgeDevice> = self
+                    .devices
+                    .iter()
+                    .filter(|d| d.status == DeviceStatus::PendingPairing)
+                    .cloned()
+                    .collect();
+
+                for dev in &pending_devices {
+                    egui::Frame::new()
+                        .fill(theme::LATAR_MENUNGGU)
+                        .stroke(Stroke::new(1.0, theme::AMBER))
+                        .corner_radius(theme::RADIUS_SM)
+                        .inner_margin(egui::Margin::symmetric(20, 16))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                // Kolom Kiri: Detail teknis perangkat
+                                ui.vertical(|ui| {
+                                    // Nama perangkat 18px semibold
+                                    ui.label(
+                                        RichText::new(&dev.hostname)
+                                            .font(theme::font_subheading())
+                                            .color(theme::TEKS),
+                                    );
+                                    ui.add_space(6.0);
+
+                                    // MAC 20px mono + label "cocokkan dengan stiker"
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(&dev.mac_address)
+                                                .font(theme::font_mac_large())
+                                                .color(theme::TEKS),
+                                        );
+                                        ui.add_space(8.0);
+                                        ui.label(
+                                            RichText::new("(cocokkan dengan stiker)")
+                                                .font(theme::font_caption())
+                                                .color(theme::TEKS_REDUP),
+                                        );
+                                    });
+
+                                    ui.add_space(4.0);
+
+                                    // IP terlihat server (BUKAN dilaporkan perangkat) & kode
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(format!("IP terlihat server: {}", dev.ip_address))
+                                                .font(theme::font_technical())
+                                                .color(theme::TEKS_REDUP),
+                                        );
+                                        ui.add_space(12.0);
+                                        if let Some(ref code) = dev.pairing_code {
+                                            ui.label(
+                                                RichText::new(format!("kode: {code}"))
+                                                    .font(theme::font_technical())
+                                                    .color(theme::AMBER),
+                                            );
+                                        }
+                                    });
+
+                                    ui.add_space(4.0);
+
+                                    // "Meminta 12 detik lalu · kedaluwarsa 9:48"
+                                    let rel_time = format_relative_time_id(dev.last_seen_sec);
+                                    ui.label(
+                                        RichText::new(format!("Meminta {rel_time} · kedaluwarsa 09:48"))
+                                            .font(theme::font_caption())
+                                            .color(theme::TEKS_REDUP),
+                                    );
+                                });
+
+                                // Kolom Kanan: Pilihan Gedung, Tombol Padat Amber "Setujui", Tombol Teks Merah "Tolak"
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    // Tombol teks merah "Tolak"
+                                    let reject_btn = egui::Button::new(
+                                        RichText::new("Tolak")
+                                            .font(theme::font_body())
+                                            .color(theme::MERAH_OFFLINE),
+                                    )
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(Stroke::NONE);
+
+                                    if ui.add(reject_btn).clicked() {
+                                        rejected_id = Some(dev.id.clone());
+                                    }
+
+                                    ui.add_space(16.0);
+
+                                    // SATU-SATUNYA tombol padat di layar: "Setujui" amber #E8B449 dengan teks #1A1405
+                                    let approve_btn = egui::Button::new(
+                                        RichText::new("Setujui")
+                                            .font(theme::font_body_medium())
+                                            .color(theme::TEKS_DI_ATAS_AMBER),
+                                    )
+                                    .fill(theme::AMBER)
+                                    .stroke(Stroke::NONE)
+                                    .corner_radius(theme::RADIUS_SM)
+                                    .min_size(Vec2::new(96.0, 36.0));
+
+                                    if ui.add(approve_btn).clicked() {
+                                        approved_id = Some(dev.id.clone());
+                                    }
+
+                                    ui.add_space(16.0);
+
+                                    // Pilihan Gedung (ComboBox)
+                                    egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
+                                        .selected_text(
+                                            RichText::new(&self.selected_building)
+                                                .font(theme::font_body())
+                                                .color(theme::TEKS),
+                                        )
+                                        .show_ui(ui, |ui| {
+                                            for b in &self.buildings {
+                                                ui.selectable_value(
+                                                    &mut self.selected_building,
+                                                    b.clone(),
+                                                    RichText::new(b).font(theme::font_body()),
+                                                );
+                                            }
+                                        });
+                                });
+                            });
+                        });
+
+                    ui.add_space(12.0);
+                }
+
+                if !pending_devices.is_empty() {
+                    ui.add_space(12.0);
+                }
+
+                // -----------------------------------------------------------------
+                // 3. Tab sebagai teks dengan garis bawah 2px & Kolom Cari 260px di kanan
+                // -----------------------------------------------------------------
                 ui.horizontal(|ui| {
                     let all_cnt = self.devices.len();
-                    let pending_cnt = self
-                        .devices
-                        .iter()
-                        .filter(|d| d.status == DeviceStatus::PendingPairing)
-                        .count();
                     let online_cnt = self
                         .devices
                         .iter()
@@ -179,79 +507,71 @@ impl eframe::App for LauncherApp {
                         .iter()
                         .filter(|d| d.status == DeviceStatus::Offline)
                         .count();
+                    let pending_cnt = self
+                        .devices
+                        .iter()
+                        .filter(|d| d.status == DeviceStatus::PendingPairing)
+                        .count();
 
-                    let tabs = [
-                        (FilterTab::All, format!("Semua ({all_cnt})")),
-                        (FilterTab::Pending, format!("Menunggu ({pending_cnt})")),
-                        (FilterTab::Online, format!("Online ({online_cnt})")),
-                        (FilterTab::Offline, format!("Offline ({offline_cnt})")),
-                    ];
+                    if draw_tab_item(ui, "semua", all_cnt, self.active_tab == FilterTab::All) {
+                        self.active_tab = FilterTab::All;
+                    }
+                    ui.add_space(20.0);
 
-                    for (tab, label) in tabs {
-                        let is_active = self.active_tab == tab;
-                        let text = RichText::new(label)
-                            .font(FontId::monospace(11.0))
-                            .strong()
-                            .color(if is_active {
-                                theme::TAB_ACTIVE_FG
-                            } else {
-                                theme::INK_MUTED
-                            });
+                    if draw_tab_item(ui, "online", online_cnt, self.active_tab == FilterTab::Online) {
+                        self.active_tab = FilterTab::Online;
+                    }
+                    ui.add_space(20.0);
 
-                        let btn = egui::Button::new(text)
-                            .fill(if is_active {
-                                theme::TAB_ACTIVE_BG
-                            } else {
-                                Color32::TRANSPARENT
-                            })
-                            .stroke(if is_active {
-                                egui::Stroke::new(1.0, theme::TAB_ACTIVE_BG)
-                            } else {
-                                theme::hairline()
-                            })
-                            .corner_radius(theme::RADIUS)
-                            .min_size(Vec2::new(94.0, 30.0));
+                    if draw_tab_item(ui, "offline", offline_cnt, self.active_tab == FilterTab::Offline) {
+                        self.active_tab = FilterTab::Offline;
+                    }
 
-                        if ui.add(btn).clicked() {
-                            self.active_tab = tab;
+                    if pending_cnt > 0 {
+                        ui.add_space(20.0);
+                        if draw_tab_item(ui, "menunggu", pending_cnt, self.active_tab == FilterTab::Pending) {
+                            self.active_tab = FilterTab::Pending;
                         }
                     }
 
-                    // Search input matching 30px height
+                    // Kolom cari 260px di kanan (tinggi 36, radius 6)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.search_query)
-                                .hint_text("Cari hostname, IP, MAC...")
-                                .font(FontId::proportional(12.0))
-                                .desired_width(260.0)
-                                .min_size(Vec2::new(0.0, 30.0))
-                                .margin(egui::Margin::symmetric(10, 7)),
-                        );
+                        let search_edit = egui::TextEdit::singleline(&mut self.search_query)
+                            .hint_text("cari perangkat, IP, MAC...")
+                            .font(theme::font_body())
+                            .desired_width(260.0)
+                            .min_size(Vec2::new(260.0, 36.0))
+                            .margin(egui::Margin::symmetric(12, 8));
+
+                        ui.add(search_edit);
                     });
                 });
 
-                ui.add_space(12.0);
+                // Jarak antar bagian: 24px
+                ui.add_space(24.0);
 
-                // Rename Modal Dialog (if triggered from options menu)
+                // -----------------------------------------------------------------
+                // Modal Rename (jika dipicu dari menu tiga titik)
+                // -----------------------------------------------------------------
                 if let Some(ref dev_id) = self.rename_device_id.clone() {
-                    egui::Frame::group(ui.style())
-                        .fill(theme::PANEL)
-                        .stroke(egui::Stroke::new(1.0, theme::ACCENT))
+                    egui::Frame::new()
+                        .fill(theme::PERMUKAAN)
+                        .stroke(Stroke::new(1.0, theme::GARIS))
                         .inner_margin(egui::Margin::symmetric(16, 12))
-                        .corner_radius(theme::RADIUS)
+                        .corner_radius(theme::RADIUS_SM)
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("Ubah Nama Perangkat:")
-                                        .font(FontId::proportional(12.0))
-                                        .strong()
-                                        .color(theme::INK),
+                                    RichText::new("Ubah nama perangkat:")
+                                        .font(theme::font_body())
+                                        .color(theme::TEKS),
                                 );
                                 ui.add(
                                     egui::TextEdit::singleline(&mut self.rename_input)
-                                        .desired_width(220.0),
+                                        .desired_width(220.0)
+                                        .font(theme::font_body()),
                                 );
-                                if ui.button("Simpan").clicked() {
+                                if ui.button(RichText::new("Simpan").font(theme::font_body())).clicked() {
                                     if self.client.rename_device(dev_id, &self.rename_input).is_ok() {
                                         if let Some(dev) = self.devices.iter_mut().find(|d| &d.id == dev_id) {
                                             dev.hostname = self.rename_input.clone();
@@ -264,111 +584,93 @@ impl eframe::App for LauncherApp {
                                     self.rename_device_id = None;
                                     self.rename_input.clear();
                                 }
-                                if ui.button("Batal").clicked() {
+                                if ui.button(RichText::new("Batal").font(theme::font_body())).clicked() {
                                     self.rename_device_id = None;
                                     self.rename_input.clear();
                                 }
                             });
                         });
-                    ui.add_space(8.0);
+                    ui.add_space(16.0);
                 }
 
-                // 3. Device Cards Scroll Area or Clean Empty State
+                // -----------------------------------------------------------------
+                // 4. Tabel Tanpa Kartu
+                // Kolom: Status 110 | Perangkat 1.4fr | Alamat 1.4fr | Engine 110 | Suhu CPU 90 | Terakhir 110 | Aksi 190, jarak kolom 16
+                // Header kolom: huruf kecil biasa, 12px, redup (bukan kapital berjarak)
+                // Baris: padding vertikal 16, hanya garis pemisah 1px antar baris
+                // -----------------------------------------------------------------
                 let filtered = self.filtered_devices();
-                let mut new_selection: Option<String> = None;
-                let mut approved_id: Option<String> = None;
-                let mut rejected_id: Option<String> = None;
-                let mut forget_id: Option<String> = None;
-                let mut copy_notification: Option<String> = None;
-                let mut trigger_rename: Option<(String, String)> = None;
 
                 if self.devices.is_empty() {
-                    // Truly empty fleet state
+                    // Daftar kosong total (0 perangkat) -> Tampilkan 3 langkah singkat
                     ui.vertical(|ui| {
-                        ui.add_space(30.0);
+                        ui.add_space(20.0);
                         ui.label(
-                            RichText::new("Belum Ada Perangkat Terdaftar")
-                                .font(FontId::proportional(16.0))
-                                .strong()
-                                .color(theme::INK),
+                            RichText::new("belum ada perangkat terdaftar")
+                                .font(theme::font_subheading())
+                                .color(theme::TEKS),
                         );
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         ui.label(
-                            RichText::new("Tidak ditemukan perangkat edge Orange Pi di jaringan lokal.")
-                                .font(FontId::proportional(12.0))
-                                .color(theme::INK_MUTED),
+                            RichText::new("Tidak ditemukan perangkat edge Orange Pi di jaringan lokal. Lakukan pemeriksaan singkat berikut:")
+                                .font(theme::font_body())
+                                .color(theme::TEKS_REDUP),
                         );
-                        ui.add_space(12.0);
+                        ui.add_space(16.0);
 
-                        egui::Frame::group(ui.style())
-                            .fill(theme::PANEL)
-                            .stroke(theme::hairline())
-                            .inner_margin(egui::Margin::symmetric(16, 12))
-                            .corner_radius(theme::RADIUS)
+                        egui::Frame::new()
+                            .fill(theme::PERMUKAAN)
+                            .stroke(Stroke::new(1.0, theme::GARIS))
+                            .corner_radius(theme::RADIUS_SM)
+                            .inner_margin(egui::Margin::symmetric(20, 16))
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
                                     ui.label(
-                                        RichText::new("Panduan Pemeriksaan Teknis:")
-                                            .font(FontId::proportional(12.0))
-                                            .strong()
-                                            .color(theme::INK),
+                                        RichText::new("1. Periksa sambungan kabel LAN dan pastikan lampu link switch menyala.")
+                                            .font(theme::font_body())
+                                            .color(theme::TEKS),
                                     );
-                                    ui.add_space(4.0);
+                                    ui.add_space(6.0);
                                     ui.label(
-                                        RichText::new("• Pastikan kabel Ethernet Orange Pi terhubung dan LED link aktif.")
-                                            .font(FontId::proportional(11.0))
-                                            .color(theme::INK_MUTED),
+                                        RichText::new("2. Pastikan service smart-absensi berjalan aktif di perangkat edge.")
+                                            .font(theme::font_body())
+                                            .color(theme::TEKS),
                                     );
+                                    ui.add_space(6.0);
                                     ui.label(
-                                        RichText::new("• Periksa status daemon: systemctl status smart-absensi-engine")
-                                            .font(FontId::monospace(11.0))
-                                            .color(theme::INK_MUTED),
-                                    );
-                                    ui.label(
-                                        RichText::new("• Pastikan IP perangkat berada pada subnet yang sama (192.168.1.0/24).")
-                                            .font(FontId::proportional(11.0))
-                                            .color(theme::INK_MUTED),
+                                        RichText::new("3. Verifikasi subnet jaringan berada pada jangkauan subnet yang sama (192.168.1.0/24).")
+                                            .font(theme::font_body())
+                                            .color(theme::TEKS),
                                     );
                                 });
                             });
 
-                        ui.add_space(12.0);
+                        ui.add_space(16.0);
                         if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("Pindai Ulang LAN").font(FontId::proportional(12.0)),
-                                )
-                                .min_size(Vec2::new(140.0, 30.0)),
-                            )
+                            .button(RichText::new("Pindai ulang jaringan").font(theme::font_body()))
                             .clicked()
                         {
                             self.devices = self.client.list_devices().unwrap_or_default();
                         }
                     });
                 } else if filtered.is_empty() {
-                    // Filter or search has no matches (fleet is NOT empty)
+                    // Filter kosong (ada perangkat tetapi pencarian / tab tidak cocok)
                     ui.vertical(|ui| {
-                        ui.add_space(30.0);
+                        ui.add_space(20.0);
                         ui.label(
-                            RichText::new("Tidak Ada Perangkat yang Cocok")
-                                .font(FontId::proportional(15.0))
-                                .strong()
-                                .color(theme::INK),
+                            RichText::new("tidak ada perangkat yang cocok")
+                                .font(theme::font_subheading())
+                                .color(theme::TEKS),
                         );
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         ui.label(
-                            RichText::new("Tidak ada perangkat yang sesuai dengan filter atau kata kunci saat ini.")
-                                .font(FontId::proportional(12.0))
-                                .color(theme::INK_MUTED),
+                            RichText::new("Tidak ditemukan perangkat yang memenuhi filter atau kata kunci pencarian.")
+                                .font(theme::font_body())
+                                .color(theme::TEKS_REDUP),
                         );
-                        ui.add_space(10.0);
+                        ui.add_space(12.0);
                         if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("Reset Filter").font(FontId::proportional(12.0)),
-                                )
-                                .min_size(Vec2::new(110.0, 28.0)),
-                            )
+                            .button(RichText::new("Reset filter pencarian").font(theme::font_body()))
                             .clicked()
                         {
                             self.active_tab = FilterTab::All;
@@ -376,423 +678,390 @@ impl eframe::App for LauncherApp {
                         }
                     });
                 } else {
-                    let current_selected = self.selected_device_id.clone();
+                    // Hitung lebar proporsional 1.4fr
+                    let col_gap = 16.0;
+                    let fixed_width_sum = 110.0 + 110.0 + 90.0 + 110.0 + 190.0 + (6.0 * col_gap);
+                    let available_width = ui.available_width();
+                    let fr_avail = (available_width - fixed_width_sum).max(280.0);
+                    let col_perangkat = fr_avail * 0.5;
+                    let col_alamat = fr_avail * 0.5;
+
+                    let widths = [
+                        110.0,         // Status
+                        col_perangkat, // Perangkat
+                        col_alamat,    // Alamat
+                        110.0,         // Engine
+                        90.0,          // Suhu CPU
+                        110.0,         // Terakhir
+                        190.0,         // Aksi
+                    ];
+
+                    // Header Kolom: huruf kecil biasa, 12px, redup (bukan kapital berjarak)
+                    let headers = [
+                        "status",
+                        "perangkat",
+                        "alamat",
+                        "engine",
+                        "suhu cpu",
+                        "terakhir",
+                        "aksi",
+                    ];
+
+                    ui.horizontal(|ui| {
+                        for (i, h) in headers.iter().enumerate() {
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(widths[i], 24.0),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        RichText::new(*h)
+                                            .font(theme::font_table_header())
+                                            .color(theme::TEKS_REDUP),
+                                    );
+                                },
+                            );
+                            if i < headers.len() - 1 {
+                                ui.add_space(col_gap);
+                            }
+                        }
+                    });
+
+                    // Garis pemisah header
+                    ui.add_space(4.0);
+                    let (sep_rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+                    ui.painter().rect_filled(sep_rect, 0.0, theme::PEMISAH_BARIS);
+                    ui.add_space(4.0);
+
+                    // Daftar Baris
                     egui::ScrollArea::vertical()
-                        .max_height(ui.available_height() - 44.0)
+                        .max_height(ui.available_height() - 40.0)
                         .show(ui, |ui| {
                             for dev in filtered {
-                                let is_selected = current_selected.as_deref() == Some(&dev.id);
-                                let is_pending = dev.status == DeviceStatus::PendingPairing;
                                 let is_offline = dev.status == DeviceStatus::Offline;
+                                let is_online = dev.status == DeviceStatus::Online;
                                 let is_outdated = dev.engine_version != LATEST_ENGINE_VERSION;
 
-                                // Card Surface Styling: Pending has warm amber border and warm background
-                                let card_fill = if is_selected {
-                                    Color32::from_rgb(32, 36, 48)
-                                } else if is_pending {
-                                    theme::CARD_PENDING_BG
-                                } else if is_offline {
-                                    Color32::from_rgb(20, 21, 26)
+                                // Offline rule: seluruh teks baris redup
+                                let text_color = if is_offline {
+                                    theme::TEKS_REDUP
                                 } else {
-                                    theme::CARD_BG
+                                    theme::TEKS
                                 };
 
-                                let card_stroke = if is_selected {
-                                    egui::Stroke::new(1.0, theme::ACCENT)
-                                } else if is_pending {
-                                    egui::Stroke::new(1.2, theme::PENDING_FG)
-                                } else {
-                                    theme::hairline()
-                                };
-
-                                egui::Frame::group(ui.style())
-                                    .fill(card_fill)
-                                    .stroke(card_stroke)
-                                    .inner_margin(egui::Margin::symmetric(16, 12))
-                                    .corner_radius(theme::RADIUS)
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            // Left Block: Identity & Admin Verification Focus
-                                            ui.vertical(|ui| {
-                                                ui.horizontal(|ui| {
-                                                    let host_color = if is_offline {
-                                                        theme::INK_MUTED
-                                                    } else {
-                                                        theme::INK
-                                                    };
-
-                                                    let host_btn = ui.selectable_label(
-                                                        is_selected,
-                                                        RichText::new(&dev.hostname)
-                                                            .font(FontId::proportional(14.0))
-                                                            .strong()
-                                                            .color(host_color),
-                                                    );
-                                                    if host_btn.clicked() {
-                                                        new_selection = Some(dev.id.clone());
-                                                    }
-
-                                                    // Status Chip (Amber STRICTLY reserved for MENUNGGU)
-                                                    let (badge_text, badge_color, badge_bg) = match dev.status {
-                                                        DeviceStatus::Online => (
-                                                            "ONLINE",
-                                                            theme::ONLINE_FG,
-                                                            theme::ONLINE_BG,
-                                                        ),
-                                                        DeviceStatus::Offline => (
-                                                            "OFFLINE",
-                                                            theme::OFFLINE_FG,
-                                                            theme::OFFLINE_BG,
-                                                        ),
-                                                        DeviceStatus::PendingPairing => (
-                                                            "MENUNGGU",
-                                                            theme::PENDING_FG,
-                                                            theme::PENDING_BG,
-                                                        ),
-                                                    };
-
-                                                    ui.label(
-                                                        RichText::new(format!(" {badge_text} "))
-                                                            .font(FontId::monospace(10.0))
-                                                            .strong()
-                                                            .color(badge_color)
-                                                            .background_color(badge_bg),
-                                                    );
-
-                                                    // Pairing Code sticker for pending cards
-                                                    if let Some(ref code) = dev.pairing_code {
-                                                        ui.label(
-                                                            RichText::new(format!(" KODE: {code} "))
-                                                                .font(FontId::monospace(10.0))
-                                                                .strong()
-                                                                .color(theme::PENDING_FG)
-                                                                .background_color(Color32::from_rgb(52, 40, 18)),
-                                                        );
-                                                    }
-
-                                                    // Outdated chip uses neutral slate outline (NOT amber!)
-                                                    if is_outdated {
-                                                        ui.label(
-                                                            RichText::new(" VERSI USANG ")
-                                                                .font(FontId::monospace(10.0))
-                                                                .strong()
-                                                                .color(theme::OUTDATED_FG)
-                                                                .background_color(theme::OUTDATED_BG),
-                                                        );
-                                                    }
-                                                });
-
-                                                ui.add_space(4.0);
-
-                                                // Monospace Details: Prominent MAC verification for Pending
-                                                ui.horizontal(|ui| {
-                                                    let detail_ink = if is_offline {
-                                                        theme::INK_DIM
-                                                    } else {
-                                                        theme::INK_MUTED
-                                                    };
-
-                                                    ui.label(
-                                                        RichText::new(format!("IP: {}", dev.ip_address))
-                                                            .font(FontId::monospace(11.0))
-                                                            .color(detail_ink),
-                                                    );
-
-                                                    ui.label(RichText::new("•").size(10.0).color(theme::INK_FAINT));
-
-                                                    // Admin Verification: High-contrast, larger MAC for Pending cards
-                                                    if is_pending {
-                                                        ui.label(
-                                                            RichText::new(format!("VERIFIKASI MAC: {}", dev.mac_address))
-                                                                .font(FontId::monospace(12.0))
-                                                                .strong()
-                                                                .color(theme::INK),
-                                                        );
-                                                    } else {
-                                                        ui.label(
-                                                            RichText::new(format!("MAC: {}", dev.mac_address))
-                                                                .font(FontId::monospace(11.0))
-                                                                .color(detail_ink),
-                                                        );
-                                                    }
-
-                                                    ui.label(RichText::new("•").size(10.0).color(theme::INK_FAINT));
-
-                                                    ui.label(
-                                                        RichText::new(format!("Mesin: {}", dev.engine_version))
-                                                            .font(FontId::monospace(11.0))
-                                                            .color(detail_ink),
-                                                        );
-                                                });
-                                            });
-
-                                            // Right Block: Fixed-width aligned Columns (Time | CPU | Actions)
-                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                // Column 3: Actions (Fixed 248px slot for pixel alignment)
-                                                ui.allocate_ui_with_layout(
-                                                    Vec2::new(248.0, 30.0),
-                                                    egui::Layout::right_to_left(egui::Align::Center),
-                                                    |ui| {
-                                                        // Context Menu "Opsi" in Outline style with scope
-                                                        ui.scope(|ui| {
-                                                            ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
-                                                            ui.visuals_mut().widgets.inactive.bg_stroke = theme::hairline();
-
-                                                            ui.menu_button(
-                                                                RichText::new("Opsi").font(FontId::proportional(12.0)),
-                                                                |ui| {
-                                                                    ui.set_min_width(140.0);
-                                                                    if ui.button("Salin Alamat IP").clicked() {
-                                                                        ui.ctx().copy_text(dev.ip_address.clone());
-                                                                        copy_notification = Some(format!(
-                                                                            "IP {} ({}) disalin ke clipboard",
-                                                                            dev.hostname, dev.ip_address
-                                                                        ));
-                                                                        ui.close();
-                                                                    }
-                                                                    if ui.button("Salin Alamat MAC").clicked() {
-                                                                        ui.ctx().copy_text(dev.mac_address.clone());
-                                                                        copy_notification = Some(format!(
-                                                                            "MAC {} ({}) disalin ke clipboard",
-                                                                            dev.hostname, dev.mac_address
-                                                                        ));
-                                                                        ui.close();
-                                                                    }
-                                                                    ui.separator();
-                                                                    if ui.button("Ubah Nama...").clicked() {
-                                                                        trigger_rename = Some((dev.id.clone(), dev.hostname.clone()));
-                                                                        ui.close();
-                                                                    }
-                                                                    if ui
-                                                                        .button(
-                                                                            RichText::new("Lupakan Perangkat")
-                                                                                .color(theme::OFFLINE_FG),
-                                                                        )
-                                                                        .clicked()
-                                                                    {
-                                                                        forget_id = Some(dev.id.clone());
-                                                                        ui.close();
-                                                                    }
-                                                                },
-                                                            );
-                                                        });
-
-                                                        // Clear spacing between Opsi and main action buttons
-                                                        ui.add_space(8.0);
-
-                                                        match dev.status {
-                                                            DeviceStatus::PendingPairing => {
-                                                                // Single Primary Button Rule: Approve is SOLID
-                                                                let approve_btn = egui::Button::new(
-                                                                    RichText::new("Setujui")
-                                                                        .font(FontId::proportional(12.0))
-                                                                        .strong()
-                                                                        .color(Color32::WHITE),
-                                                                )
-                                                                .fill(theme::SOLID_APPROVE_BG)
-                                                                .min_size(Vec2::new(84.0, 30.0));
-                                                                if ui.add(approve_btn).clicked() {
-                                                                    approved_id = Some(dev.id.clone());
-                                                                }
-
-                                                                // Security control: Reject button ("Tolak" - Outline)
-                                                                let reject_btn = egui::Button::new(
-                                                                    RichText::new("Tolak")
-                                                                        .font(FontId::proportional(12.0))
-                                                                        .color(theme::REJECT_FG),
-                                                                )
-                                                                .fill(Color32::TRANSPARENT)
-                                                                .stroke(egui::Stroke::new(1.0, theme::REJECT_FG))
-                                                                .min_size(Vec2::new(60.0, 30.0));
-                                                                if ui.add(reject_btn).clicked() {
-                                                                    rejected_id = Some(dev.id.clone());
-                                                                }
-                                                            }
-                                                            DeviceStatus::Online => {
-                                                                // Secondary action: Buka Stream (HTTP MJPEG port 5000)
-                                                                let stream_btn = egui::Button::new(
-                                                                    RichText::new("Buka Stream")
-                                                                        .font(FontId::proportional(12.0))
-                                                                        .color(theme::ACCENT),
-                                                                )
-                                                                .fill(Color32::TRANSPARENT)
-                                                                .stroke(egui::Stroke::new(1.0, theme::ACCENT))
-                                                                .min_size(Vec2::new(96.0, 30.0));
-                                                                if ui.add(stream_btn).clicked() {
-                                                                    copy_notification = Some(format!(
-                                                                        "Membuka stream {}: http://{}:5000/stream",
-                                                                        dev.hostname, dev.ip_address
-                                                                    ));
-                                                                }
-
-                                                                // Secondary action: Inspeksi (Hairline outline)
-                                                                let inspect_btn = egui::Button::new(
-                                                                    RichText::new("Inspeksi")
-                                                                        .font(FontId::proportional(12.0))
-                                                                        .color(theme::INK),
-                                                                )
-                                                                .fill(Color32::TRANSPARENT)
-                                                                .stroke(theme::hairline())
-                                                                .min_size(Vec2::new(68.0, 30.0));
-                                                                if ui.add(inspect_btn).clicked() {
-                                                                    copy_notification = Some(format!(
-                                                                        "Inspeksi telemetri {}",
-                                                                        dev.hostname
-                                                                    ));
-                                                                }
-                                                            }
-                                                            DeviceStatus::Offline => {
-                                                                let ping_btn = egui::Button::new(
-                                                                    RichText::new("Ping")
-                                                                        .font(FontId::proportional(12.0))
-                                                                        .color(theme::INK_MUTED),
-                                                                )
-                                                                .fill(Color32::TRANSPARENT)
-                                                                .stroke(theme::hairline())
-                                                                .min_size(Vec2::new(72.0, 30.0));
-                                                                if ui.add(ping_btn).clicked() {
-                                                                    copy_notification = Some(format!(
-                                                                        "Mengirim ICMP ping ke {} ({})",
-                                                                        dev.hostname, dev.ip_address
-                                                                    ));
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                );
-
-                                                ui.add(egui::Separator::default().vertical());
-
-                                                // Column 2: CPU Telemetry (Fixed 90px slot for vertical alignment)
-                                                ui.allocate_ui_with_layout(
-                                                    Vec2::new(90.0, 30.0),
-                                                    egui::Layout::left_to_right(egui::Align::Center),
-                                                    |ui| {
-                                                        if dev.status == DeviceStatus::Online {
-                                                            let temp_col = theme::temp_color(dev.temperature_c);
-                                                            ui.label(
-                                                                RichText::new(format!("CPU: {:.1}°C", dev.temperature_c))
-                                                                    .font(FontId::monospace(11.0))
-                                                                    .color(temp_col),
-                                                                );
-                                                        } else if dev.status == DeviceStatus::PendingPairing {
-                                                            ui.label(
-                                                                RichText::new("CPU: --")
-                                                                    .font(FontId::monospace(11.0))
-                                                                    .color(theme::INK_FAINT),
-                                                            );
-                                                        } else {
-                                                            ui.label(
-                                                                RichText::new("CPU: Off")
-                                                                    .font(FontId::monospace(11.0))
-                                                                    .color(theme::INK_FAINT),
-                                                            );
-                                                        }
-                                                    },
-                                                );
-
-                                                ui.add(egui::Separator::default().vertical());
-
-                                                // Column 1: Time Freshness (Fixed 80px slot for vertical alignment)
-                                                ui.allocate_ui_with_layout(
-                                                    Vec2::new(80.0, 30.0),
-                                                    egui::Layout::right_to_left(egui::Align::Center),
-                                                    |ui| {
-                                                        ui.label(
-                                                            RichText::new(format_relative_time_id(dev.last_seen_sec))
-                                                                .font(FontId::monospace(11.0))
-                                                                .color(theme::INK_DIM),
-                                                        );
-                                                    },
-                                                );
-                                            });
-                                        });
-                                    });
+                                // Padding vertikal 16 (8 atas, 8 bawah)
                                 ui.add_space(8.0);
+
+                                ui.horizontal(|ui| {
+                                    // 1. Status (110px): titik 8px (penuh hijau / cincin merah), lalu teks
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[0], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            draw_status_dot(ui, is_online);
+                                            ui.add_space(6.0);
+                                            let st_text = match dev.status {
+                                                DeviceStatus::Online => "online",
+                                                DeviceStatus::Offline => "offline",
+                                                DeviceStatus::PendingPairing => "menunggu",
+                                            };
+                                            ui.label(
+                                                RichText::new(st_text)
+                                                    .font(theme::font_body())
+                                                    .color(text_color),
+                                            );
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 2. Perangkat (1.4fr): nama perangkat
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[1], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                RichText::new(&dev.hostname)
+                                                    .font(theme::font_body_medium())
+                                                    .color(text_color),
+                                            );
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 3. Alamat (1.4fr): IP dan MAC dalam font Mono
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[2], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.vertical(|ui| {
+                                                ui.label(
+                                                    RichText::new(&dev.ip_address)
+                                                        .font(theme::font_technical())
+                                                        .color(text_color),
+                                                );
+                                                ui.label(
+                                                    RichText::new(&dev.mac_address)
+                                                        .font(theme::font_technical_sm())
+                                                        .color(theme::TEKS_REDUP),
+                                                );
+                                            });
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 4. Engine (110px): versi usang tanpa chip ("v0.2.8 · usang")
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[3], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            if is_outdated {
+                                                ui.label(
+                                                    RichText::new(format!("{} · usang", dev.engine_version))
+                                                        .font(theme::font_technical())
+                                                        .color(theme::TEKS_REDUP),
+                                                );
+                                            } else {
+                                                ui.label(
+                                                    RichText::new(&dev.engine_version)
+                                                        .font(theme::font_technical())
+                                                        .color(text_color),
+                                                );
+                                            }
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 5. Suhu CPU (90px): mono
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[4], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let temp_text = if is_online {
+                                                format!("{:.1}°C", dev.temperature_c)
+                                            } else {
+                                                "—".to_string()
+                                            };
+                                            ui.label(
+                                                RichText::new(temp_text)
+                                                    .font(theme::font_technical())
+                                                    .color(text_color),
+                                            );
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 6. Terakhir (110px): waktu relatif
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[5], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let rel = format_relative_time_id(dev.last_seen_sec);
+                                            ui.label(
+                                                RichText::new(rel)
+                                                    .font(theme::font_caption())
+                                                    .color(theme::TEKS_REDUP),
+                                            );
+                                        },
+                                    );
+                                    ui.add_space(col_gap);
+
+                                    // 7. Aksi (190px): tombol outline (tinggi 36, radius 6) "Buka stream" / "Ping" + tombol tiga titik
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(widths[6], 36.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let main_btn_text = if is_online {
+                                                "Buka stream"
+                                            } else {
+                                                "Ping"
+                                            };
+
+                                            let main_btn = egui::Button::new(
+                                                RichText::new(main_btn_text)
+                                                    .font(theme::font_body())
+                                                    .color(theme::TEKS),
+                                            )
+                                            .min_size(Vec2::new(104.0, 36.0))
+                                            .corner_radius(theme::RADIUS_SM);
+
+                                            if ui.add(main_btn).clicked() {
+                                                if is_online {
+                                                    copy_notification = Some(format!(
+                                                        "Membuka stream http://{}:5000/stream",
+                                                        dev.ip_address
+                                                    ));
+                                                } else {
+                                                    copy_notification = Some(format!(
+                                                        "Mengirim ping ke {} ({})",
+                                                        dev.hostname, dev.ip_address
+                                                    ));
+                                                }
+                                            }
+
+                                            ui.add_space(8.0);
+
+                                            // Tombol ikon tiga titik kustom painter
+                                            let dots_resp = draw_three_dots_button(ui);
+                                            let popup_id = ui.make_persistent_id(format!("menu_{}", dev.id));
+                                            if dots_resp.clicked() {
+                                                if self.active_menu_device_id.as_deref() == Some(&dev.id) {
+                                                    self.active_menu_device_id = None;
+                                                } else {
+                                                    self.active_menu_device_id = Some(dev.id.clone());
+                                                }
+                                            }
+
+                                            if self.active_menu_device_id.as_deref() == Some(&dev.id) {
+                                                egui::Area::new(popup_id)
+                                                    .order(egui::Order::Foreground)
+                                                    .fixed_pos(dots_resp.rect.left_bottom() + Vec2::new(-110.0, 4.0))
+                                                    .show(ui.ctx(), |ui| {
+                                                        egui::Frame::new()
+                                                            .fill(theme::PERMUKAAN)
+                                                            .stroke(Stroke::new(1.0, theme::GARIS))
+                                                            .corner_radius(theme::RADIUS_SM)
+                                                            .inner_margin(egui::Margin::symmetric(12, 8))
+                                                            .show(ui, |ui| {
+                                                                ui.set_min_width(140.0);
+                                                                if ui.button(RichText::new("Salin IP").font(theme::font_body())).clicked() {
+                                                                    ui.ctx().copy_text(dev.ip_address.clone());
+                                                                    copy_notification = Some(format!("IP {} disalin", dev.ip_address));
+                                                                    self.active_menu_device_id = None;
+                                                                }
+                                                                if ui.button(RichText::new("Salin MAC").font(theme::font_body())).clicked() {
+                                                                    ui.ctx().copy_text(dev.mac_address.clone());
+                                                                    copy_notification = Some(format!("MAC {} disalin", dev.mac_address));
+                                                                    self.active_menu_device_id = None;
+                                                                }
+                                                                ui.add_space(4.0);
+                                                                let (m_sep, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+                                                                ui.painter().rect_filled(m_sep, 0.0, theme::PEMISAH_BARIS);
+                                                                ui.add_space(4.0);
+
+                                                                if ui.button(RichText::new("Ubah nama").font(theme::font_body())).clicked() {
+                                                                    trigger_rename = Some((dev.id.clone(), dev.hostname.clone()));
+                                                                    self.active_menu_device_id = None;
+                                                                }
+                                                                if ui.button(
+                                                                    RichText::new("Lupakan perangkat")
+                                                                        .font(theme::font_body())
+                                                                        .color(theme::MERAH_OFFLINE),
+                                                                ).clicked() {
+                                                                    forget_id = Some(dev.id.clone());
+                                                                    self.active_menu_device_id = None;
+                                                                }
+                                                            });
+                                                    });
+                                            }
+                                        },
+                                    );
+                                });
+
+                                ui.add_space(8.0);
+
+                                // Garis pemisah 1px antar baris
+                                let (row_sep, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+                                ui.painter().rect_filled(row_sep, 0.0, theme::PEMISAH_BARIS);
                             }
                         });
-
-                    if let Some(id) = new_selection {
-                        self.selected_device_id = Some(id);
-                    }
-                    if let Some(id) = approved_id {
-                        if self.client.approve_device(&id).is_ok() {
-                            if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
-                                dev.status = DeviceStatus::Online;
-                                dev.pairing_code = None;
-                                self.notification = Some((
-                                    format!("Perangkat {} disetujui", dev.hostname),
-                                    Instant::now(),
-                                ));
-                            }
-                        }
-                    }
-                    if let Some(id) = rejected_id {
-                        let rejected_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
-                        if self.client.reject_device(&id).is_ok() {
-                            self.devices.retain(|d| d.id != id);
-                            self.notification = Some((
-                                format!("Perangkat {} ditolak dan dihapus dari antrean", rejected_name),
-                                Instant::now(),
-                            ));
-                        }
-                    }
-                    if let Some(id) = forget_id {
-                        let forgotten_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
-                        if self.client.forget_device(&id).is_ok() {
-                            self.devices.retain(|d| d.id != id);
-                            self.notification = Some((
-                                format!("Perangkat {} dilupakan", forgotten_name),
-                                Instant::now(),
-                            ));
-                        }
-                    }
-                    if let Some((id, hostname)) = trigger_rename {
-                        self.rename_device_id = Some(id);
-                        self.rename_input = hostname;
-                    }
-                    if let Some(msg) = copy_notification {
-                        self.notification = Some((msg, Instant::now()));
-                    }
                 }
 
-                // 4. Footer Bar with real technician metrics & auto-expiring status
+                // -----------------------------------------------------------------
+                // Actions handling
+                // -----------------------------------------------------------------
+                if let Some(id) = approved_id {
+                    if self.client.approve_device(&id).is_ok() {
+                        if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
+                            dev.status = DeviceStatus::Online;
+                            dev.pairing_code = None;
+                            self.notification = Some((
+                                format!("Perangkat {} disetujui ({})", dev.hostname, self.selected_building),
+                                Instant::now(),
+                            ));
+                        }
+                    }
+                }
+                if let Some(id) = rejected_id {
+                    let rejected_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
+                    if self.client.reject_device(&id).is_ok() {
+                        self.devices.retain(|d| d.id != id);
+                        self.notification = Some((
+                            format!("Perangkat {} ditolak", rejected_name),
+                            Instant::now(),
+                        ));
+                    }
+                }
+                if let Some(id) = forget_id {
+                    let forgotten_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
+                    if self.client.forget_device(&id).is_ok() {
+                        self.devices.retain(|d| d.id != id);
+                        self.notification = Some((
+                            format!("Perangkat {} dilupakan", forgotten_name),
+                            Instant::now(),
+                        ));
+                    }
+                }
+                if let Some((id, hostname)) = trigger_rename {
+                    self.rename_device_id = Some(id);
+                    self.rename_input = hostname;
+                }
+                if let Some(msg) = copy_notification {
+                    self.notification = Some((msg, Instant::now()));
+                }
+
+                // -----------------------------------------------------------------
+                // 5. Footer
+                // Kiri: "Dipindai 10:42 · 4 perangkat terdaftar"
+                // Kanan: "Tampilan contoh dengan data simulasi"
+                // -----------------------------------------------------------------
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    ui.add_space(2.0);
-                    ui.separator();
                     ui.add_space(4.0);
+                    let (f_sep, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+                    ui.painter().rect_filled(f_sep, 0.0, theme::PEMISAH_BARIS);
+                    ui.add_space(8.0);
+
                     ui.horizontal(|ui| {
                         let total_devices = self.devices.len();
                         ui.label(
                             RichText::new(format!(
-                                "Dipindai {} • {} perangkat terdaftar",
+                                "Dipindai {} · {} perangkat terdaftar",
                                 self.last_scanned_time, total_devices
                             ))
-                            .font(FontId::monospace(11.0))
-                            .color(theme::INK_MUTED),
+                            .font(theme::font_caption())
+                            .color(theme::TEKS_REDUP),
                         );
 
-                        // Auto-expiring status notification (~4 seconds)
+                        // Notifikasi toast jika ada
                         if let Some((ref note, timestamp)) = self.notification {
                             if timestamp.elapsed() > Duration::from_secs(4) {
                                 self.notification = None;
                             } else {
                                 let remaining = Duration::from_secs(4).saturating_sub(timestamp.elapsed());
                                 ui.ctx().request_repaint_after(remaining);
+                                ui.add_space(12.0);
                                 ui.label(
-                                    RichText::new(format!("• {note}"))
-                                        .font(FontId::monospace(11.0))
-                                        .color(theme::ONLINE_FG),
+                                    RichText::new(format!("· {note}"))
+                                        .font(theme::font_caption())
+                                        .color(theme::AMBER),
                                 );
                             }
                         }
 
+                        // Kalimat kanan
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
-                                RichText::new(format!("Server: {} (Mode Simulasi)", self.server_url))
-                                    .font(FontId::monospace(11.0))
-                                    .color(theme::PENDING_FG),
+                                RichText::new("Tampilan contoh dengan data simulasi")
+                                    .font(theme::font_caption())
+                                    .color(theme::TEKS_REDUP),
                             );
+
+                            // Feature flag dev-states: Toolbar simulasi
+                            #[cfg(feature = "dev-states")]
+                            {
+                                ui.add_space(16.0);
+                                if ui.small_button("Simulasi: Putus").clicked() {
+                                    self.simulated_server_error = !self.simulated_server_error;
+                                }
+                            }
                         });
                     });
                 });
@@ -803,15 +1072,51 @@ impl eframe::App for LauncherApp {
 fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size(Vec2::new(1040.0, 680.0))
-            .with_min_inner_size(Vec2::new(840.0, 520.0))
-            .with_title("Absensi-Cam // Peluncur Armada Edge"),
+            .with_inner_size(Vec2::new(1080.0, 680.0))
+            .with_min_inner_size(Vec2::new(880.0, 520.0))
+            .with_title("Absensi-Cam // Perangkat"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Absensi-Cam // Peluncur Armada Edge",
+        "Absensi-Cam // Perangkat",
         native_options,
         Box::new(|cc| Ok(Box::new(LauncherApp::new(cc)))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_launcher_theme_colors() {
+        assert_eq!(theme::LATAR, Color32::from_rgb(0x12, 0x14, 0x13));
+        assert_eq!(theme::PERMUKAAN, Color32::from_rgb(0x18, 0x1B, 0x19));
+        assert_eq!(theme::GARIS, Color32::from_rgb(0x26, 0x2A, 0x27));
+        assert_eq!(theme::PEMISAH_BARIS, Color32::from_rgb(0x1F, 0x23, 0x21));
+        assert_eq!(theme::TEKS, Color32::from_rgb(0xE7, 0xEA, 0xE5));
+        assert_eq!(theme::TEKS_REDUP, Color32::from_rgb(0x98, 0xA1, 0x99));
+        assert_eq!(theme::OUTLINE_TOMBOL, Color32::from_rgb(0x3A, 0x40, 0x3B));
+        assert_eq!(theme::AMBER, Color32::from_rgb(0xE8, 0xB4, 0x49));
+        assert_eq!(theme::TEKS_DI_ATAS_AMBER, Color32::from_rgb(0x1A, 0x14, 0x05));
+        assert_eq!(theme::LATAR_MENUNGGU, Color32::from_rgb(0x1B, 0x19, 0x12));
+        assert_eq!(theme::HIJAU_ONLINE, Color32::from_rgb(0x62, 0xC4, 0x8F));
+        assert_eq!(theme::MERAH_OFFLINE, Color32::from_rgb(0xE5, 0x83, 0x6F));
+    }
+
+    #[test]
+    fn test_launcher_filter_tabs() {
+        let client = MockApiClient::new();
+        let devices = client.list_devices().unwrap();
+        assert_eq!(devices.len(), 4);
+
+        let online_count = devices.iter().filter(|d| d.status == DeviceStatus::Online).count();
+        let offline_count = devices.iter().filter(|d| d.status == DeviceStatus::Offline).count();
+        let pending_count = devices.iter().filter(|d| d.status == DeviceStatus::PendingPairing).count();
+
+        assert_eq!(online_count, 2);
+        assert_eq!(offline_count, 1);
+        assert_eq!(pending_count, 1);
+    }
 }

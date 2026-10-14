@@ -1,4 +1,4 @@
-﻿# ========================================
+# ========================================
 # 1. Laravel & PHP Framework
 # ========================================
 /vendor/
@@ -10,6 +10,8 @@
 /public/fonts-manifest.dev.json
 .env
 .env.backup
+.env.bak
+.env.*.bak
 .env.production
 .phpunit.cache
 .phpunit.result.cache

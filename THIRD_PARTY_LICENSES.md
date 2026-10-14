@@ -36,9 +36,8 @@ The production edge engine is written in native Rust and compiles to a single st
 | :--- | :--- | :--- | :--- |
 | `eframe` / `egui` | Immediate mode GUI framework | MIT / Apache 2.0 | https://github.com/emilk/egui |
 | ArtCraft UI Style Reference | Brutalist dark UI tokens & widgets design reference | MIT / Apache 2.0 | Copyright (c) 2026 ArtCraft Team (https://github.com/storytold/artcraft) |
-| Inter Font (`Inter-Variable.ttf`) | UI Body Typography | SIL Open Font License 1.1 | Copyright (c) 2016-2024 Rasmus Andersson (https://rsms.me/inter/) |
-| Geist Mono (`GeistMono-Variable.ttf`) | Telemetry & Status HUD Typography | SIL Open Font License 1.1 | Copyright (c) 2023 Vercel, Inc. (https://vercel.com/font) |
-| Archivo (`Archivo-Variable.ttf`) | Display Headings Typography | SIL Open Font License 1.1 | Copyright (c) 2012-2023 Omnibus-Type (https://fonts.google.com/specimen/Archivo) |
+| IBM Plex Sans (`IBMPlexSans-*.ttf`) | UI Typography (Regular 400, Medium 500, SemiBold 600) | SIL Open Font License 1.1 | Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex" (https://github.com/IBM/plex) |
+| IBM Plex Mono (`IBMPlexMono-*.ttf`) | Telemetry, Technical & Code Typography (Regular 400, Medium 500) | SIL Open Font License 1.1 | Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex" (https://github.com/IBM/plex) |
 
 ## AI Models
 

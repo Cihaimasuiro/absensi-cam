@@ -3,28 +3,40 @@
 namespace Tests\Feature;
 
 use App\Domain\Device\Models\Device;
+use App\Domain\Device\Models\DevicePairingRequest;
 use App\Domain\Device\Models\PairingCode;
 use App\Domain\School\Models\Building;
-use App\Domain\School\Models\School;
+use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
  * Feature: Device Pairing & Heartbeat API
- * Covers: POST /api/v1/devices/pair · POST /api/v1/devices/heartbeat
- * Ref: PRD §4.2 Device Provisioning, AGENTS.md §Security (Rule 31)
+ * Covers:
+ *   - Legacy Admin-Initiated: POST /api/v1/devices/pair
+ *   - Device-Initiated Pairing: POST /api/v1/devices/pairing/request & POST /api/v1/devices/pairing/poll
+ *   - Device Heartbeat: POST /api/v1/devices/heartbeat
  */
 class DevicePairingTest extends TestCase
 {
     use RefreshDatabase;
 
-    // ─── POST /api/v1/devices/pair ───────────────────────────────────────
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Role::firstOrCreate(['name' => 'admin']);
+        Role::firstOrCreate(['name' => 'super_admin']);
+    }
+
+    // ─── POST /api/v1/devices/pair (Legacy Admin Code) ───────────────────
 
     public function test_device_can_pair_with_valid_code(): void
     {
         $building = Building::factory()->create();
-        $user = \App\Domain\User\Models\User::factory()->create();
+        $user = User::factory()->create();
 
         $plain = 'ABCD-1234';
         PairingCode::create([
@@ -66,13 +78,13 @@ class DevicePairingTest extends TestCase
     public function test_pairing_rejects_expired_code(): void
     {
         $building = Building::factory()->create();
-        $user = \App\Domain\User\Models\User::factory()->create();
-        $plain    = 'EXPR-0000';
+        $user = User::factory()->create();
+        $plain = 'EXPR-0000';
 
         PairingCode::create([
             'building_id' => $building->id,
             'code_hash'   => hash('sha256', $plain),
-            'expires_at'  => now()->subMinute(),   // already expired
+            'expires_at'  => now()->subMinute(),
             'created_by'  => $user->id,
         ]);
 
@@ -90,14 +102,14 @@ class DevicePairingTest extends TestCase
     public function test_pairing_code_is_one_time_use(): void
     {
         $building = Building::factory()->create();
-        $user = \App\Domain\User\Models\User::factory()->create();
-        $plain    = 'ONCE-0001';
+        $user = User::factory()->create();
+        $plain = 'ONCE-0001';
 
         PairingCode::create([
             'building_id' => $building->id,
             'code_hash'   => hash('sha256', $plain),
             'expires_at'  => now()->addMinutes(15),
-            'used_at'     => now(),                // already used
+            'used_at'     => now(),
             'created_by'  => $user->id,
         ]);
 
@@ -136,10 +148,9 @@ class DevicePairingTest extends TestCase
     public function test_pairing_accepts_https_when_flag_false(): void
     {
         config(['app.pairing_allow_http' => false]);
-        
-        // Mock a valid pairing code
+
         $building = Building::factory()->create();
-        $user = \App\Domain\User\Models\User::factory()->create();
+        $user = User::factory()->create();
         $plain = 'ABCD-1234';
         PairingCode::create([
             'building_id' => $building->id,
@@ -148,7 +159,6 @@ class DevicePairingTest extends TestCase
             'created_by'  => $user->id,
         ]);
 
-        // Override the request to pretend it is secure by using https://
         $response = $this->postJson('https://localhost/api/v1/devices/pair', [
             'code'          => $plain,
             'device_name'   => 'Test HTTPS Device',
@@ -157,6 +167,367 @@ class DevicePairingTest extends TestCase
         ]);
 
         $response->assertStatus(201);
+    }
+
+    // ─── DEVICE-INITIATED PAIRING (TV / IoT Style) ──────────────────────
+
+    public function test_device_initiated_pairing_request_creates_record_with_sha256_hashed_poll_token(): void
+    {
+        $response = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'       => 'orangepilite2-gate-in',
+            'mac_address'    => '02:42:c0:a8:01:32',
+            'engine_version' => '0.2.0',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonStructure([
+                'pairing_code',
+                'poll_token',
+                'expires_at',
+                'poll_interval_sec',
+            ]);
+
+        $pairingCode = $response->json('pairing_code');
+        $pollToken = $response->json('poll_token');
+
+        // Check pairing_code format: 6 characters, uppercase + digits excluding 0, O, 1, I
+        $this->assertEquals(6, strlen($pairingCode));
+        $this->assertMatchesRegularExpression('/^[2-9A-HJ-NP-Z]{6}$/', $pairingCode);
+        $this->assertEquals(64, strlen($pollToken));
+
+        // Verify poll_token is stored as SHA-256 hash, NEVER plaintext
+        $this->assertDatabaseHas('device_pairing_requests', [
+            'pairing_code'    => $pairingCode,
+            'poll_token_hash' => hash('sha256', $pollToken),
+            'hostname'        => 'orangepilite2-gate-in',
+            'mac_address'     => '02:42:c0:a8:01:32',
+            'engine_version'  => '0.2.0',
+            'status'          => 'pending',
+        ]);
+
+        $this->assertDatabaseMissing('device_pairing_requests', [
+            'poll_token_hash' => $pollToken,
+        ]);
+    }
+
+    public function test_device_repeat_pairing_request_from_same_mac_cancels_previous_pending_request(): void
+    {
+        $mac = '02:42:c0:a8:01:55';
+
+        // First pairing request
+        $res1 = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'    => 'orangepi-term-1',
+            'mac_address' => $mac,
+        ]);
+        $res1->assertStatus(201);
+        $code1 = $res1->json('pairing_code');
+
+        $this->assertDatabaseHas('device_pairing_requests', [
+            'pairing_code' => $code1,
+            'status'       => 'pending',
+        ]);
+
+        // Second request from same MAC (e.g. after reboot)
+        $res2 = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'    => 'orangepi-term-1',
+            'mac_address' => $mac,
+        ]);
+        $res2->assertStatus(201);
+        $code2 = $res2->json('pairing_code');
+
+        // First request is invalidated to expired
+        $this->assertDatabaseHas('device_pairing_requests', [
+            'pairing_code' => $code1,
+            'status'       => 'expired',
+        ]);
+
+        // Second request is active pending
+        $this->assertDatabaseHas('device_pairing_requests', [
+            'pairing_code' => $code2,
+            'status'       => 'pending',
+        ]);
+
+        $pendingCount = DevicePairingRequest::where('mac_address', $mac)
+            ->where('status', 'pending')
+            ->count();
+        $this->assertEquals(1, $pendingCount);
+    }
+
+    public function test_poll_while_pending_returns_pending_status(): void
+    {
+        $initRes = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'    => 'orangepi-gate',
+            'mac_address' => '02:42:c0:a8:01:77',
+        ]);
+        $initRes->assertStatus(201);
+        $pollToken = $initRes->json('poll_token');
+
+        // Poll with body JSON
+        $pollRes = $this->postJson('/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+
+        $pollRes->assertStatus(200)
+            ->assertJson(['status' => 'pending']);
+
+        // Poll with Bearer token header
+        $pollBearerRes = $this->withToken($pollToken)->postJson('/api/v1/devices/pairing/poll');
+        $pollBearerRes->assertStatus(200)
+            ->assertJson(['status' => 'pending']);
+    }
+
+    public function test_full_pairing_flow_request_admin_approve_and_one_time_credential_retrieval(): void
+    {
+        // 1. Device initiates pairing request
+        $initRes = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'       => 'orangepi-pos-1',
+            'mac_address'    => '02:42:c0:a8:01:99',
+            'engine_version' => '0.2.0',
+        ]);
+        $initRes->assertStatus(201);
+        $pollToken = $initRes->json('poll_token');
+        $pairingCode = $initRes->json('pairing_code');
+
+        $pairingRecord = DevicePairingRequest::where('pairing_code', $pairingCode)->firstOrFail();
+        $this->assertEquals('pending', $pairingRecord->status);
+        $this->assertNull($pairingRecord->device_id);
+
+        // 2. Admin approves pairing in dashboard
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $building = Building::factory()->create(['name' => 'Gedung Utama']);
+
+        $approveRes = $this->actingAs($admin)->post(route('devices.pairing.approve', $pairingRecord->id), [
+            'building_id' => $building->id,
+            'name'        => 'Kamera Gerbang Masuk',
+        ]);
+        $approveRes->assertRedirect();
+
+        $refreshed = $pairingRecord->fresh();
+        $this->assertEquals('approved', $refreshed->status);
+        $this->assertNotNull($refreshed->device_id);
+
+        $device = Device::find($refreshed->device_id);
+        $this->assertNotNull($device);
+        $this->assertEquals('Kamera Gerbang Masuk', $device->name);
+        $this->assertEquals($building->id, $device->building_id);
+        // Note: token is NOT yet created prior to first poll
+        $this->assertNull($device->token_hash);
+
+        // 3. First poll by device retrieves credentials and issues token
+        $pollRes1 = $this->postJson('/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+
+        $pollRes1->assertStatus(200)
+            ->assertJsonPath('status', 'approved')
+            ->assertJsonStructure([
+                'status',
+                'credentials' => [
+                    'url',
+                    'token',
+                    'device_id',
+                    'device_code',
+                    'embed_key',
+                    'model_version',
+                ],
+            ]);
+
+        $token = $pollRes1->json('credentials.token');
+        $this->assertNotEmpty($token);
+
+        // Device token_hash is now stored, and status transitioned to consumed
+        $this->assertEquals('consumed', $pairingRecord->fresh()->status);
+        $this->assertNotNull($device->fresh()->token_hash);
+        $this->assertEquals(hash('sha256', $token), $device->fresh()->token_hash);
+
+        // 4. Second poll with same poll_token is rejected with 410 consumed (one-time delivery)
+        $pollRes2 = $this->postJson('/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+
+        $pollRes2->assertStatus(410)
+            ->assertJson([
+                'status'  => 'consumed',
+                'message' => 'Credentials already retrieved',
+            ]);
+    }
+
+    public function test_pairing_reject_flow_returns_rejected_status(): void
+    {
+        $initRes = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'    => 'orangepi-unknown',
+            'mac_address' => '02:42:c0:a8:01:88',
+        ]);
+        $initRes->assertStatus(201);
+        $pollToken = $initRes->json('poll_token');
+        $pairingCode = $initRes->json('pairing_code');
+
+        $pairingRecord = DevicePairingRequest::where('pairing_code', $pairingCode)->firstOrFail();
+
+        // Admin rejects pairing
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $rejectRes = $this->actingAs($admin)->post(route('devices.pairing.reject', $pairingRecord->id));
+        $rejectRes->assertRedirect();
+
+        $this->assertEquals('rejected', $pairingRecord->fresh()->status);
+
+        // Poll returns 200 with status rejected
+        $pollRes = $this->postJson('/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+
+        $pollRes->assertStatus(200)
+            ->assertJson(['status' => 'rejected']);
+    }
+
+    public function test_poll_on_expired_request_returns_410_expired(): void
+    {
+        $initRes = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname'    => 'orangepi-timedout',
+            'mac_address' => '02:42:c0:a8:01:66',
+        ]);
+        $initRes->assertStatus(201);
+        $pollToken = $initRes->json('poll_token');
+        $pairingCode = $initRes->json('pairing_code');
+
+        $pairingRecord = DevicePairingRequest::where('pairing_code', $pairingCode)->firstOrFail();
+        $pairingRecord->update(['expires_at' => now()->subMinute()]);
+
+        $pollRes = $this->postJson('/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+
+        $pollRes->assertStatus(410)
+            ->assertJson(['status' => 'expired']);
+
+        $this->assertEquals('expired', $pairingRecord->fresh()->status);
+    }
+
+    // ─── HTTPS ENFORCEMENT ON PAIRING REQUEST & POLL ───────────────────
+
+    public function test_device_initiated_pairing_request_enforces_https(): void
+    {
+        config(['app.pairing_allow_http' => false]);
+
+        // HTTP request rejected with 403
+        $httpRes = $this->postJson('http://localhost/api/v1/devices/pairing/request', [
+            'hostname' => 'orangepi-secure',
+        ]);
+        $httpRes->assertStatus(403);
+
+        // HTTPS request succeeds with 201
+        $httpsRes = $this->postJson('https://localhost/api/v1/devices/pairing/request', [
+            'hostname' => 'orangepi-secure',
+        ]);
+        $httpsRes->assertStatus(201);
+    }
+
+    public function test_device_initiated_pairing_poll_enforces_https(): void
+    {
+        config(['app.pairing_allow_http' => true]);
+        $initRes = $this->postJson('/api/v1/devices/pairing/request', [
+            'hostname' => 'orangepi-secure-poll',
+        ]);
+        $pollToken = $initRes->json('poll_token');
+
+        config(['app.pairing_allow_http' => false]);
+
+        // HTTP poll rejected with 403
+        $httpPoll = $this->postJson('http://localhost/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+        $httpPoll->assertStatus(403);
+
+        // HTTPS poll succeeds with 200
+        $httpsPoll = $this->postJson('https://localhost/api/v1/devices/pairing/poll', [
+            'poll_token' => $pollToken,
+        ]);
+        $httpsPoll->assertStatus(200);
+    }
+
+    public function test_server_ip_and_client_reported_ip_stored_distinctively(): void
+    {
+        $res = $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.195'])
+            ->postJson('/api/v1/devices/pairing/request', [
+                'hostname'   => 'orangepi-lan',
+                'ip_address' => '192.168.1.150', // device reported local IP
+            ]);
+
+        $res->assertStatus(201);
+        $code = $res->json('pairing_code');
+
+        $this->assertDatabaseHas('device_pairing_requests', [
+            'pairing_code'       => $code,
+            'ip_address'         => '203.0.113.195', // server-seen IP
+            'client_reported_ip' => '192.168.1.150', // device-reported IP
+        ]);
+    }
+
+    public function test_multiple_devices_behind_same_ip_can_poll_without_429(): void
+    {
+        // Simulate 2 devices behind the same NAT IP polling actively
+        $d1 = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])
+            ->postJson('/api/v1/devices/pairing/request', ['hostname' => 'gate-in']);
+        $token1 = $d1->json('poll_token');
+
+        $d2 = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])
+            ->postJson('/api/v1/devices/pairing/request', ['hostname' => 'gate-out']);
+        $token2 = $d2->json('poll_token');
+
+        // Both devices poll 25 times each from the same IP (total 50 reqs in burst)
+        for ($i = 0; $i < 25; $i++) {
+            $p1 = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])
+                ->postJson('/api/v1/devices/pairing/poll', ['poll_token' => $token1]);
+            $this->assertEquals(200, $p1->status(), "Device 1 poll {$i} failed with status {$p1->status()}");
+
+            $p2 = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])
+                ->postJson('/api/v1/devices/pairing/poll', ['poll_token' => $token2]);
+            $this->assertEquals(200, $p2->status(), "Device 2 poll {$i} failed with status {$p2->status()}");
+        }
+    }
+
+    public function test_device_code_generation_is_race_condition_safe(): void
+    {
+        $code1 = \App\Domain\Device\Actions\ApproveDevicePairingRequest::generateUniqueDeviceCode();
+        $this->assertMatchesRegularExpression('/^dev-\d{4}$/', $code1);
+
+        // Pre-create device with that code
+        Device::create([
+            'name'        => 'Test Device',
+            'device_code' => $code1,
+            'status'      => 'offline',
+        ]);
+
+        // Next generated code must automatically be incremented/unique
+        $code2 = \App\Domain\Device\Actions\ApproveDevicePairingRequest::generateUniqueDeviceCode();
+        $this->assertNotEquals($code1, $code2);
+        $this->assertMatchesRegularExpression('/^dev-\d{4}$/', $code2);
+    }
+
+    public function test_poll_fails_gracefully_when_enrollment_embed_key_is_missing(): void
+    {
+        config(['app.enrollment_embed_key' => '']);
+
+        $init = $this->postJson('/api/v1/devices/pairing/request', ['hostname' => 'orangepi-nokey']);
+        $token = $init->json('poll_token');
+        $code = $init->json('pairing_code');
+        $req = DevicePairingRequest::where('pairing_code', $code)->firstOrFail();
+
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $building = Building::factory()->create();
+        $this->actingAs($admin)->post("/devices/pairing/{$req->id}/approve", [
+            'building_id' => $building->id,
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ENROLLMENT_EMBED_KEY is not configured');
+
+        $action = app(\App\Domain\Device\Actions\PollDevicePairing::class);
+        $action->execute($token);
     }
 
     // ─── POST /api/v1/devices/heartbeat ─────────────────────────────────
@@ -203,4 +574,3 @@ class DevicePairingTest extends TestCase
         $response->assertStatus(401);
     }
 }
-

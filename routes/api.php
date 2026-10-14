@@ -34,11 +34,11 @@ Route::prefix('v1')->group(function () {
 
     // --- Device-Initiated Pairing (public, throttled per IP) ---
     Route::post('devices/pairing/request', DevicePairingRequestController::class)
-        ->middleware(['throttle:5,10'])
+        ->middleware(['throttle:10,1'])
         ->name('api.v1.devices.pairing.request');
 
     Route::post('devices/pairing/poll', DevicePairingPollController::class)
-        ->middleware(['throttle:60,1'])
+        ->middleware(['throttle:120,1'])
         ->name('api.v1.devices.pairing.poll');
 
     // --- Device API (requires Sanctum token with 'device' ability) ---

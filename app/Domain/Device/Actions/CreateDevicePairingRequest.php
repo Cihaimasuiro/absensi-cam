@@ -3,65 +3,82 @@
 namespace App\Domain\Device\Actions;
 
 use App\Domain\Device\Models\DevicePairingRequest;
-use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class CreateDevicePairingRequest
 {
     public function execute(array $data, ?string $clientIp = null): array
     {
-        $ip = $data['ip_address'] ?? $clientIp;
+        $serverIp = $clientIp ?? request()->ip();
+        $clientReportedIp = $data['ip_address'] ?? null;
         $mac = $data['mac_address'] ?? null;
+        $hostname = $data['hostname'];
 
-        // Auto-expire old pending requests
+        // Auto-expire past deadline pending records
         DevicePairingRequest::where('status', 'pending')
             ->where('expires_at', '<=', now())
             ->update(['status' => 'expired']);
 
-        // Limit pending requests per IP or MAC to prevent flooding
-        $pendingQuery = DevicePairingRequest::pending();
+        // Invalidate previous unexpired pending requests from same mac_address or (hostname + serverIp)
+        $staleQuery = DevicePairingRequest::where('status', 'pending')
+            ->where('expires_at', '>', now());
+
         if ($mac) {
-            $pendingQuery->where(function ($q) use ($ip, $mac) {
+            $staleQuery->where(function ($q) use ($mac, $hostname, $serverIp) {
                 $q->where('mac_address', $mac);
-                if ($ip) {
-                    $q->orWhere('ip_address', $ip);
+                if ($serverIp) {
+                    $q->orWhere(function ($sub) use ($hostname, $serverIp) {
+                        $sub->where('hostname', $hostname)->where('ip_address', $serverIp);
+                    });
                 }
             });
-        } elseif ($ip) {
-            $pendingQuery->where('ip_address', $ip);
+        } elseif ($serverIp) {
+            $staleQuery->where('hostname', $hostname)->where('ip_address', $serverIp);
+        } else {
+            $staleQuery->where('hostname', $hostname);
         }
 
-        if ($pendingQuery->count() >= 3) {
-            throw ValidationException::withMessages([
-                'pairing' => ['Terlalu banyak permintaan pairing aktif yang belum disetujui. Tunggu beberapa menit atau setujui permintaan yang sudah ada.'],
-            ]);
-        }
+        $staleQuery->update(['status' => 'expired']);
 
-        // Generate unique readable pairing code (e.g. 782-419)
+        // Generate 6-character unambiguous uppercase alphanumeric pairing code (excluding 0, O, 1, I)
+        $chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $charLen = strlen($chars);
         do {
-            $code = sprintf('%03d-%03d', random_int(100, 999), random_int(100, 999));
-        } while (DevicePairingRequest::pending()->where('pairing_code', $code)->exists());
+            $code = '';
+            for ($i = 0; $i < 6; $i++) {
+                $code .= $chars[random_int(0, $charLen - 1)];
+            }
+        } while (DevicePairingRequest::where('pairing_code', $code)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->exists()
+        );
 
         // Generate high-entropy poll token (64 hex characters)
         $pollToken = bin2hex(random_bytes(32));
         $pollTokenHash = hash('sha256', $pollToken);
 
+        $expiresAt = now()->addMinutes(10);
+
         $request = DevicePairingRequest::create([
-            'pairing_code'    => $code,
-            'poll_token_hash' => $pollTokenHash,
-            'hostname'        => $data['hostname'],
-            'mac_address'     => $mac,
-            'ip_address'      => $ip,
-            'model_version'   => $data['model_version'] ?? null,
-            'status'          => 'pending',
-            'expires_at'      => now()->addMinutes(10),
+            'pairing_code'        => $code,
+            'poll_token_hash'     => $pollTokenHash,
+            'hostname'            => $hostname,
+            'mac_address'         => $mac,
+            'ip_address'          => $serverIp,
+            'client_reported_ip'  => $clientReportedIp,
+            'engine_version'      => $data['engine_version'] ?? $data['model_version'] ?? null,
+            'model_version'       => $data['model_version'] ?? null,
+            'status'              => 'pending',
+            'expires_at'          => $expiresAt,
         ]);
 
         return [
-            'pairing_code' => $request->pairing_code,
-            'poll_token'   => $pollToken,
-            'expires_in'   => 600,
-            'interval'     => 3,
+            'pairing_code'      => $request->pairing_code,
+            'poll_token'        => $pollToken,
+            'expires_at'        => $request->expires_at->toIso8601ZuluString(),
+            'poll_interval_sec' => 3,
+            'expires_in'        => 600,
+            'interval'          => 3,
         ];
     }
 }

@@ -2,8 +2,8 @@
 
 namespace App\Domain\Device\Actions;
 
+use App\Domain\Device\Models\Device;
 use App\Domain\Device\Models\DevicePairingRequest;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
 class PollDevicePairing
@@ -24,36 +24,24 @@ class PollDevicePairing
             ];
         }
 
-        // Auto expire if past deadline
-        if ($request->isExpired() || $request->status === 'expired') {
-            if ($request->status !== 'expired') {
-                $request->update(['status' => 'expired']);
-            }
+        // Auto expire if past deadline and status is still pending or approved
+        if (now()->greaterThan($request->expires_at) && in_array($request->status, ['pending', 'approved'])) {
+            $request->update(['status' => 'expired']);
             return [
                 'http_status' => 410,
                 'data' => [
                     'status'  => 'expired',
-                    'message' => 'Kode pairing telah kedaluwarsa. Silakan ajukan pairing baru dari perangkat.',
+                    'message' => 'Permintaan pairing telah kedaluwarsa.',
                 ],
             ];
         }
 
-        if ($request->status === 'rejected') {
-            return [
-                'http_status' => 403,
-                'data' => [
-                    'status'  => 'rejected',
-                    'message' => 'Permintaan pairing ditolak oleh administrator.',
-                ],
-            ];
-        }
-
-        if ($request->status === 'claimed') {
+        if ($request->status === 'expired') {
             return [
                 'http_status' => 410,
                 'data' => [
-                    'status'  => 'claimed',
-                    'message' => 'Kredensial pairing sudah pernah diklaim sebelumnya.',
+                    'status'  => 'expired',
+                    'message' => 'Permintaan pairing telah kedaluwarsa.',
                 ],
             ];
         }
@@ -64,40 +52,137 @@ class PollDevicePairing
                 'data' => [
                     'status'       => 'pending',
                     'pairing_code' => $request->pairing_code,
-                    'message'      => 'Menunggu persetujuan administrator di dashboard.',
+                    'message'      => 'Menunggu persetujuan admin.',
+                ],
+            ];
+        }
+
+        if ($request->status === 'rejected') {
+            return [
+                'http_status' => 200,
+                'data' => [
+                    'status'  => 'rejected',
+                    'message' => 'Permintaan pairing ditolak oleh administrator.',
+                ],
+            ];
+        }
+
+        if ($request->status === 'consumed') {
+            return [
+                'http_status' => 410,
+                'data' => [
+                    'status'  => 'consumed',
+                    'message' => 'Credentials already retrieved',
                 ],
             ];
         }
 
         if ($request->status === 'approved') {
             return DB::transaction(function () use ($request) {
-                // Re-lock record to prevent race conditions on single-use retrieval
-                $locked = DevicePairingRequest::where('id', $request->id)->lockForUpdate()->first();
+                // Re-lock record to prevent race conditions
+                $locked = DevicePairingRequest::where('id', $request->id)
+                    ->lockForUpdate()
+                    ->first();
 
-                if (! $locked || $locked->status !== 'approved' || empty($locked->encrypted_payload)) {
+                if (! $locked) {
                     return [
-                        'http_status' => 410,
+                        'http_status' => 404,
                         'data' => [
-                            'status'  => 'claimed',
-                            'message' => 'Kredensial pairing sudah pernah diklaim sebelumnya.',
+                            'status'  => 'not_found',
+                            'message' => 'Permintaan pairing tidak ditemukan.',
                         ],
                     ];
                 }
 
-                $payload = json_decode(Crypt::decryptString($locked->encrypted_payload), true);
+                if ($locked->status === 'consumed') {
+                    return [
+                        'http_status' => 410,
+                        'data' => [
+                            'status'  => 'consumed',
+                            'message' => 'Credentials already retrieved',
+                        ],
+                    ];
+                }
 
-                // Instantly burn the credentials from DB (one-time delivery)
-                $locked->update([
-                    'status'            => 'claimed',
-                    'claimed_at'        => now(),
-                    'encrypted_payload' => null,
+                if (now()->greaterThan($locked->expires_at)) {
+                    $locked->update(['status' => 'expired']);
+                    return [
+                        'http_status' => 410,
+                        'data' => [
+                            'status'  => 'expired',
+                            'message' => 'Permintaan pairing telah kedaluwarsa.',
+                        ],
+                    ];
+                }
+
+                if ($locked->status !== 'approved') {
+                    return [
+                        'http_status' => 200,
+                        'data' => [
+                            'status' => $locked->status,
+                        ],
+                    ];
+                }
+
+                $device = Device::where('id', $locked->device_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $device) {
+                    return [
+                        'http_status' => 404,
+                        'data' => [
+                            'status'  => 'device_not_found',
+                            'message' => 'Perangkat tertaut tidak ditemukan.',
+                        ],
+                    ];
+                }
+
+                // Issue Sanctum token right now
+                $plainToken = $device->createToken('edge-engine', ['device'])->plainTextToken;
+                $device->update([
+                    'token_hash' => hash('sha256', $plainToken),
+                    'status'     => 'online',
                 ]);
+
+                // Transition status to consumed
+                $locked->update([
+                    'status' => 'consumed',
+                ]);
+
+                activity('device')
+                    ->performedOn($device)
+                    ->log("Kredensial pairing ({$locked->pairing_code}) telah diambil oleh perangkat (consumed)");
+
+                $serverUrl = config('app.url') ?: 'http://127.0.0.1:8000';
+                
+                // Read strictly from config, zero literal fallback
+                $embedKey = config('app.enrollment_embed_key');
+                if (empty($embedKey)) {
+                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in config/app.php or environment.');
+                }
+
+                $credentials = [
+                    'url'           => $serverUrl,
+                    'token'         => $plainToken,
+                    'device_id'     => (string) $device->id,
+                    'device_code'   => $device->device_code,
+                    'embed_key'     => $embedKey,
+                    'model_version' => $device->model_version,
+                ];
 
                 return [
                     'http_status' => 200,
-                    'data' => array_merge([
-                        'status' => 'approved',
-                    ], $payload),
+                    'data' => [
+                        'status'        => 'approved',
+                        'credentials'   => $credentials,
+                        'url'           => $serverUrl,
+                        'token'         => $plainToken,
+                        'device_id'     => (string) $device->id,
+                        'device_code'   => $device->device_code,
+                        'embed_key'     => $embedKey,
+                        'model_version' => $device->model_version,
+                    ],
                 ];
             });
         }

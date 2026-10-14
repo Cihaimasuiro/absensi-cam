@@ -37,10 +37,10 @@ struct Cli {
     #[arg(short, long, default_value = "local_edge.db")]
     db: String,
 
-    #[arg(long)]
+    #[arg(long, alias = "server-url")]
     api_url: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, alias = "device-token")]
     api_token: Option<String>,
 
     #[arg(long)]
@@ -57,10 +57,10 @@ enum Commands {
         #[arg(short, long, default_value = "local_edge.db")]
         db: String,
 
-        #[arg(long)]
+        #[arg(long, alias = "server-url")]
         api_url: Option<String>,
 
-        #[arg(long)]
+        #[arg(long, alias = "device-token")]
         api_token: Option<String>,
 
         #[arg(long)]
@@ -86,6 +86,12 @@ enum Commands {
 
         #[arg(long, default_value = "local_edge.db")]
         db: String,
+
+        #[arg(long, alias = "server-url")]
+        api_url: Option<String>,
+
+        #[arg(long, alias = "device-token")]
+        api_token: Option<String>,
 
         #[arg(long)]
         models_dir: Option<String>,
@@ -139,6 +145,8 @@ async fn main() -> Result<()> {
             width,
             height,
             db,
+            api_url,
+            api_token,
             models_dir,
             ort_path,
             vision,
@@ -157,6 +165,8 @@ async fn main() -> Result<()> {
                 width,
                 height,
                 db,
+                api_url,
+                api_token,
                 models_dir,
                 ort_path,
                 vision,
@@ -214,6 +224,8 @@ async fn run_stream(
     width: u32,
     height: u32,
     db_path: String,
+    api_url_opt: Option<String>,
+    api_token_opt: Option<String>,
     models_dir_opt: Option<String>,
     ort_path_opt: Option<String>,
     vision_enabled: bool,
@@ -226,6 +238,53 @@ async fn run_stream(
     confirm_frames_opt: Option<u32>,
     min_face_size_opt: Option<f32>,
 ) -> Result<()> {
+    let api_url = api_url_opt
+        .or_else(|| env::var("SERVER_URL").ok())
+        .or_else(|| env::var("SMART_ABSENSI_URL").ok())
+        .unwrap_or_else(|| "http://127.0.0.1:8000".to_string());
+
+    let api_token_raw = api_token_opt
+        .or_else(|| env::var("DEVICE_TOKEN").ok())
+        .or_else(|| env::var("SMART_ABSENSI_TOKEN").ok())
+        .unwrap_or_default();
+
+    let device_id_raw = env::var("DEVICE_ID")
+        .or_else(|_| env::var("SMART_ABSENSI_DEVICE_ID"))
+        .unwrap_or_default();
+
+    let model_version = model_version_opt
+        .or_else(|| env::var("MODEL_VERSION").ok())
+        .unwrap_or_else(|| "3d9f1f77896fb3d1".to_string());
+
+    let env_path = if Path::new("/opt/smart-absensi/edge-engine/.env").exists() {
+        PathBuf::from("/opt/smart-absensi/edge-engine/.env")
+    } else if Path::new("/opt/smart-absensi/edge-engine").exists() {
+        PathBuf::from("/opt/smart-absensi/edge-engine/.env")
+    } else {
+        PathBuf::from(".env")
+    };
+
+    let (_active_token, embed_key_b64) = if api_token_raw.is_empty() || device_id_raw.is_empty() {
+        info!("Kredensial perangkat (DEVICE_ID / DEVICE_TOKEN) belum lengkap. Masuk ke mode pairing...");
+        let (tok, ek) = engine_sync::ensure_authenticated_or_pair(
+            &api_url,
+            &api_token_raw,
+            embed_key_opt.clone(),
+            &env_path,
+            &model_version,
+        )
+        .await?;
+        if let Ok(iter) = dotenvy::from_path_iter(&env_path) {
+            for item in iter.flatten() {
+                env::set_var(item.0, item.1);
+            }
+        }
+        (tok, ek)
+    } else {
+        let ek = embed_key_opt.or_else(|| env::var("ENROLLMENT_EMBED_KEY").ok());
+        (api_token_raw, ek)
+    };
+
     let cooldown_secs = cooldown_opt
         .or_else(|| {
             env::var("RECOGNITION_COOLDOWN_SEC")
@@ -285,16 +344,10 @@ async fn run_stream(
     let cam_fps_shared_ai = cam_fps_shared.clone();
 
     // 1. Inisialisasi Database SQLite
-    let embed_key_bytes = embed_key_opt
-        .or_else(|| env::var("ENROLLMENT_EMBED_KEY").ok())
-        .and_then(|k| {
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD.decode(k).ok()
-        });
-
-    let model_version = model_version_opt
-        .or_else(|| env::var("MODEL_VERSION").ok())
-        .unwrap_or_else(|| "3d9f1f77896fb3d1".to_string());
+    let embed_key_bytes = embed_key_b64.and_then(|k| {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.decode(k).ok()
+    });
 
     let db = Arc::new(EdgeDb::init(&db_path).await?);
     let templates = Arc::new(
@@ -907,10 +960,12 @@ async fn run_sync(
     info!("Memulai Smart Absensi Sync Daemon (Rust)...");
 
     let api_url = api_url_opt
+        .or_else(|| env::var("SERVER_URL").ok())
         .or_else(|| env::var("SMART_ABSENSI_URL").ok())
         .unwrap_or_else(|| "http://127.0.0.1:8000".to_string());
 
     let api_token_raw = api_token_opt
+        .or_else(|| env::var("DEVICE_TOKEN").ok())
         .or_else(|| env::var("SMART_ABSENSI_TOKEN").ok())
         .unwrap_or_default();
 
@@ -940,6 +995,12 @@ async fn run_sync(
         &model_version,
     )
     .await?;
+
+    if let Ok(iter) = dotenvy::from_path_iter(&env_path) {
+        for item in iter.flatten() {
+            env::set_var(item.0, item.1);
+        }
+    }
 
     let embed_key_bytes = embed_key_b64.and_then(|k| {
         use base64::Engine;

@@ -18,20 +18,19 @@ class DevicePairingRequest extends Model
         'hostname',
         'mac_address',
         'ip_address',
+        'client_reported_ip',
+        'engine_version',
         'model_version',
         'status',
         'device_id',
-        'encrypted_payload',
         'expires_at',
         'approved_at',
-        'claimed_at',
         'approved_by',
     ];
 
     protected $casts = [
         'expires_at'  => 'datetime',
         'approved_at' => 'datetime',
-        'claimed_at'  => 'datetime',
     ];
 
     public function device(): BelongsTo

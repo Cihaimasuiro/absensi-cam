@@ -31,12 +31,13 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Kode</th>
+                        <th>Kode Pairing</th>
+                        <th>MAC Address</th>
                         <th>Hostname</th>
-                        <th>MAC Address (Stiker)</th>
                         <th>IP Address</th>
-                        <th>Waktu</th>
-                        <th>Penetapan Lokasi</th>
+                        <th>Versi Engine</th>
+                        <th>Kedaluwarsa</th>
+                        <th>Penetapan Gedung & Nama</th>
                         <th class="text-right">Aksi</th>
                     </tr>
                 </thead>
@@ -44,19 +45,25 @@
                     @foreach($pendingPairings as $pairing)
                         <tr>
                             <td class="font-mono font-bold text-[13px] text-ink">{{ $pairing->pairing_code }}</td>
-                            <td class="font-medium text-ink">{{ $pairing->hostname }}</td>
                             <td class="font-mono text-[12px] text-ink">{{ $pairing->mac_address ?? '-' }}</td>
+                            <td class="font-medium text-ink">{{ $pairing->hostname }}</td>
                             <td class="font-mono text-[12px] text-ink-muted">
                                 {{ $pairing->ip_address ?? '-' }}
                                 @if($pairing->ip_address === $clientIp)
                                     <span class="text-[10px] text-amber-700 font-semibold">(LAN Anda)</span>
                                 @endif
+                                @if($pairing->client_reported_ip && $pairing->client_reported_ip !== $pairing->ip_address)
+                                    <div class="text-[10px] text-ink-faint">Lokal: {{ $pairing->client_reported_ip }}</div>
+                                @endif
                             </td>
-                            <td class="text-caption text-ink-muted">{{ $pairing->created_at->diffForHumans() }}</td>
+                            <td class="font-mono text-[11px] text-ink-muted">{{ $pairing->engine_version ?? $pairing->model_version ?? '-' }}</td>
+                            <td class="text-caption text-ink-muted" title="{{ $pairing->expires_at->format('Y-m-d H:i:s') }}">
+                                {{ $pairing->expires_at->diffForHumans() }}
+                            </td>
                             <td>
-                                <form id="approve-form-{{ $pairing->id }}" method="POST" action="{{ route('devices.pairing.approve', $pairing) }}" class="flex items-center gap-xs">
+                                <form id="approve-form-{{ $pairing->id }}" method="POST" action="{{ route('devices.pairing.approve', $pairing->id) }}" class="flex items-center gap-xs">
                                     @csrf
-                                    <input type="text" name="name" value="{{ $pairing->hostname }}" placeholder="Nama perangkat" class="form-input py-1 px-2 text-[12px] w-36" required>
+                                    <input type="text" name="name" value="{{ $pairing->hostname }}" placeholder="Nama perangkat (opsional)" class="form-input py-1 px-2 text-[12px] w-36">
                                     <select name="building_id" class="form-input py-1 px-2 text-[12px] w-36" required>
                                         <option value="">Pilih Gedung...</option>
                                         @foreach($buildings as $building)
@@ -70,7 +77,7 @@
                                     <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn-primary py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
                                         <i data-lucide="check" class="w-3 h-3"></i> Setujui
                                     </button>
-                                    <form method="POST" action="{{ route('devices.pairing.reject', $pairing) }}" class="inline">
+                                    <form method="POST" action="{{ route('devices.pairing.reject', $pairing->id) }}" class="inline">
                                         @csrf
                                         <button type="submit" class="btn-danger py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
                                             <i data-lucide="x" class="w-3 h-3"></i> Tolak
@@ -263,7 +270,7 @@
                     Salin teks ini ke dalam file .env di Perangkat Edge Anda.
                 </p>
                 <div class="bg-gray-900 text-gray-100 p-3 rounded text-[13px] font-mono whitespace-pre-wrap break-all select-all mb-md" 
-                     x-text="newDeviceEnv ? newDeviceEnv : 'SMART_ABSENSI_URL={{ request()->getSchemeAndHttpHost() }}\nSMART_ABSENSI_TOKEN=<RAHASIA_SILAKAN_GENERATE_ULANG_JIKA_LUPA>\nSMART_ABSENSI_DEVICE_ID=' + configDevice.device_code + '\nENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE='">
+                     x-text="newDeviceEnv ? newDeviceEnv : 'SMART_ABSENSI_URL={{ request()->getSchemeAndHttpHost() }}\nSMART_ABSENSI_TOKEN=<RAHASIA_SILAKAN_GENERATE_ULANG_JIKA_LUPA>\nSMART_ABSENSI_DEVICE_ID=' + configDevice.device_code + '\nENROLLMENT_EMBED_KEY={{ config('app.enrollment_embed_key') ?: '<SET_ENROLLMENT_EMBED_KEY_IN_SERVER_CONFIG>' }}'">
                 </div>
                 <div class="flex justify-right gap-sm mt-md pt-sm">
                     <form method="POST" x-bind:action="'/devices/' + configDevice.id + '/reset-token'" @submit="confirmSubmit" data-confirm="Anda yakin ingin MENGGANTI (reset) token lama? Device akan terputus sampai token baru dipasang.">

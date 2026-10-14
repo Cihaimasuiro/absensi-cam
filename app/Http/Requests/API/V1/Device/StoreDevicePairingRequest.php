@@ -8,16 +8,21 @@ class StoreDevicePairingRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        if (!config('app.pairing_allow_http', false) && !$this->isSecure()) {
+            return false; // Force HTTPS unless explicitly allowed
+        }
+
         return true;
     }
 
     public function rules(): array
     {
         return [
-            'hostname'      => ['required', 'string', 'max:100'],
-            'mac_address'   => ['nullable', 'string', 'max:32'],
-            'model_version' => ['nullable', 'string', 'max:60'],
-            'ip_address'    => ['nullable', 'ip'],
+            'hostname'       => ['required', 'string', 'max:100'],
+            'mac_address'    => ['nullable', 'string', 'max:32'],
+            'engine_version' => ['nullable', 'string', 'max:60'],
+            'model_version'  => ['nullable', 'string', 'max:60'],
+            'ip_address'     => ['nullable', 'ip'],
         ];
     }
 }

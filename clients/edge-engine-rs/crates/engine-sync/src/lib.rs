@@ -485,7 +485,7 @@ pub struct PairingInitRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mac_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_version: Option<String>,
+    pub engine_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_address: Option<String>,
 }
@@ -494,13 +494,35 @@ pub struct PairingInitRequest {
 pub struct PairingInitResponse {
     pub pairing_code: String,
     pub poll_token: String,
-    pub expires_in: u64,
-    pub interval: u64,
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    #[serde(default)]
+    pub poll_interval_sec: Option<u64>,
+    #[serde(default)]
+    pub expires_in: Option<u64>,
+    #[serde(default)]
+    pub interval: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct PairingPollRequest {
     pub poll_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PairingCredentialsPayload {
+    #[serde(default)]
+    pub device_id: Option<String>,
+    #[serde(default)]
+    pub device_code: Option<String>,
+    #[serde(default)]
+    pub token: Option<String>,
+    #[serde(default)]
+    pub embed_key: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub model_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -510,6 +532,9 @@ pub struct PairingPollResponse {
     pub message: Option<String>,
     #[serde(default)]
     pub pairing_code: Option<String>,
+    #[serde(default)]
+    pub credentials: Option<PairingCredentialsPayload>,
+    // Fallback fields directly on the top-level response
     #[serde(default)]
     pub url: Option<String>,
     #[serde(default)]
@@ -522,9 +547,15 @@ pub struct PairingPollResponse {
     pub embed_key: Option<String>,
     #[serde(default)]
     pub model_version: Option<String>,
+    #[serde(default)]
+    pub poll_interval_sec: Option<u64>,
+    #[serde(default)]
+    pub interval: Option<u64>,
+    #[serde(default)]
+    pub expires_in: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PairedCredentials {
     pub url: String,
     pub token: String,
@@ -532,6 +563,116 @@ pub struct PairedCredentials {
     pub device_code: String,
     pub embed_key: String,
     pub model_version: Option<String>,
+}
+
+impl PairingPollResponse {
+    pub fn extract_credentials(&self, fallback_url: &str) -> Option<PairedCredentials> {
+        let creds_obj = self.credentials.as_ref();
+        let token = creds_obj
+            .and_then(|c| c.token.clone())
+            .or_else(|| self.token.clone())?;
+        let device_code = creds_obj
+            .and_then(|c| c.device_code.clone())
+            .or_else(|| self.device_code.clone())?;
+        let device_id = creds_obj
+            .and_then(|c| c.device_id.clone())
+            .or_else(|| self.device_id.clone())
+            .unwrap_or_else(|| device_code.clone());
+        let embed_key = creds_obj
+            .and_then(|c| c.embed_key.clone())
+            .or_else(|| self.embed_key.clone())
+            .unwrap_or_default();
+        let url = creds_obj
+            .and_then(|c| c.url.clone())
+            .or_else(|| self.url.clone())
+            .unwrap_or_else(|| fallback_url.to_string());
+        let model_version = creds_obj
+            .and_then(|c| c.model_version.clone())
+            .or_else(|| self.model_version.clone());
+
+        Some(PairedCredentials {
+            url,
+            token,
+            device_id,
+            device_code,
+            embed_key,
+            model_version,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum PollOutcome {
+    Pending { interval_secs: u64 },
+    Approved(PairedCredentials),
+    Rejected(String),
+    Expired(String),
+    NetworkOrServerError(String),
+}
+
+pub async fn poll_pairing_token(
+    client: &reqwest::Client,
+    clean_url: &str,
+    poll_token: &str,
+) -> PollOutcome {
+    let poll_req = PairingPollRequest {
+        poll_token: poll_token.to_string(),
+    };
+
+    let poll_res = match client
+        .post(&format!("{}/api/v1/devices/pairing/poll", clean_url))
+        .json(&poll_req)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return PollOutcome::NetworkOrServerError(e.to_string()),
+    };
+
+    let status = poll_res.status();
+
+    if status == reqwest::StatusCode::GONE {
+        let body = poll_res.text().await.unwrap_or_default();
+        return PollOutcome::Expired(format!("HTTP 410: {}", body));
+    }
+
+    if status == reqwest::StatusCode::FORBIDDEN {
+        let body = poll_res.text().await.unwrap_or_default();
+        return PollOutcome::Rejected(format!("HTTP 403: {}", body));
+    }
+
+    if !status.is_success() {
+        let body = poll_res.text().await.unwrap_or_default();
+        return PollOutcome::NetworkOrServerError(format!("HTTP {}: {}", status, body));
+    }
+
+    let poll_body: PairingPollResponse = match poll_res.json().await {
+        Ok(b) => b,
+        Err(e) => return PollOutcome::NetworkOrServerError(format!("JSON parse error: {}", e)),
+    };
+
+    if poll_body.status == "pending" {
+        let interval_secs = poll_body.poll_interval_sec.or(poll_body.interval).unwrap_or(3).max(2);
+        return PollOutcome::Pending { interval_secs };
+    }
+
+    if poll_body.status == "rejected" {
+        return PollOutcome::Rejected(poll_body.message.unwrap_or_else(|| "Rejected by administrator".to_string()));
+    }
+
+    if poll_body.status == "expired" || poll_body.status == "consumed" {
+        return PollOutcome::Expired(poll_body.message.unwrap_or_else(|| poll_body.status.clone()));
+    }
+
+    if poll_body.status == "approved" {
+        if let Some(creds) = poll_body.extract_credentials(clean_url) {
+            return PollOutcome::Approved(creds);
+        } else {
+            return PollOutcome::NetworkOrServerError("Missing credentials in approved response".to_string());
+        }
+    }
+
+    PollOutcome::NetworkOrServerError(format!("Unexpected pairing status: {}", poll_body.status))
 }
 
 pub fn detect_mac_address() -> Option<String> {
@@ -553,10 +694,18 @@ pub fn detect_hostname() -> String {
             return h.trim().to_string();
         }
     }
-    if let Ok(content) = std::fs::read_to_string("/etc/hostname") {
-        let h = content.trim();
-        if !h.is_empty() {
-            return h.to_string();
+    #[cfg(unix)]
+    {
+        if let Ok(content) = std::fs::read_to_string("/etc/hostname") {
+            let h = content.trim();
+            if !h.is_empty() {
+                return h.to_string();
+            }
+        }
+    }
+    if let Ok(h) = std::env::var("COMPUTERNAME") {
+        if !h.trim().is_empty() {
+            return h.trim().to_string();
         }
     }
     "orangepilite2".to_string()
@@ -571,12 +720,19 @@ pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Resul
 
     let tmp_path = env_path.with_extension("tmp");
     let content = format!(
-        "SMART_ABSENSI_URL={}\nSMART_ABSENSI_TOKEN={}\nSMART_ABSENSI_DEVICE_ID={}\nENROLLMENT_EMBED_KEY={}\nMODEL_VERSION={}\n",
-        creds.url,
-        creds.token,
-        creds.device_code,
-        creds.embed_key,
-        creds.model_version.as_deref().unwrap_or("v1.0-yunet")
+        "SMART_ABSENSI_URL={url}\n\
+         SERVER_URL={url}\n\
+         SMART_ABSENSI_TOKEN={token}\n\
+         DEVICE_TOKEN={token}\n\
+         SMART_ABSENSI_DEVICE_ID={device_code}\n\
+         DEVICE_ID={device_code}\n\
+         ENROLLMENT_EMBED_KEY={embed_key}\n\
+         MODEL_VERSION={model_version}\n",
+        url = creds.url,
+        token = creds.token,
+        device_code = creds.device_code,
+        embed_key = creds.embed_key,
+        model_version = creds.model_version.as_deref().unwrap_or("v1.0-yunet")
     );
 
     std::fs::write(&tmp_path, &content)
@@ -605,13 +761,14 @@ pub async fn run_device_initiated_pairing(
     let clean_url = server_url.trim().trim_end_matches('/');
     let hostname = detect_hostname();
     let mac = detect_mac_address();
+    let engine_version = env!("CARGO_PKG_VERSION").to_string();
 
     loop {
         info!("Mengirim permintaan pairing ke server: {}/api/v1/devices/pairing/request", clean_url);
         let init_req = PairingInitRequest {
             hostname: hostname.clone(),
             mac_address: mac.clone(),
-            model_version: model_version_opt.map(|s| s.to_string()),
+            engine_version: Some(engine_version.clone()),
             ip_address: None,
         };
 
@@ -639,14 +796,16 @@ pub async fn run_device_initiated_pairing(
 
         let init: PairingInitResponse = init_res.json().await?;
         info!("================================================================");
-        info!(" [MODE PAIRING PERANGKAT]");
+        info!(" [MODE PAIRING PERANGKAT (DEVICE-INITIATED)]");
         info!(" Kode Pairing : {}", init.pairing_code);
         info!(" MAC Address  : {}", mac.as_deref().unwrap_or("Tidak terdeteksi"));
         info!(" Hostname     : {}", hostname);
+        info!(" Engine Ver   : {}", engine_version);
         info!(" Petunjuk     : Buka Dashboard Admin -> Menu Perangkat -> Setujui");
         info!("================================================================");
 
-        let poll_interval = Duration::from_secs(init.interval.max(2));
+        let default_interval_sec = init.poll_interval_sec.or(init.interval).unwrap_or(3).max(2);
+        let mut poll_interval = Duration::from_secs(default_interval_sec);
         let mut loop_count = 0u64;
 
         loop {
@@ -654,70 +813,36 @@ pub async fn run_device_initiated_pairing(
             tokio::time::sleep(poll_interval).await;
             loop_count += 1;
 
-            let poll_req = PairingPollRequest {
-                poll_token: init.poll_token.clone(),
-            };
-
-            let poll_res = match client
-                .post(&format!("{}/api/v1/devices/pairing/poll", clean_url))
-                .json(&poll_req)
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    if loop_count % 5 == 0 {
-                        warn!("Gagal polling server ({:?}). Tetap mencoba...", e);
+            match poll_pairing_token(client, clean_url, &init.poll_token).await {
+                PollOutcome::Pending { interval_secs } => {
+                    poll_interval = Duration::from_secs(interval_secs);
+                    if loop_count % 4 == 0 {
+                        info!("Menunggu persetujuan admin... (Kode: {})", init.pairing_code);
                     }
-                    continue;
                 }
-            };
-
-            let status = poll_res.status();
-            if status == reqwest::StatusCode::GONE {
-                warn!("Kode pairing {} kedaluwarsa atau sudah pernah diklaim. Mengulang permohonan baru...", init.pairing_code);
-                break;
-            }
-
-            if status == reqwest::StatusCode::FORBIDDEN {
-                warn!("Permintaan pairing ditolak oleh administrator. Mencoba permohonan baru dalam 10 detik...");
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                break;
-            }
-
-            if !status.is_success() {
-                if loop_count % 5 == 0 {
-                    warn!("Status HTTP {} saat polling: {:?}", status, poll_res.text().await.unwrap_or_default());
+                PollOutcome::Approved(mut creds) => {
+                    if creds.model_version.is_none() {
+                        creds.model_version = model_version_opt.map(|s| s.to_string());
+                    }
+                    write_env_atomically(env_path, &creds)?;
+                    info!("🎉 Perangkat BERHASIL dipasangkan! Melanjutkan ke mode operasional normal...");
+                    return Ok(creds);
                 }
-                continue;
-            }
-
-            let poll_body: PairingPollResponse = poll_res.json().await?;
-            if poll_body.status == "pending" {
-                if loop_count % 4 == 0 {
-                    info!("Menunggu persetujuan admin... (Kode: {})", init.pairing_code);
+                PollOutcome::Rejected(msg) => {
+                    warn!("Permintaan pairing {} DITOLAK oleh admin ({}). Menunggu 15 detik sebelum meminta kode baru...", init.pairing_code, msg);
+                    tokio::time::sleep(Duration::from_secs(15)).await;
+                    break;
                 }
-                continue;
-            }
-
-            if poll_body.status == "approved" {
-                let token = poll_body.token.context("Token tidak ada dalam respons pairing")?;
-                let device_code = poll_body.device_code.context("Device code tidak ada dalam respons pairing")?;
-                let embed_key = poll_body.embed_key.unwrap_or_else(|| "t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=".to_string());
-                let url = poll_body.url.unwrap_or_else(|| clean_url.to_string());
-
-                let creds = PairedCredentials {
-                    url,
-                    token,
-                    device_id: poll_body.device_id.unwrap_or_else(|| device_code.clone()),
-                    device_code,
-                    embed_key,
-                    model_version: poll_body.model_version,
-                };
-
-                write_env_atomically(env_path, &creds)?;
-                info!("🎉 Perangkat BERHASIL dipasangkan! Melanjutkan ke mode operasional normal...");
-                return Ok(creds);
+                PollOutcome::Expired(msg) => {
+                    warn!("Kode pairing {} kedaluwarsa/sudah diklaim ({}). Menunggu 10 detik sebelum meminta kode baru...", init.pairing_code, msg);
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    break;
+                }
+                PollOutcome::NetworkOrServerError(err) => {
+                    if loop_count % 5 == 0 {
+                        warn!("Polling warning: {}. Tetap mencoba...", err);
+                    }
+                }
             }
         }
     }
@@ -995,7 +1120,7 @@ mod tests {
             if let Ok((mut socket, _)) = listener.accept().await {
                 let mut buf = [0u8; 2048];
                 let _ = socket.read(&mut buf).await;
-                let body = r#"{"pairing_code":"839-204","poll_token":"test-poll-token-123","expires_in":600,"interval":1}"#;
+                let body = r#"{"pairing_code":"XYZ890","poll_token":"test-poll-token-123","poll_interval_sec":1,"interval":1,"expires_in":600}"#;
                 let response = format!(
                     "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
@@ -1004,11 +1129,24 @@ mod tests {
                 let _ = socket.write_all(response.as_bytes()).await;
             }
 
-            // 2. Accept poll -> return approved
+            // 2. Accept poll -> return pending first
             if let Ok((mut socket, _)) = listener.accept().await {
                 let mut buf = [0u8; 2048];
                 let _ = socket.read(&mut buf).await;
-                let body = r#"{"status":"approved","token":"sanctum-token-abc","device_id":"dev-0001","device_code":"dev-0001","embed_key":"test-key","model_version":"v0.2.0","url":"http://127.0.0.1:8000"}"#;
+                let body = r#"{"status":"pending","message":"Waiting for admin approval","poll_interval_sec":1}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+
+            // 3. Accept poll -> return approved with nested credentials
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"status":"approved","message":"Device paired successfully.","credentials":{"device_id":"dev-0001","device_code":"dev-0001","token":"sanctum-token-abc","embed_key":"test-key-32","url":"http://127.0.0.1:8000"}}"#;
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
@@ -1033,7 +1171,144 @@ mod tests {
 
         assert_eq!(creds.token, "sanctum-token-abc");
         assert_eq!(creds.device_code, "dev-0001");
+        assert_eq!(creds.embed_key, "test-key-32");
         assert!(temp_env.exists());
+
+        let env_content = std::fs::read_to_string(&temp_env).unwrap();
+        assert!(env_content.contains("SMART_ABSENSI_TOKEN=sanctum-token-abc"));
+        assert!(env_content.contains("DEVICE_TOKEN=sanctum-token-abc"));
+        assert!(env_content.contains("SMART_ABSENSI_DEVICE_ID=dev-0001"));
+        assert!(env_content.contains("DEVICE_ID=dev-0001"));
+        assert!(env_content.contains("ENROLLMENT_EMBED_KEY=test-key-32"));
+
         let _ = std::fs::remove_file(temp_env);
+    }
+
+    #[tokio::test]
+    async fn test_poll_outcome_rejected() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"status":"rejected","message":"Device rejected by administrator"}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let outcome = poll_pairing_token(&client, &api_url, "token-rej-123").await;
+        match outcome {
+            PollOutcome::Rejected(msg) => {
+                assert!(msg.contains("Device rejected by administrator"));
+            }
+            other => panic!("Expected PollOutcome::Rejected, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_poll_outcome_expired_410() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"status":"expired","message":"Pairing request expired"}"#;
+                let response = format!(
+                    "HTTP/1.1 410 Gone\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let outcome = poll_pairing_token(&client, &api_url, "token-exp-123").await;
+        match outcome {
+            PollOutcome::Expired(msg) => {
+                assert!(msg.contains("410"));
+            }
+            other => panic!("Expected PollOutcome::Expired, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_poll_outcome_consumed_410() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 2048];
+                let _ = socket.read(&mut buf).await;
+                let body = r#"{"status":"consumed","message":"Pairing token already consumed"}"#;
+                let response = format!(
+                    "HTTP/1.1 410 Gone\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let client = reqwest::Client::new();
+        let outcome = poll_pairing_token(&client, &api_url, "token-con-123").await;
+        match outcome {
+            PollOutcome::Expired(msg) => {
+                assert!(msg.contains("410"));
+            }
+            other => panic!("Expected PollOutcome::Expired, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_extract_credentials_nested_and_flat() {
+        // Format 1: Nested credentials
+        let json_nested = r#"{
+            "status": "approved",
+            "message": "Device paired successfully.",
+            "credentials": {
+                "device_id": "dev-0010",
+                "device_code": "dev-0010",
+                "token": "tok-nested-123",
+                "embed_key": "key-nested",
+                "url": "http://nested.example.com"
+            }
+        }"#;
+        let resp_nested: PairingPollResponse = serde_json::from_str(json_nested).unwrap();
+        let creds_nested = resp_nested.extract_credentials("http://fallback.com").unwrap();
+        assert_eq!(creds_nested.token, "tok-nested-123");
+        assert_eq!(creds_nested.device_code, "dev-0010");
+        assert_eq!(creds_nested.embed_key, "key-nested");
+        assert_eq!(creds_nested.url, "http://nested.example.com");
+
+        // Format 2: Flat top-level credentials
+        let json_flat = r#"{
+            "status": "approved",
+            "token": "tok-flat-456",
+            "device_id": "dev-0020",
+            "device_code": "dev-0020",
+            "embed_key": "key-flat",
+            "url": "http://flat.example.com"
+        }"#;
+        let resp_flat: PairingPollResponse = serde_json::from_str(json_flat).unwrap();
+        let creds_flat = resp_flat.extract_credentials("http://fallback.com").unwrap();
+        assert_eq!(creds_flat.token, "tok-flat-456");
+        assert_eq!(creds_flat.device_code, "dev-0020");
+        assert_eq!(creds_flat.embed_key, "key-flat");
+        assert_eq!(creds_flat.url, "http://flat.example.com");
     }
 }

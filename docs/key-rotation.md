@@ -6,7 +6,7 @@ Dokumen ini mendokumentasikan prosedur keamanan rotasi kunci enkripsi embedding 
 
 ## 1. Latar Belakang & Status Kunci Lama
 
-Kunci bawaan contoh (`t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=`) sempat tercatat pada riwayat commit Git publik (`4b96a97`, `08214d7`, `ec35962`, dan `92b05dc`). Kunci tersebut dianggap **bocor/compromised**.
+Kunci bawaan contoh (`t7rXp59Z...`) sempat tercatat pada riwayat commit Git publik (`4b96a97`, `08214d7`, `ec35962`, dan `92b05dc`). Kunci tersebut dianggap **bocor/compromised**.
 
 ### Pemeriksaan Data di Server Aktual (PENTING)
 > [!WARNING]

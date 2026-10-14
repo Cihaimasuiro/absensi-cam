@@ -8,6 +8,10 @@ class StoreDevicePairingRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        if (!config('app.pairing_allow_http', false) && !$this->isSecure()) {
+            return false; // Force HTTPS unless explicitly allowed
+        }
+
         return true;
     }
 

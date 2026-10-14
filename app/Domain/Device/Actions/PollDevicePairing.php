@@ -138,7 +138,7 @@ class PollDevicePairing
                     ];
                 }
 
-                // Issue Sanctum token right now (no plaintext token was stored previously)
+                // Issue Sanctum token right now
                 $plainToken = $device->createToken('edge-engine', ['device'])->plainTextToken;
                 $device->update([
                     'token_hash' => hash('sha256', $plainToken),
@@ -155,7 +155,12 @@ class PollDevicePairing
                     ->log("Kredensial pairing ({$locked->pairing_code}) telah diambil oleh perangkat (consumed)");
 
                 $serverUrl = config('app.url') ?: 'http://127.0.0.1:8000';
-                $embedKey = env('ENROLLMENT_EMBED_KEY', config('app.enrollment_embed_key', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE='));
+                
+                // Read strictly from config, zero literal fallback
+                $embedKey = config('app.enrollment_embed_key');
+                if (empty($embedKey)) {
+                    throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in config/app.php or environment.');
+                }
 
                 $credentials = [
                     'url'           => $serverUrl,
@@ -171,7 +176,6 @@ class PollDevicePairing
                     'data' => [
                         'status'        => 'approved',
                         'credentials'   => $credentials,
-                        // Direct keys for Rust engine compatibility:
                         'url'           => $serverUrl,
                         'token'         => $plainToken,
                         'device_id'     => (string) $device->id,

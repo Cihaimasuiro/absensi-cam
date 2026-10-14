@@ -38,7 +38,7 @@ Route::prefix('v1')->group(function () {
         ->name('api.v1.devices.pairing.request');
 
     Route::post('devices/pairing/poll', DevicePairingPollController::class)
-        ->middleware(['throttle:30,1'])
+        ->middleware(['throttle:120,1'])
         ->name('api.v1.devices.pairing.poll');
 
     // --- Device API (requires Sanctum token with 'device' ability) ---

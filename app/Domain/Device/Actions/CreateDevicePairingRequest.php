@@ -8,7 +8,8 @@ class CreateDevicePairingRequest
 {
     public function execute(array $data, ?string $clientIp = null): array
     {
-        $ip = $data['ip_address'] ?? $clientIp;
+        $serverIp = $clientIp ?? request()->ip();
+        $clientReportedIp = $data['ip_address'] ?? null;
         $mac = $data['mac_address'] ?? null;
         $hostname = $data['hostname'];
 
@@ -17,21 +18,21 @@ class CreateDevicePairingRequest
             ->where('expires_at', '<=', now())
             ->update(['status' => 'expired']);
 
-        // Invalidate previous unexpired pending requests from same mac_address or (hostname + ip_address)
+        // Invalidate previous unexpired pending requests from same mac_address or (hostname + serverIp)
         $staleQuery = DevicePairingRequest::where('status', 'pending')
             ->where('expires_at', '>', now());
 
         if ($mac) {
-            $staleQuery->where(function ($q) use ($mac, $hostname, $ip) {
+            $staleQuery->where(function ($q) use ($mac, $hostname, $serverIp) {
                 $q->where('mac_address', $mac);
-                if ($ip) {
-                    $q->orWhere(function ($sub) use ($hostname, $ip) {
-                        $sub->where('hostname', $hostname)->where('ip_address', $ip);
+                if ($serverIp) {
+                    $q->orWhere(function ($sub) use ($hostname, $serverIp) {
+                        $sub->where('hostname', $hostname)->where('ip_address', $serverIp);
                     });
                 }
             });
-        } elseif ($ip) {
-            $staleQuery->where('hostname', $hostname)->where('ip_address', $ip);
+        } elseif ($serverIp) {
+            $staleQuery->where('hostname', $hostname)->where('ip_address', $serverIp);
         } else {
             $staleQuery->where('hostname', $hostname);
         }
@@ -59,15 +60,16 @@ class CreateDevicePairingRequest
         $expiresAt = now()->addMinutes(10);
 
         $request = DevicePairingRequest::create([
-            'pairing_code'    => $code,
-            'poll_token_hash' => $pollTokenHash,
-            'hostname'        => $hostname,
-            'mac_address'     => $mac,
-            'ip_address'      => $ip,
-            'engine_version'  => $data['engine_version'] ?? $data['model_version'] ?? null,
-            'model_version'   => $data['model_version'] ?? null,
-            'status'          => 'pending',
-            'expires_at'      => $expiresAt,
+            'pairing_code'        => $code,
+            'poll_token_hash'     => $pollTokenHash,
+            'hostname'            => $hostname,
+            'mac_address'         => $mac,
+            'ip_address'          => $serverIp,
+            'client_reported_ip'  => $clientReportedIp,
+            'engine_version'      => $data['engine_version'] ?? $data['model_version'] ?? null,
+            'model_version'       => $data['model_version'] ?? null,
+            'status'              => 'pending',
+            'expires_at'          => $expiresAt,
         ]);
 
         return [

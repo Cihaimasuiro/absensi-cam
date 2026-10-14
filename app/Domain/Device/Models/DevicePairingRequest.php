@@ -18,6 +18,7 @@ class DevicePairingRequest extends Model
         'hostname',
         'mac_address',
         'ip_address',
+        'client_reported_ip',
         'engine_version',
         'model_version',
         'status',

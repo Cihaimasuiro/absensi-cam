@@ -1,5 +1,6 @@
 mod theme;
 
+use std::time::{Duration, Instant};
 use eframe::egui::{self, Color32, FontFamily, FontId, RichText, Vec2};
 use launcher_core::{
     format_relative_time_id, ApiClient, DeviceStatus, EdgeDevice, FilterTab, MockApiClient,
@@ -15,8 +16,9 @@ struct LauncherApp {
     devices: Vec<EdgeDevice>,
     selected_device_id: Option<String>,
     is_scanning: bool,
+    scan_started_at: Option<Instant>,
     last_scanned_time: String,
-    notification_msg: Option<String>,
+    notification: Option<(String, Instant)>,
     rename_device_id: Option<String>,
     rename_input: String,
 }
@@ -33,8 +35,9 @@ impl LauncherApp {
             search_query: String::new(),
             active_tab: FilterTab::All,
             is_scanning: false,
+            scan_started_at: None,
             last_scanned_time: "10:42 WIB".to_string(),
-            notification_msg: None,
+            notification: None,
             rename_device_id: None,
             rename_input: String::new(),
             devices,
@@ -82,6 +85,25 @@ impl LauncherApp {
 
 impl eframe::App for LauncherApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Handle scanning state progression
+        if self.is_scanning {
+            if let Some(started) = self.scan_started_at {
+                if started.elapsed() >= Duration::from_millis(1500) {
+                    self.is_scanning = false;
+                    self.scan_started_at = None;
+                    self.last_scanned_time = "baru saja".to_string();
+                    self.devices = self.client.list_devices().unwrap_or_default();
+                    let count = self.devices.len();
+                    self.notification = Some((
+                        format!("Pindai LAN selesai: {count} perangkat terdeteksi"),
+                        Instant::now(),
+                    ));
+                } else {
+                    ui.ctx().request_repaint_after(Duration::from_millis(100));
+                }
+            }
+        }
+
         // Enforce 20px perimeter padding around entire application window
         egui::Frame::new()
             .fill(theme::BG)
@@ -117,12 +139,13 @@ impl eframe::App for LauncherApp {
                         )
                         .min_size(Vec2::new(96.0, 30.0));
 
-                        if ui.add(scan_btn).clicked() {
-                            self.is_scanning = !self.is_scanning;
-                            if self.is_scanning {
-                                self.last_scanned_time = "Baru saja".to_string();
-                                self.notification_msg = Some("Pindai LAN selesai: 4 perangkat terdeteksi".to_string());
-                            }
+                        if ui.add(scan_btn).clicked() && !self.is_scanning {
+                            self.is_scanning = true;
+                            self.scan_started_at = Some(Instant::now());
+                            self.notification = Some((
+                                "Memindai subnet LAN 192.168.1.0/24...".to_string(),
+                                Instant::now(),
+                            ));
                         }
 
                         // Consistent label: "Server:"
@@ -233,7 +256,10 @@ impl eframe::App for LauncherApp {
                                         if let Some(dev) = self.devices.iter_mut().find(|d| &d.id == dev_id) {
                                             dev.hostname = self.rename_input.clone();
                                         }
-                                        self.notification_msg = Some(format!("Nama diubah menjadi '{}'", self.rename_input));
+                                        self.notification = Some((
+                                            format!("Nama diubah menjadi '{}'", self.rename_input),
+                                            Instant::now(),
+                                        ));
                                     }
                                     self.rename_device_id = None;
                                     self.rename_input.clear();
@@ -496,54 +522,63 @@ impl eframe::App for LauncherApp {
                                                         RichText::new(format!("Mesin: {}", dev.engine_version))
                                                             .font(FontId::monospace(11.0))
                                                             .color(detail_ink),
-                                                    );
+                                                        );
                                                 });
                                             });
 
                                             // Right Block: Fixed-width aligned Columns (Time | CPU | Actions)
                                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                // Column 3: Actions (Fixed 240px slot for pixel alignment)
+                                                // Column 3: Actions (Fixed 248px slot for pixel alignment)
                                                 ui.allocate_ui_with_layout(
-                                                    Vec2::new(240.0, 30.0),
+                                                    Vec2::new(248.0, 30.0),
                                                     egui::Layout::right_to_left(egui::Align::Center),
                                                     |ui| {
-                                                        // Context Menu "Opsi" (Standard ASCII text, zero missing glyphs!)
-                                                        ui.menu_button(
-                                                            RichText::new("Opsi").font(FontId::proportional(12.0)),
-                                                            |ui| {
-                                                                if ui.button("Salin Alamat IP").clicked() {
-                                                                    ui.ctx().copy_text(dev.ip_address.clone());
-                                                                    copy_notification = Some(format!(
-                                                                        "IP {} disalin ke clipboard",
-                                                                        dev.ip_address
-                                                                    ));
-                                                                    ui.close();
-                                                                }
-                                                                if ui.button("Salin Alamat MAC").clicked() {
-                                                                    ui.ctx().copy_text(dev.mac_address.clone());
-                                                                    copy_notification = Some(format!(
-                                                                        "MAC {} disalin ke clipboard",
-                                                                        dev.mac_address
-                                                                    ));
-                                                                    ui.close();
-                                                                }
-                                                                ui.separator();
-                                                                if ui.button("Ubah Nama...").clicked() {
-                                                                    trigger_rename = Some((dev.id.clone(), dev.hostname.clone()));
-                                                                    ui.close();
-                                                                }
-                                                                if ui
-                                                                    .button(
-                                                                        RichText::new("Lupakan Perangkat")
-                                                                            .color(theme::OFFLINE_FG),
-                                                                    )
-                                                                    .clicked()
-                                                                {
-                                                                    forget_id = Some(dev.id.clone());
-                                                                    ui.close();
-                                                                }
-                                                            },
-                                                        );
+                                                        // Context Menu "Opsi" in Outline style with scope
+                                                        ui.scope(|ui| {
+                                                            ui.visuals_mut().widgets.inactive.bg_fill = Color32::TRANSPARENT;
+                                                            ui.visuals_mut().widgets.inactive.bg_stroke = theme::hairline();
+
+                                                            ui.menu_button(
+                                                                RichText::new("Opsi").font(FontId::proportional(12.0)),
+                                                                |ui| {
+                                                                    ui.set_min_width(140.0);
+                                                                    if ui.button("Salin Alamat IP").clicked() {
+                                                                        ui.ctx().copy_text(dev.ip_address.clone());
+                                                                        copy_notification = Some(format!(
+                                                                            "IP {} ({}) disalin ke clipboard",
+                                                                            dev.hostname, dev.ip_address
+                                                                        ));
+                                                                        ui.close();
+                                                                    }
+                                                                    if ui.button("Salin Alamat MAC").clicked() {
+                                                                        ui.ctx().copy_text(dev.mac_address.clone());
+                                                                        copy_notification = Some(format!(
+                                                                            "MAC {} ({}) disalin ke clipboard",
+                                                                            dev.hostname, dev.mac_address
+                                                                        ));
+                                                                        ui.close();
+                                                                    }
+                                                                    ui.separator();
+                                                                    if ui.button("Ubah Nama...").clicked() {
+                                                                        trigger_rename = Some((dev.id.clone(), dev.hostname.clone()));
+                                                                        ui.close();
+                                                                    }
+                                                                    if ui
+                                                                        .button(
+                                                                            RichText::new("Lupakan Perangkat")
+                                                                                .color(theme::OFFLINE_FG),
+                                                                        )
+                                                                        .clicked()
+                                                                    {
+                                                                        forget_id = Some(dev.id.clone());
+                                                                        ui.close();
+                                                                    }
+                                                                },
+                                                            );
+                                                        });
+
+                                                        // Clear spacing between Opsi and main action buttons
+                                                        ui.add_space(8.0);
 
                                                         match dev.status {
                                                             DeviceStatus::PendingPairing => {
@@ -555,7 +590,7 @@ impl eframe::App for LauncherApp {
                                                                         .color(Color32::WHITE),
                                                                 )
                                                                 .fill(theme::SOLID_APPROVE_BG)
-                                                                .min_size(Vec2::new(88.0, 30.0));
+                                                                .min_size(Vec2::new(84.0, 30.0));
                                                                 if ui.add(approve_btn).clicked() {
                                                                     approved_id = Some(dev.id.clone());
                                                                 }
@@ -568,13 +603,13 @@ impl eframe::App for LauncherApp {
                                                                 )
                                                                 .fill(Color32::TRANSPARENT)
                                                                 .stroke(egui::Stroke::new(1.0, theme::REJECT_FG))
-                                                                .min_size(Vec2::new(64.0, 30.0));
+                                                                .min_size(Vec2::new(60.0, 30.0));
                                                                 if ui.add(reject_btn).clicked() {
                                                                     rejected_id = Some(dev.id.clone());
                                                                 }
                                                             }
                                                             DeviceStatus::Online => {
-                                                                // Secondary action: Buka Stream (Outline with Accent stroke)
+                                                                // Secondary action: Buka Stream (HTTP MJPEG port 5000)
                                                                 let stream_btn = egui::Button::new(
                                                                     RichText::new("Buka Stream")
                                                                         .font(FontId::proportional(12.0))
@@ -585,8 +620,8 @@ impl eframe::App for LauncherApp {
                                                                 .min_size(Vec2::new(96.0, 30.0));
                                                                 if ui.add(stream_btn).clicked() {
                                                                     copy_notification = Some(format!(
-                                                                        "Membuka stream RTSP: rtsp://{}:8554/live",
-                                                                        dev.ip_address
+                                                                        "Membuka stream {}: http://{}:5000/stream",
+                                                                        dev.hostname, dev.ip_address
                                                                     ));
                                                                 }
 
@@ -598,8 +633,13 @@ impl eframe::App for LauncherApp {
                                                                 )
                                                                 .fill(Color32::TRANSPARENT)
                                                                 .stroke(theme::hairline())
-                                                                .min_size(Vec2::new(76.0, 30.0));
-                                                                if ui.add(inspect_btn).clicked() {}
+                                                                .min_size(Vec2::new(68.0, 30.0));
+                                                                if ui.add(inspect_btn).clicked() {
+                                                                    copy_notification = Some(format!(
+                                                                        "Inspeksi telemetri {}",
+                                                                        dev.hostname
+                                                                    ));
+                                                                }
                                                             }
                                                             DeviceStatus::Offline => {
                                                                 let ping_btn = egui::Button::new(
@@ -609,11 +649,11 @@ impl eframe::App for LauncherApp {
                                                                 )
                                                                 .fill(Color32::TRANSPARENT)
                                                                 .stroke(theme::hairline())
-                                                                .min_size(Vec2::new(76.0, 30.0));
+                                                                .min_size(Vec2::new(72.0, 30.0));
                                                                 if ui.add(ping_btn).clicked() {
                                                                     copy_notification = Some(format!(
-                                                                        "Mengirim ICMP ping ke {}",
-                                                                        dev.ip_address
+                                                                        "Mengirim ICMP ping ke {} ({})",
+                                                                        dev.hostname, dev.ip_address
                                                                     ));
                                                                 }
                                                             }
@@ -680,20 +720,31 @@ impl eframe::App for LauncherApp {
                             if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
                                 dev.status = DeviceStatus::Online;
                                 dev.pairing_code = None;
-                                self.notification_msg = Some(format!("Perangkat {} disetujui", dev.hostname));
+                                self.notification = Some((
+                                    format!("Perangkat {} disetujui", dev.hostname),
+                                    Instant::now(),
+                                ));
                             }
                         }
                     }
                     if let Some(id) = rejected_id {
+                        let rejected_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
                         if self.client.reject_device(&id).is_ok() {
                             self.devices.retain(|d| d.id != id);
-                            self.notification_msg = Some("Perangkat ditolak dan dihapus dari antrean".to_string());
+                            self.notification = Some((
+                                format!("Perangkat {} ditolak dan dihapus dari antrean", rejected_name),
+                                Instant::now(),
+                            ));
                         }
                     }
                     if let Some(id) = forget_id {
+                        let forgotten_name = self.devices.iter().find(|d| d.id == id).map(|d| d.hostname.clone()).unwrap_or_else(|| id.clone());
                         if self.client.forget_device(&id).is_ok() {
                             self.devices.retain(|d| d.id != id);
-                            self.notification_msg = Some("Perangkat dilupakan".to_string());
+                            self.notification = Some((
+                                format!("Perangkat {} dilupakan", forgotten_name),
+                                Instant::now(),
+                            ));
                         }
                     }
                     if let Some((id, hostname)) = trigger_rename {
@@ -701,11 +752,11 @@ impl eframe::App for LauncherApp {
                         self.rename_input = hostname;
                     }
                     if let Some(msg) = copy_notification {
-                        self.notification_msg = Some(msg);
+                        self.notification = Some((msg, Instant::now()));
                     }
                 }
 
-                // 4. Footer Bar with real technician metrics
+                // 4. Footer Bar with real technician metrics & auto-expiring status
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.add_space(2.0);
                     ui.separator();
@@ -721,12 +772,19 @@ impl eframe::App for LauncherApp {
                             .color(theme::INK_MUTED),
                         );
 
-                        if let Some(ref note) = self.notification_msg {
-                            ui.label(
-                                RichText::new(format!("• {note}"))
-                                    .font(FontId::monospace(11.0))
-                                    .color(theme::ONLINE_FG),
-                            );
+                        // Auto-expiring status notification (~4 seconds)
+                        if let Some((ref note, timestamp)) = self.notification {
+                            if timestamp.elapsed() > Duration::from_secs(4) {
+                                self.notification = None;
+                            } else {
+                                let remaining = Duration::from_secs(4).saturating_sub(timestamp.elapsed());
+                                ui.ctx().request_repaint_after(remaining);
+                                ui.label(
+                                    RichText::new(format!("• {note}"))
+                                        .font(FontId::monospace(11.0))
+                                        .color(theme::ONLINE_FG),
+                                );
+                            }
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

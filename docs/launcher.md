@@ -32,15 +32,21 @@ Dengan pairing yang dimulai dari perangkat (Orange Pi menghubungi Laravel sendir
 
 Prinsip: Logika bisnis dan klien API **tidak boleh bergantung** pada pilihan shell UI.
 
-### FASE 0: Pisahkan Logika dari UI (Sedang Berjalan)
+### FASE 0: Pisahkan Logika dari UI (Selesai & Disempurnakan)
 - Buat crate `clients/launcher-core` (tanpa dependensi UI atau grafis):
   - Tipe data: `EdgeDevice`, `DeviceStatus`, `FilterTab`
   - Trait `ApiClient` + implementasi `MockApiClient`
   - Pemformat waktu (`format_relative_time_id`)
-  - Unit test
-- `clients/launcher` (egui) hanya memanggil `launcher-core`.
-- Bersihkan semua AI slop dan perbaiki bug visual.
-- **Kriteria Lolos:** `cargo test` di `launcher-core` 100% pass, `clients/launcher` berjalan bersih.
+  - 6 unit test otomatis (100% lulus via `cargo test`)
+- `clients/launcher` (egui) murni memanggil `launcher-core`.
+- Pembersihan & Koreksi UX:
+  1. URL stream diubah ke HTTP MJPEG port 5000: `http://{ip}:5000/stream` (bukan RTSP).
+  2. Notifikasi footer hilang otomatis dalam ~4 detik via timer `Instant::now()` dan repaint reaktif.
+  3. Status pemindaian konsisten: tombol "Memindai..." dan notifikasi tidak kontradiktif, jumlah perangkat di footer sinkron dengan daftar aktif.
+  4. Penulisan waktu diseragamkan: `"Dipindai baru saja"`.
+  5. Tombol "Opsi" diselaraskan menjadi outline dengan margin pembatas dan menu pop-up terisolasi.
+  6. **TODO (Pengaturan URL Server):** Tambahkan kembali modal/dialog pengaturan URL target server Laravel saat mode dinamis diintegrasikan pada Fase 4.
+- **Kriteria Lolos:** `cargo test` di `launcher-core` 100% pass, `cargo build --release` di `launcher` 0 warning.
 
 ### FASE 1: Spike "wry di dalam eframe" (Maks. 1 hari)
 - Crate terisolasi `clients/launcher-webview-spike` (jangan sentuh `clients/launcher`).

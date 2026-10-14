@@ -4,8 +4,8 @@
 Tujuan spike ini adalah menguji estetika dan ergonomi antarmuka grafis native Rust untuk mengelola armada perangkat Orange Pi secara lokal, membandingkannya dengan pendekatan alternatif (web dashboard Blade atau Tauri/wry).
 
 - **Branch Eksperimen:** `feat/egui-launcher`
-- **Kode Prototipe:** [`clients/launcher/src/main.rs`](../clients/launcher/src/main.rs)
-- **Status Saat Ini:** **Fase 0 (Pemisahan Core & Pembersihan Slop UI)**
+- **Kode Prototipe:** [`clients/launcher/src/main.rs`](../clients/launcher/src/main.rs) (Prototipe antarmuka egui dengan data mock, belum menyentuh jaringan atau Laravel; bukan aplikasi stabil atau sudah jadi)
+- **Status Saat Ini:** **Fase 0 Selesai (Core terpisah & UI bersih)**; **Fase 1 Spike Wry Selesai (Diarsipkan pada tag git `spike-wry-eframe`)**
 
 ---
 
@@ -57,12 +57,12 @@ Prinsip: Logika bisnis dan klien API **tidak boleh bergantung** pada pilihan she
 
 | Butir Pengujian | Status | Hasil Pengukuran / Catatan Teknis |
 | :--- | :---: | :--- |
-| **a. Resize, Minimize, Maximize** | **Catatan** | Webview mengikuti perubahan ukuran jendela via `set_bounds`. Namun karena WebView2 adalah child HWND terpisah, terjadi *asynchronous lag* (flicker hitam sesaat pada batas tepi) saat jendela ditarik cepat secara manual di Windows. |
+| **a. Resize, Minimize, Maximize** | **Tidak Diuji** | Belum diuji secara interaktif manual. |
 | **b. DPI Scaling (100% vs 150%)** | **Lulus** | Posisi dan dimensi webview dikonversi ke `LogicalPosition` dan `LogicalSize`. WebView2 menangani rendering resolusi tinggi secara internal. |
-| **c. Fokus Keyboard** | **Catatan** | Mengetik di dalam kolom input HTML dan Tab antar-elemen HTML berjalan normal. Namun, fokus terjebak di child HWND: tombol Tab tidak bisa berpindah keluar dari webview kembali ke elemen egui tanpa klik mouse manual. |
-| **d. Tumpang Tindih (Airspace / Overlap)** | **GAGAL** | **Popup / dropdown menu egui tertutup oleh webview.** Child window Win32 (`HWND`) WebView2 berada di atas lapisan gambar OpenGL egui. Elemen egui di atas area webview tidak terlihat (masalah klasik *Airspace* Win32). |
+| **c. Fokus Keyboard** | **Tidak Diuji** | Belum diuji secara interaktif manual. |
+| **d. Tumpang Tindih (Airspace / Overlap)** | **GAGAL** | **Diamati langsung (screenshot), popup egui terpotong oleh webview.** Child window Win32 (`HWND`) WebView2 berada di atas lapisan gambar OpenGL egui; elemen popup/menu egui di atas area webview terpotong tepat pada batas webview. Semua menu dan dialog terpaksa harus dibuat di dalam HTML. |
 | **e. IPC Dua Arah** | **Lulus** | Perintah `list_devices`, `approve`, dan `reject` berhasil memicu mutasi di `MockApiClient` dan memperbarui tampilan HTML tanpa reload. Perintah di luar whitelist JSON ditolak dan dicatat di stderr. |
-| **f. Memori (Working Set)** | **Catatan** | • Host process saja: **105.51 MB**<br>• Total (Host + 6 proses anak `msedgewebview2.exe`): **~385 MB**.<br>*(Sebagai perbandingan, `launcher-egui` pure Rust hanya memakan **~96 MB** dalam 1 proses tunggal tanpa proses anak).* |
+| **f. Memori (Working Set)** | **Catatan** | Hasil ukur ulang binary release via `Get-Process`:<br>• Host process saja: **89.61 MB**<br>• Total (Host + 6 proses anak `msedgewebview2.exe`): **370.81 MB**.<br>*(Sebagai perbandingan, `clients/launcher` egui release memakan **95.86 MB** dalam 1 proses tunggal).* |
 | **g. Ukuran Binary Release** | **Lulus** | **20,444,828 bytes** (**~19.50 MB**). Selisih hanya +63 KB dibandingkan launcher egui (**19.44 MB**). |
 | **h. Prasyarat Runtime** | **Wajib** | Membutuhkan **Microsoft Edge WebView2 Runtime**. Sudah terpasang bawaan di Windows 11 & Windows 10 modern. Pada Windows 10 LTSC / sistem offline tanpa WebView2, inisialisasi akan gagal (error panic pada creation). |
 | **i. Lingkungan Linux** | **Tidak Diuji** | Lingkungan pengujian saat ini adalah Windows. Secara arsitektur, `build_as_child` wry di Linux bergantung pada X11 plug/socket dan tidak mendukung Wayland native. |
@@ -71,10 +71,10 @@ Prinsip: Logika bisnis dan klien API **tidak boleh bergantung** pada pilihan she
 **Jawaban Jujur:** **TIDAK.**
 Jika seluruh antarmuka aplikasi dibangun dengan HTML/CSS, keberadaan `egui` justru menjadi beban ganda:
 1. **Masalah Airspace:** Menu, dialog modal, dan tooltip egui tidak bisa digambar di atas webview (tertutup oleh HWND WebView2). Akibatnya, semua dialog dan menu tetap harus ditulis di HTML.
-2. **Duplikasi Overhead:** Aplikasi harus menjalankan runtime OpenGL/egui sekaligus runtime Chromium WebView2, menghabiskan ~385 MB RAM.
+2. **Duplikasi Overhead:** Aplikasi harus menjalankan runtime OpenGL/egui sekaligus runtime Chromium WebView2, menghabiskan 370.81 MB RAM.
 3. **Pilihan Lebih Masuk Akal:**
    - **Jika Ingin Web UI Desktop:** Gunakan **`Tauri`** atau **`tao` + `wry` langsung** (tanpa egui). Menghilangkan lapisan OpenGL yang mubazir, perataan jendela native rapi tanpa lag resize, dan footprint lebih bersih.
-   - **Jika Ingin Efisiensi Memori & Single Binary:** Tetap pada **`egui` murni** (Fase 0) yang hanya memakan ~53–96 MB RAM, tanpa ketergantungan runtime browser eksternal.
+   - **Jika Ingin Efisiensi Memori & Single Binary:** Tetap pada **`egui` murni** (Fase 0) yang memakan **95.86 MB** RAM (diukur pada build release), tanpa ketergantungan runtime browser eksternal.
    - **Jika Ingin Nol Distribusi Desktop:** Gunakan **Halaman Admin Blade Laravel** (terhubung langsung ke database tanpa aplikasi klien desktop sama sekali).
 
 ### FASE 2: Pilih Shell Final

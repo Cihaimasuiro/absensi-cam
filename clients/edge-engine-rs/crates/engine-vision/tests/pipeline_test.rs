@@ -23,6 +23,7 @@ fn find_model(names: &[&str]) -> Option<PathBuf> {
 }
 
 #[test]
+#[ignore = "memerlukan test_face.png dan model ONNX lokal"]
 fn test_full_vision_pipeline_local() {
     println!("\n=== Testing Pure-Rust AI Vision Pipeline Locally ===");
 
@@ -50,10 +51,7 @@ fn test_full_vision_pipeline_local() {
     // 3. Load test face image
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let img_path = manifest.join("test_face.png");
-    if !img_path.exists() {
-        println!("[SKIP] test_face.png not found in crate directory, skipping local inference test.");
-        return;
-    }
+    assert!(img_path.exists(), "test_face.png harus ada di direktori crate untuk menjalankan tes inferensi");
     let dyn_img = image::open(&img_path).expect("Failed to open test_face.png").to_rgb8();
     let (width, height) = dyn_img.dimensions();
     let rgb_bytes = dyn_img.into_raw();

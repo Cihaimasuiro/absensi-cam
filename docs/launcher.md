@@ -4,8 +4,8 @@
 Tujuan spike ini adalah menguji estetika dan ergonomi antarmuka grafis native Rust untuk mengelola armada perangkat Orange Pi secara lokal, membandingkannya dengan pendekatan alternatif (web dashboard Blade atau Tauri/wry).
 
 - **Branch Eksperimen:** `feat/egui-launcher`
-- **Kode Prototipe:** [`clients/launcher/src/main.rs`](../clients/launcher/src/main.rs) (Prototipe antarmuka egui dengan data mock, belum menyentuh jaringan atau Laravel; bukan aplikasi stabil atau sudah jadi)
-- **Status Saat Ini:** **Fase 0 Selesai (Core terpisah & UI bersih)**; **Fase 1 Spike Wry Selesai (Diarsipkan pada tag git `spike-wry-eframe`)**
+- **Kode Prototipe:** [`archive/launcher/src/main.rs`](../archive/launcher/src/main.rs) (Prototipe antarmuka egui dengan data mock, diarsipkan di `archive/launcher`)
+- **Status Saat Ini:** **Fase 0 Selesai (Diarsipkan ke `archive/launcher` & `archive/launcher-core`)**; **Fase 1 Desktop Shell Tauri (`clients/desktop-shell`) Aktif**
 
 ---
 

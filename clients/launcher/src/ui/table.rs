@@ -4,7 +4,9 @@ use launcher_core::{format_relative_time_id, ApiClient, DeviceStatus, FilterTab}
 use crate::app::{LauncherApp, LATEST_ENGINE_VERSION};
 use crate::layout::TableLayout;
 use crate::theme;
-use crate::widgets::{child_cell, draw_status_dot, draw_tab_item, draw_three_dots_button};
+use crate::widgets::{
+    child_cell, child_cell_vertical_center, draw_status_dot, draw_tab_item, draw_three_dots_button,
+};
 
 pub fn render_table(
     app: &mut LauncherApp,
@@ -253,7 +255,7 @@ pub fn render_table(
 
         // Daftar Baris Tabel dalam ScrollArea
         egui::ScrollArea::vertical()
-            .max_height((ui.available_height() - 56.0).max(120.0))
+            .max_height(ui.available_height())
             .show(ui, |ui| {
                 for dev in &table_devices {
                     let is_offline = dev.status == DeviceStatus::Offline;
@@ -327,25 +329,23 @@ pub fn render_table(
                         Pos2::new(row_rect.left() + layout.col_x[2], row_rect.top()),
                         Vec2::new(layout.col_w[2], 56.0),
                     );
-                    child_cell(ui, cell_addr, |ui| {
-                        ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(&dev.ip_address)
-                                        .font(theme::font_technical())
-                                        .color(text_color),
-                                )
-                                .truncate(),
-                            );
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(&dev.mac_address)
-                                        .font(theme::font_technical_sm())
-                                        .color(theme::TEKS_REDUP),
-                                )
-                                .truncate(),
-                            );
-                        });
+                    child_cell_vertical_center(ui, cell_addr, 36.0, |ui| {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&dev.ip_address)
+                                    .font(theme::font_technical())
+                                    .color(text_color),
+                            )
+                            .truncate(),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&dev.mac_address)
+                                    .font(theme::font_technical_sm())
+                                    .color(theme::TEKS_REDUP),
+                            )
+                            .truncate(),
+                        );
                     });
 
                     // 4, 5, 6: Telemetri sekunder (hanya tampil pada mode penuh / !layout.is_compact)
@@ -555,6 +555,7 @@ pub fn render_table(
                     let (row_sep, _) = ui.allocate_exact_size(Vec2::new(layout.total_w, 1.0), Sense::hover());
                     ui.painter().rect_filled(row_sep, 0.0, theme::PEMISAH_BARIS);
                 }
+                ui.add_space(16.0);
             });
     }
 }

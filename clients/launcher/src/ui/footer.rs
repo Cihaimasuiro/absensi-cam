@@ -5,13 +5,11 @@ use crate::app::LauncherApp;
 use crate::theme;
 
 pub fn render_footer(app: &mut LauncherApp, ui: &mut egui::Ui) {
-    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-        ui.add_space(4.0);
-        let (f_sep, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
-        ui.painter().rect_filled(f_sep, 0.0, theme::PEMISAH_BARIS);
-        ui.add_space(8.0);
+    let (f_sep, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 1.0), Sense::hover());
+    ui.painter().rect_filled(f_sep, 0.0, theme::PEMISAH_BARIS);
+    ui.add_space(8.0);
 
-        ui.horizontal(|ui| {
+    ui.horizontal(|ui| {
             let registered_count = app
                 .devices
                 .iter()
@@ -75,5 +73,4 @@ pub fn render_footer(app: &mut LauncherApp, ui: &mut egui::Ui) {
                 }
             });
         });
-    });
 }

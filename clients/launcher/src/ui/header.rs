@@ -6,18 +6,21 @@ use crate::theme;
 use crate::widgets::draw_status_dot;
 
 pub fn render_header(app: &mut LauncherApp, ui: &mut egui::Ui) {
+    let show_subtitle = ui.available_width() >= 840.0;
     ui.horizontal(|ui| {
         ui.label(
             RichText::new("Perangkat")
                 .font(theme::font_title())
                 .color(theme::TEKS),
         );
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new("Absensi-Cam · armada edge")
-                .font(theme::font_body())
-                .color(theme::TEKS_REDUP),
-        );
+        if show_subtitle {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new("Absensi-Cam · armada edge")
+                    .font(theme::font_body())
+                    .color(theme::TEKS_REDUP),
+            );
+        }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Tombol outline transparan "Pindai jaringan" (tinggi 36, radius 6, stroke #3A403B)

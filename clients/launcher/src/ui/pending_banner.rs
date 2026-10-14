@@ -23,6 +23,7 @@ pub fn render_pending_banners(
             .corner_radius(theme::RADIUS_SM)
             .inner_margin(egui::Margin::symmetric(20, 16))
             .show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 let is_narrow_banner = ui.available_width() < 820.0;
 
                 if is_narrow_banner {
@@ -84,10 +85,16 @@ pub fn render_pending_banners(
 
                         // Baris baru grup aksi: ComboBox Gedung, Setujui, Tolak
                         ui.horizontal(|ui| {
-                            // Pilihan Gedung: border tunggal bawaan widget ComboBox (tinggi 36px)
+                            // Pilihan Gedung: border 1px #3A403B, latar permukaan (tinggi 36px)
                             ui.scope(|ui| {
                                 ui.spacing_mut().interact_size.y = 36.0;
                                 ui.visuals_mut().widgets.inactive.bg_fill = theme::PERMUKAAN;
+                                ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0, theme::OUTLINE_TOMBOL);
+                                ui.visuals_mut().widgets.hovered.bg_stroke = Stroke::new(1.0, theme::TEKS_REDUP);
+                                ui.visuals_mut().widgets.active.bg_stroke = Stroke::new(1.0, theme::TEKS);
+                                ui.visuals_mut().widgets.inactive.corner_radius = theme::RADIUS_SM;
+                                ui.visuals_mut().widgets.hovered.corner_radius = theme::RADIUS_SM;
+                                ui.visuals_mut().widgets.active.corner_radius = theme::RADIUS_SM;
                                 egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
                                     .selected_text(
                                         RichText::new(&app.selected_building)
@@ -229,10 +236,16 @@ pub fn render_pending_banners(
 
                             ui.add_space(16.0);
 
-                            // Pilihan Gedung: border tunggal bawaan widget ComboBox (tinggi serasi 36px)
+                            // Pilihan Gedung: border 1px #3A403B, latar permukaan (tinggi serasi 36px)
                             ui.scope(|ui| {
                                 ui.spacing_mut().interact_size.y = 36.0;
                                 ui.visuals_mut().widgets.inactive.bg_fill = theme::PERMUKAAN;
+                                ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0, theme::OUTLINE_TOMBOL);
+                                ui.visuals_mut().widgets.hovered.bg_stroke = Stroke::new(1.0, theme::TEKS_REDUP);
+                                ui.visuals_mut().widgets.active.bg_stroke = Stroke::new(1.0, theme::TEKS);
+                                ui.visuals_mut().widgets.inactive.corner_radius = theme::RADIUS_SM;
+                                ui.visuals_mut().widgets.hovered.corner_radius = theme::RADIUS_SM;
+                                ui.visuals_mut().widgets.active.corner_radius = theme::RADIUS_SM;
                                 egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
                                     .selected_text(
                                         RichText::new(&app.selected_building)

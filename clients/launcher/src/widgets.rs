@@ -18,6 +18,29 @@ pub fn child_cell<R>(
     .inner
 }
 
+/// Helper untuk mengalokasikan scoped UI pada koordinat tepat (sub-sel tabel)
+/// untuk konten multi-baris (seperti IP di atas, MAC di bawah) agar tepat
+/// di tengah vertikal pada baris 56px.
+pub fn child_cell_vertical_center<R>(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    content_height: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let y_offset = ((rect.height() - content_height) / 2.0).max(0.0);
+    let centered_rect = Rect::from_min_size(
+        Pos2::new(rect.left(), rect.top() + y_offset),
+        Vec2::new(rect.width(), content_height),
+    );
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(centered_rect)
+            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+        add_contents,
+    )
+    .inner
+}
+
 /// Gambar titik status 8px:
 /// - Online: lingkaran penuh hijau
 /// - Offline: cincin 2px merah

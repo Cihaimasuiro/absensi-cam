@@ -124,33 +124,51 @@ impl eframe::App for LauncherApp {
             }
         }
 
-        let mut approved_id: Option<String> = None;
-        let mut rejected_id: Option<String> = None;
-        let mut forget_id: Option<String> = None;
-        let mut copy_notification: Option<String> = None;
-        let mut trigger_rename: Option<(String, String)> = None;
-        let mut close_active_menu = false;
+        // 1. Render Footer terlebih dahulu menggunakan Panel::bottom.
+        // Dengan ini egui secara otomatis memisahkan ruang bawah untuk footer
+        // sehingga konten tabel di atas tidak akan pernah menabrak atau menimpa footer.
+        egui::Panel::bottom("launcher_footer")
+            .frame(
+                egui::Frame::new()
+                    .fill(theme::LATAR)
+                    .inner_margin(egui::Margin {
+                        left: 40,
+                        right: 40,
+                        top: 6,
+                        bottom: 16,
+                    }),
+            )
+            .show(ui, |ui| {
+                footer::render_footer(self, ui);
+            });
 
-        // Padding halaman: 40 (kiri-kanan) x 28 (atas-bawah)
+        // 2. Render seluruh area konten utama pada sisa ruang di atas footer
         egui::Frame::new()
             .fill(theme::LATAR)
             .inner_margin(egui::Margin {
                 left: 40,
                 right: 40,
                 top: 28,
-                bottom: 28,
+                bottom: 0,
             })
             .show(ui, |ui| {
-                // 1. Header (judul, pemindaian, status server, scanning bar)
+                let mut approved_id: Option<String> = None;
+                let mut rejected_id: Option<String> = None;
+                let mut forget_id: Option<String> = None;
+                let mut copy_notification: Option<String> = None;
+                let mut trigger_rename: Option<(String, String)> = None;
+                let mut close_active_menu = false;
+
+                // Header (judul, pemindaian, status server, scanning bar)
                 header::render_header(self, ui);
 
                 // Jarak antar bagian: 24px
                 ui.add_space(24.0);
 
-                // 2. Blok "Menunggu persetujuan"
+                // Blok "Menunggu persetujuan"
                 pending_banner::render_pending_banners(self, ui, &mut approved_id, &mut rejected_id);
 
-                // 3 & 4. Tab navigasi, pencarian, modal ganti nama, dan tabel perangkat
+                // Tab navigasi, pencarian, modal ganti nama, dan tabel perangkat
                 table::render_table(
                     self,
                     ui,
@@ -206,9 +224,6 @@ impl eframe::App for LauncherApp {
                 if let Some(msg) = copy_notification {
                     self.notification = Some((msg, Instant::now()));
                 }
-
-                // 5. Footer (hitungan perangkat, waktu pemindaian, notifikasi toast)
-                footer::render_footer(self, ui);
             });
     }
 }

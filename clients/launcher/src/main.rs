@@ -11,7 +11,7 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(Vec2::new(1180.0, 700.0))
-            .with_min_inner_size(Vec2::new(720.0, 480.0))
+            .with_min_inner_size(Vec2::new(760.0, 560.0))
             .with_title("Absensi-Cam · Perangkat"),
         ..Default::default()
     };

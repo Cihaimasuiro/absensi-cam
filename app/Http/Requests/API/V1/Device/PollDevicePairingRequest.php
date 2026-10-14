@@ -11,6 +11,13 @@ class PollDevicePairingRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('poll_token') && $this->bearerToken()) {
+            $this->merge(['poll_token' => $this->bearerToken()]);
+        }
+    }
+
     public function rules(): array
     {
         return [

@@ -24,6 +24,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -45,14 +47,38 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Build Desktop Shell & Create Draft Release
+      - name: Run Clippy Strict Lints
+        run: cargo clippy --manifest-path clients/desktop-shell/Cargo.toml --all-targets -- -D warnings
+
+      # Build & Draft Release (only triggered on tag push v*)
+      - name: Build & Publish Draft Release (Tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: clients/desktop-shell
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0-manual' }}
+          tagName: ${{ github.ref_name }}
           releaseName: 'Absensi-Cam v__VERSION__'
           releaseBody: 'Draft release otomatis untuk Absensi-Cam Desktop Shell.'
           releaseDraft: true
           prerelease: false
+
+      # Build & Upload Artifacts (for manual workflow_dispatch test runs without creating fake releases)
+      - name: Build Binary (Manual Dispatch only)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: cargo build --manifest-path clients/desktop-shell/Cargo.toml --release
+
+      - name: Upload Binary Artifact (Windows)
+        if: "!startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'windows-latest'"
+        uses: actions/upload-artifact@v4
+        with:
+          name: absensi-cam-windows
+          path: clients/desktop-shell/target/release/desktop-shell.exe
+
+      - name: Upload Binary Artifact (Linux)
+        if: "!startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'ubuntu-22.04'"
+        uses: actions/upload-artifact@v4
+        with:
+          name: absensi-cam-linux
+          path: clients/desktop-shell/target/release/desktop-shell

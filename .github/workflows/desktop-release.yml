@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - feat/egui-launcher
   workflow_dispatch:
 
 jobs:
@@ -64,8 +66,8 @@ jobs:
           releaseDraft: true
           prerelease: false
 
-      # Build & Upload Artifacts (for manual workflow_dispatch test runs without creating fake releases)
-      - name: Build Binary (Manual Dispatch only)
+      # Build & Upload Artifacts (for branch push and manual dispatch test runs without creating fake releases)
+      - name: Build Binary (Non-tag builds)
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: cargo build --manifest-path clients/desktop-shell/Cargo.toml --release
 

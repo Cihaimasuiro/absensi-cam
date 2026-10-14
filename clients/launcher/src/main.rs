@@ -24,6 +24,7 @@ fn main() -> eframe::Result<()> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use eframe::egui::Color32;

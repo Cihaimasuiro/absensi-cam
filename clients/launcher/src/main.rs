@@ -1,156 +1,48 @@
 mod theme;
 
 use eframe::egui::{self, Color32, FontFamily, FontId, RichText, Vec2};
+use launcher_core::{
+    format_relative_time_id, ApiClient, DeviceStatus, EdgeDevice, FilterTab, MockApiClient,
+};
 
 const LATEST_ENGINE_VERSION: &str = "v0.3.0-rust";
 
-#[derive(Debug, Clone, PartialEq)]
-enum DeviceStatus {
-    PendingPairing,
-    Online,
-    Offline,
-}
-
-#[derive(Debug, Clone)]
-struct EdgeDevice {
-    id: String,
-    hostname: String,
-    ip_address: String,
-    mac_address: String,
-    pairing_code: Option<String>,
-    status: DeviceStatus,
-    engine_version: String,
-    temperature_c: f32,
-    last_seen_sec: u64,
-    has_timeout_error: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum FilterTab {
-    All,
-    Pending,
-    Online,
-    Offline,
-}
-
-/// Simulation states to demonstrate error & edge scenarios before wiring real networking
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum SimState {
-    Normal,
-    Scanning,
-    NoDevices,
-    ServerUnreachable,
-    TokenExpired,
-    DeviceTimeout,
-}
-
-fn format_relative_time_id(seconds: u64) -> String {
-    if seconds < 60 {
-        format!("{seconds} dtk lalu")
-    } else if seconds < 3600 {
-        format!("{} mnt lalu", seconds / 60)
-    } else if seconds < 86400 {
-        format!("{} jam lalu", seconds / 3600)
-    } else {
-        format!("{} hari lalu", seconds / 86400)
-    }
-}
-
 struct LauncherApp {
+    client: MockApiClient,
     server_url: String,
     search_query: String,
     active_tab: FilterTab,
-    sim_state: SimState,
-    scan_progress: f32,
     devices: Vec<EdgeDevice>,
     selected_device_id: Option<String>,
+    is_scanning: bool,
     last_scanned_time: String,
     notification_msg: Option<String>,
     rename_device_id: Option<String>,
     rename_input: String,
-    token_input_open: bool,
-    token_input: String,
 }
 
 impl LauncherApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         theme::configure_theme(&cc.egui_ctx);
+        let client = MockApiClient::new();
+        let devices = client.list_devices().unwrap_or_default();
 
         Self {
+            client,
             server_url: "http://192.168.1.100:8000".to_string(),
             search_query: String::new(),
             active_tab: FilterTab::All,
-            sim_state: SimState::Normal,
-            scan_progress: 0.0,
+            is_scanning: false,
             last_scanned_time: "10:42 WIB".to_string(),
             notification_msg: None,
             rename_device_id: None,
             rename_input: String::new(),
-            token_input_open: false,
-            token_input: String::new(),
-            devices: Self::sample_devices(),
+            devices,
             selected_device_id: None,
         }
     }
 
-    fn sample_devices() -> Vec<EdgeDevice> {
-        vec![
-            EdgeDevice {
-                id: "dev-04".to_string(),
-                hostname: "orangepi-new-device".to_string(),
-                ip_address: "192.168.1.88".to_string(),
-                mac_address: "02:42:C0:A8:01:58".to_string(),
-                pairing_code: Some("PAIR-7842".to_string()),
-                status: DeviceStatus::PendingPairing,
-                engine_version: "v0.3.0-rust".to_string(),
-                temperature_c: 50.2,
-                last_seen_sec: 12,
-                has_timeout_error: false,
-            },
-            EdgeDevice {
-                id: "dev-01".to_string(),
-                hostname: "orangepi-gate-in".to_string(),
-                ip_address: "192.168.1.50".to_string(),
-                mac_address: "02:42:C0:A8:01:32".to_string(),
-                pairing_code: None,
-                status: DeviceStatus::Online,
-                engine_version: "v0.3.0-rust".to_string(),
-                temperature_c: 54.8,
-                last_seen_sec: 2,
-                has_timeout_error: false,
-            },
-            EdgeDevice {
-                id: "dev-02".to_string(),
-                hostname: "orangepi-gate-out".to_string(),
-                ip_address: "192.168.1.51".to_string(),
-                mac_address: "02:42:C0:A8:01:33".to_string(),
-                pairing_code: None,
-                status: DeviceStatus::Online,
-                engine_version: "v0.3.0-rust".to_string(),
-                temperature_c: 56.1,
-                last_seen_sec: 5,
-                has_timeout_error: false,
-            },
-            EdgeDevice {
-                id: "dev-03".to_string(),
-                hostname: "orangepi-canteen".to_string(),
-                ip_address: "192.168.1.55".to_string(),
-                mac_address: "02:42:C0:A8:01:37".to_string(),
-                pairing_code: None,
-                status: DeviceStatus::Offline,
-                engine_version: "v0.2.8".to_string(),
-                temperature_c: 0.0,
-                last_seen_sec: 1420,
-                has_timeout_error: false,
-            },
-        ]
-    }
-
     fn filtered_devices(&self) -> Vec<&EdgeDevice> {
-        if self.sim_state == SimState::NoDevices {
-            return Vec::new();
-        }
-
         let mut list: Vec<&EdgeDevice> = self
             .devices
             .iter()
@@ -204,12 +96,6 @@ impl eframe::App for LauncherApp {
                             .color(theme::INK),
                     );
 
-                    ui.label(
-                        RichText::new("// PELUNCUR ARMADA")
-                            .font(FontId::monospace(11.0))
-                            .color(theme::INK_MUTED),
-                    );
-
                     // Honest simulation tag
                     ui.label(
                         RichText::new(" DATA SIMULASI ")
@@ -220,20 +106,11 @@ impl eframe::App for LauncherApp {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Settings button
-                        let _ = ui.add(
-                            egui::Button::new(
-                                RichText::new("⚙ Pengaturan").font(FontId::proportional(12.0)),
-                            )
-                            .min_size(Vec2::new(96.0, 30.0)),
-                        );
-
-                        // Scan LAN button with active feedback
-                        let is_scanning = self.sim_state == SimState::Scanning;
-                        let scan_text = if is_scanning {
-                            "⏳ Memindai..."
+                        // Scan LAN button
+                        let scan_text = if self.is_scanning {
+                            "Memindai..."
                         } else {
-                            "⟳ Pindai LAN"
+                            "Pindai LAN"
                         };
                         let scan_btn = egui::Button::new(
                             RichText::new(scan_text).font(FontId::proportional(12.0)),
@@ -241,247 +118,27 @@ impl eframe::App for LauncherApp {
                         .min_size(Vec2::new(96.0, 30.0));
 
                         if ui.add(scan_btn).clicked() {
-                            if self.sim_state == SimState::Scanning {
-                                self.sim_state = SimState::Normal;
-                            } else {
-                                self.sim_state = SimState::Scanning;
-                                self.scan_progress = 0.35;
+                            self.is_scanning = !self.is_scanning;
+                            if self.is_scanning {
                                 self.last_scanned_time = "Baru saja".to_string();
+                                self.notification_msg = Some("Pindai LAN selesai: 4 perangkat terdeteksi".to_string());
                             }
                         }
 
-                        // Consistent label: "Server:" (matching footer)
-                        let server_status_text = match self.sim_state {
-                            SimState::ServerUnreachable => "Server: Terputus (ECONNREFUSED)".to_string(),
-                            _ => format!("Server: {}", self.server_url),
-                        };
-                        let server_color = match self.sim_state {
-                            SimState::ServerUnreachable => theme::OFFLINE_FG,
-                            _ => theme::INK_MUTED,
-                        };
+                        // Consistent label: "Server:"
                         ui.label(
-                            RichText::new(&server_status_text)
+                            RichText::new(format!("Server: {}", self.server_url))
                                 .font(FontId::monospace(11.0))
-                                .color(server_color),
+                                .color(theme::INK_MUTED),
                         );
                     });
                 });
 
-                ui.add_space(8.0);
-
-                // State Simulation Switcher (Pre-network verification bar)
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new("Simulasi Keadaan:")
-                            .font(FontId::monospace(10.0))
-                            .color(theme::INK_DIM),
-                    );
-
-                    let sim_modes = [
-                        (SimState::Normal, "Normal"),
-                        (SimState::Scanning, "⏳ Memindai"),
-                        (SimState::NoDevices, "∅ Kosong"),
-                        (SimState::ServerUnreachable, "⚠ Server Putus"),
-                        (SimState::TokenExpired, "🔒 Token Habis"),
-                        (SimState::DeviceTimeout, "⏱ Device Timeout"),
-                    ];
-
-                    for (mode, label) in sim_modes {
-                        let is_selected = self.sim_state == mode;
-                        let text = RichText::new(label)
-                            .font(FontId::monospace(10.0))
-                            .color(if is_selected {
-                                theme::TAB_ACTIVE_FG
-                            } else {
-                                theme::INK_MUTED
-                            });
-
-                        let btn = egui::Button::new(text)
-                            .fill(if is_selected {
-                                theme::TAB_ACTIVE_BG
-                            } else {
-                                Color32::TRANSPARENT
-                            })
-                            .stroke(theme::hairline())
-                            .corner_radius(theme::RADIUS)
-                            .min_size(Vec2::new(0.0, 22.0));
-
-                        if ui.add(btn).clicked() {
-                            self.sim_state = mode;
-                            if mode == SimState::DeviceTimeout {
-                                if let Some(dev) = self.devices.first_mut() {
-                                    dev.has_timeout_error = true;
-                                }
-                            } else {
-                                for dev in &mut self.devices {
-                                    dev.has_timeout_error = false;
-                                }
-                            }
-                        }
-                    }
-                });
-
-                ui.add_space(8.0);
+                ui.add_space(10.0);
                 ui.separator();
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
-                // 2. Alert & Edge State Banners (Top Priority Indicators)
-                match self.sim_state {
-                    SimState::Scanning => {
-                        egui::Frame::group(ui.style())
-                            .fill(Color32::from_rgb(20, 28, 42))
-                            .stroke(egui::Stroke::new(1.0, theme::ACCENT))
-                            .inner_margin(egui::Margin::symmetric(14, 10))
-                            .corner_radius(theme::RADIUS)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new("⏳ MEMINDAI SUBNET:")
-                                            .font(FontId::monospace(11.0))
-                                            .strong()
-                                            .color(theme::ACCENT),
-                                    );
-                                    ui.label(
-                                        RichText::new("Mengirim probe ARP & UDP port 8000 ke 192.168.1.0/24...")
-                                            .font(FontId::proportional(12.0))
-                                            .color(theme::INK),
-                                    );
-
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    RichText::new("Hentikan").font(FontId::proportional(11.0)),
-                                                )
-                                                .min_size(Vec2::new(70.0, 24.0)),
-                                            )
-                                            .clicked()
-                                        {
-                                            self.sim_state = SimState::Normal;
-                                        }
-
-                                        ui.add(
-                                            egui::ProgressBar::new(0.42)
-                                                .desired_width(120.0)
-                                                .text("108/254 IP"),
-                                        );
-                                    });
-                                });
-                            });
-                        ui.add_space(8.0);
-                    }
-                    SimState::ServerUnreachable => {
-                        egui::Frame::group(ui.style())
-                            .fill(theme::BANNER_WARN_BG)
-                            .stroke(egui::Stroke::new(1.0, theme::PENDING_FG))
-                            .inner_margin(egui::Margin::symmetric(14, 10))
-                            .corner_radius(theme::RADIUS)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new("⚠ SERVER TERPUTUS:")
-                                            .font(FontId::monospace(11.0))
-                                            .strong()
-                                            .color(theme::PENDING_FG),
-                                    );
-                                    ui.label(
-                                        RichText::new(format!(
-                                            "Gagal menghubungi {} (ECONNREFUSED). Mode offline aktif.",
-                                            self.server_url
-                                        ))
-                                        .font(FontId::proportional(12.0))
-                                        .color(theme::INK),
-                                    );
-
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    RichText::new("Uji Ulang").font(FontId::proportional(11.0)),
-                                                )
-                                                .min_size(Vec2::new(80.0, 24.0)),
-                                            )
-                                            .clicked()
-                                        {
-                                            self.notification_msg = Some("Mencoba hubungkan ke server...".to_string());
-                                        }
-
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    RichText::new("Ubah URL").font(FontId::proportional(11.0)),
-                                                )
-                                                .min_size(Vec2::new(80.0, 24.0)),
-                                            )
-                                            .clicked()
-                                        {}
-                                    });
-                                });
-                            });
-                        ui.add_space(8.0);
-                    }
-                    SimState::TokenExpired => {
-                        egui::Frame::group(ui.style())
-                            .fill(theme::BANNER_ERR_BG)
-                            .stroke(egui::Stroke::new(1.0, theme::OFFLINE_FG))
-                            .inner_margin(egui::Margin::symmetric(14, 10))
-                            .corner_radius(theme::RADIUS)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        RichText::new("🔒 SESI TOKEN HABIS:")
-                                            .font(FontId::monospace(11.0))
-                                            .strong()
-                                            .color(theme::OFFLINE_FG),
-                                    );
-                                    ui.label(
-                                        RichText::new("Token otorisasi API kedaluwarsa. Persetujuan dan perubahan armada dikunci.")
-                                            .font(FontId::proportional(12.0))
-                                            .color(theme::INK),
-                                    );
-
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui
-                                            .add(
-                                                egui::Button::new(
-                                                    RichText::new("Perbarui Token").font(FontId::proportional(11.0)),
-                                                )
-                                                .min_size(Vec2::new(100.0, 24.0)),
-                                            )
-                                            .clicked()
-                                        {
-                                            self.token_input_open = !self.token_input_open;
-                                        }
-                                    });
-                                });
-
-                                if self.token_input_open {
-                                    ui.add_space(6.0);
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new("Token Baru:")
-                                                .font(FontId::monospace(11.0))
-                                                .color(theme::INK_MUTED),
-                                        );
-                                        ui.add(
-                                            egui::TextEdit::singleline(&mut self.token_input)
-                                                .hint_text("Masukkan Bearer Sanctum Token...")
-                                                .desired_width(280.0),
-                                        );
-                                        if ui.button("Simpan & Aktifkan").clicked() {
-                                            self.token_input_open = false;
-                                            self.sim_state = SimState::Normal;
-                                            self.notification_msg = Some("Token berhasil diperbarui".to_string());
-                                        }
-                                    });
-                                }
-                            });
-                        ui.add_space(8.0);
-                    }
-                    _ => {}
-                }
-
-                // 3. Filter Tabs & Search Bar (Uniform 30px height, High-Contrast Active Tab)
+                // 2. Filter Tabs & Search Bar (Uniform 30px height, High-Contrast Active Tab)
                 ui.horizontal(|ui| {
                     let all_cnt = self.devices.len();
                     let pending_cnt = self
@@ -537,13 +194,13 @@ impl eframe::App for LauncherApp {
                         }
                     }
 
-                    // Search input precisely matching 30px height
+                    // Search input matching 30px height
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add(
                             egui::TextEdit::singleline(&mut self.search_query)
-                                .hint_text("Cari hostname, IP, MAC, atau kode...")
+                                .hint_text("Cari hostname, IP, MAC...")
                                 .font(FontId::proportional(12.0))
-                                .desired_width(280.0)
+                                .desired_width(260.0)
                                 .min_size(Vec2::new(0.0, 30.0))
                                 .margin(egui::Margin::symmetric(10, 7)),
                         );
@@ -552,7 +209,7 @@ impl eframe::App for LauncherApp {
 
                 ui.add_space(12.0);
 
-                // Rename Modal Dialog (if triggered from "⋯" menu)
+                // Rename Modal Dialog (if triggered from options menu)
                 if let Some(ref dev_id) = self.rename_device_id.clone() {
                     egui::Frame::group(ui.style())
                         .fill(theme::PANEL)
@@ -572,8 +229,11 @@ impl eframe::App for LauncherApp {
                                         .desired_width(220.0),
                                 );
                                 if ui.button("Simpan").clicked() {
-                                    if let Some(dev) = self.devices.iter_mut().find(|d| &d.id == dev_id) {
-                                        dev.hostname = self.rename_input.clone();
+                                    if self.client.rename_device(dev_id, &self.rename_input).is_ok() {
+                                        if let Some(dev) = self.devices.iter_mut().find(|d| &d.id == dev_id) {
+                                            dev.hostname = self.rename_input.clone();
+                                        }
+                                        self.notification_msg = Some(format!("Nama diubah menjadi '{}'", self.rename_input));
                                     }
                                     self.rename_device_id = None;
                                     self.rename_input.clear();
@@ -587,86 +247,106 @@ impl eframe::App for LauncherApp {
                     ui.add_space(8.0);
                 }
 
-                // 4. Device Cards Scroll Area or Rich Empty State
+                // 3. Device Cards Scroll Area or Clean Empty State
                 let filtered = self.filtered_devices();
                 let mut new_selection: Option<String> = None;
                 let mut approved_id: Option<String> = None;
                 let mut rejected_id: Option<String> = None;
                 let mut forget_id: Option<String> = None;
                 let mut copy_notification: Option<String> = None;
-                let mut retry_device_id: Option<String> = None;
                 let mut trigger_rename: Option<(String, String)> = None;
 
-                if filtered.is_empty() {
-                    // Empty State: Technician-friendly diagnostic screen
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(40.0);
+                if self.devices.is_empty() {
+                    // Truly empty fleet state
+                    ui.vertical(|ui| {
+                        ui.add_space(30.0);
                         ui.label(
-                            RichText::new("[ ∅ ]")
-                                .font(FontId::monospace(26.0))
-                                .color(theme::INK_FAINT),
-                        );
-                        ui.add_space(8.0);
-                        ui.label(
-                            RichText::new("Tidak ada perangkat yang terdeteksi.")
-                                .font(FontId::proportional(15.0))
+                            RichText::new("Belum Ada Perangkat Terdaftar")
+                                .font(FontId::proportional(16.0))
                                 .strong()
                                 .color(theme::INK),
                         );
-                        ui.add_space(6.0);
+                        ui.add_space(4.0);
                         ui.label(
-                            RichText::new(
-                                "Tidak ditemukan Orange Pi yang cocok dengan kriteria pencarian / filter ini.",
-                            )
-                            .font(FontId::proportional(12.0))
-                            .color(theme::INK_MUTED),
+                            RichText::new("Tidak ditemukan perangkat edge Orange Pi di jaringan lokal.")
+                                .font(FontId::proportional(12.0))
+                                .color(theme::INK_MUTED),
                         );
-                        ui.add_space(14.0);
+                        ui.add_space(12.0);
 
                         egui::Frame::group(ui.style())
                             .fill(theme::PANEL)
                             .stroke(theme::hairline())
-                            .inner_margin(egui::Margin::symmetric(20, 14))
+                            .inner_margin(egui::Margin::symmetric(16, 12))
                             .corner_radius(theme::RADIUS)
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
                                     ui.label(
-                                        RichText::new("PANDUAN PEMERIKSAAN LAPANGAN:")
-                                            .font(FontId::monospace(10.0))
+                                        RichText::new("Panduan Pemeriksaan Teknis:")
+                                            .font(FontId::proportional(12.0))
                                             .strong()
-                                            .color(theme::INK_DIM),
+                                            .color(theme::INK),
                                     );
                                     ui.add_space(4.0);
                                     ui.label(
-                                        RichText::new("1. Pastikan kabel Ethernet / WiFi Orange Pi terpasang dan LED link berkedip.")
+                                        RichText::new("• Pastikan kabel Ethernet Orange Pi terhubung dan LED link aktif.")
                                             .font(FontId::proportional(11.0))
                                             .color(theme::INK_MUTED),
                                     );
                                     ui.label(
-                                        RichText::new("2. Pastikan layanan edge-engine-rs aktif: systemctl status smart-absensi-engine")
+                                        RichText::new("• Periksa status daemon: systemctl status smart-absensi-engine")
                                             .font(FontId::monospace(11.0))
                                             .color(theme::INK_MUTED),
                                     );
                                     ui.label(
-                                        RichText::new("3. Pastikan subnet workstation dan perangkat berada dalam segmen yang sama (192.168.1.0/24).")
+                                        RichText::new("• Pastikan IP perangkat berada pada subnet yang sama (192.168.1.0/24).")
                                             .font(FontId::proportional(11.0))
                                             .color(theme::INK_MUTED),
                                     );
                                 });
                             });
 
-                        ui.add_space(14.0);
+                        ui.add_space(12.0);
                         if ui
                             .add(
                                 egui::Button::new(
-                                    RichText::new("⟳ Pindai Ulang Jaringan Lokal")
-                                        .font(FontId::proportional(12.0)),
+                                    RichText::new("Pindai Ulang LAN").font(FontId::proportional(12.0)),
                                 )
-                                .min_size(Vec2::new(180.0, 32.0)),
+                                .min_size(Vec2::new(140.0, 30.0)),
                             )
                             .clicked()
                         {
-                            self.sim_state = SimState::Scanning;
+                            self.devices = self.client.list_devices().unwrap_or_default();
+                        }
+                    });
+                } else if filtered.is_empty() {
+                    // Filter or search has no matches (fleet is NOT empty)
+                    ui.vertical(|ui| {
+                        ui.add_space(30.0);
+                        ui.label(
+                            RichText::new("Tidak Ada Perangkat yang Cocok")
+                                .font(FontId::proportional(15.0))
+                                .strong()
+                                .color(theme::INK),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new("Tidak ada perangkat yang sesuai dengan filter atau kata kunci saat ini.")
+                                .font(FontId::proportional(12.0))
+                                .color(theme::INK_MUTED),
+                        );
+                        ui.add_space(10.0);
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new("Reset Filter").font(FontId::proportional(12.0)),
+                                )
+                                .min_size(Vec2::new(110.0, 28.0)),
+                            )
+                            .clicked()
+                        {
+                            self.active_tab = FilterTab::All;
+                            self.search_query.clear();
                         }
                     });
                 } else {
@@ -739,7 +419,7 @@ impl eframe::App for LauncherApp {
                                                             theme::OFFLINE_BG,
                                                         ),
                                                         DeviceStatus::PendingPairing => (
-                                                            "MENUNGGU PERSETUJUAN",
+                                                            "MENUNGGU",
                                                             theme::PENDING_FG,
                                                             theme::PENDING_BG,
                                                         ),
@@ -753,7 +433,7 @@ impl eframe::App for LauncherApp {
                                                             .background_color(badge_bg),
                                                     );
 
-                                                    // Prominent Pairing Code sticker for pending cards
+                                                    // Pairing Code sticker for pending cards
                                                     if let Some(ref code) = dev.pairing_code {
                                                         ui.label(
                                                             RichText::new(format!(" KODE: {code} "))
@@ -827,11 +507,11 @@ impl eframe::App for LauncherApp {
                                                     Vec2::new(240.0, 30.0),
                                                     egui::Layout::right_to_left(egui::Align::Center),
                                                     |ui| {
-                                                        // Context Menu "⋯" (Holds Rename, Revoke/Forget, Copy IP/MAC)
+                                                        // Context Menu "Opsi" (Standard ASCII text, zero missing glyphs!)
                                                         ui.menu_button(
-                                                            RichText::new("⋯").font(FontId::proportional(14.0)),
+                                                            RichText::new("Opsi").font(FontId::proportional(12.0)),
                                                             |ui| {
-                                                                if ui.button("📋 Salin Alamat IP").clicked() {
+                                                                if ui.button("Salin Alamat IP").clicked() {
                                                                     ui.ctx().copy_text(dev.ip_address.clone());
                                                                     copy_notification = Some(format!(
                                                                         "IP {} disalin ke clipboard",
@@ -839,7 +519,7 @@ impl eframe::App for LauncherApp {
                                                                     ));
                                                                     ui.close();
                                                                 }
-                                                                if ui.button("📋 Salin Alamat MAC").clicked() {
+                                                                if ui.button("Salin Alamat MAC").clicked() {
                                                                     ui.ctx().copy_text(dev.mac_address.clone());
                                                                     copy_notification = Some(format!(
                                                                         "MAC {} disalin ke clipboard",
@@ -848,13 +528,13 @@ impl eframe::App for LauncherApp {
                                                                     ui.close();
                                                                 }
                                                                 ui.separator();
-                                                                if ui.button("✏ Ubah Nama...").clicked() {
+                                                                if ui.button("Ubah Nama...").clicked() {
                                                                     trigger_rename = Some((dev.id.clone(), dev.hostname.clone()));
                                                                     ui.close();
                                                                 }
                                                                 if ui
                                                                     .button(
-                                                                        RichText::new("🗑 Lupakan Perangkat")
+                                                                        RichText::new("Lupakan Perangkat")
                                                                             .color(theme::OFFLINE_FG),
                                                                     )
                                                                     .clicked()
@@ -869,13 +549,13 @@ impl eframe::App for LauncherApp {
                                                             DeviceStatus::PendingPairing => {
                                                                 // Single Primary Button Rule: Approve is SOLID
                                                                 let approve_btn = egui::Button::new(
-                                                                    RichText::new("✔ Setujui")
+                                                                    RichText::new("Setujui")
                                                                         .font(FontId::proportional(12.0))
                                                                         .strong()
                                                                         .color(Color32::WHITE),
                                                                 )
                                                                 .fill(theme::SOLID_APPROVE_BG)
-                                                                .min_size(Vec2::new(96.0, 30.0));
+                                                                .min_size(Vec2::new(88.0, 30.0));
                                                                 if ui.add(approve_btn).clicked() {
                                                                     approved_id = Some(dev.id.clone());
                                                                 }
@@ -905,8 +585,8 @@ impl eframe::App for LauncherApp {
                                                                 .min_size(Vec2::new(96.0, 30.0));
                                                                 if ui.add(stream_btn).clicked() {
                                                                     copy_notification = Some(format!(
-                                                                        "Membuka stream RTSP untuk {}",
-                                                                        dev.hostname
+                                                                        "Membuka stream RTSP: rtsp://{}:8554/live",
+                                                                        dev.ip_address
                                                                     ));
                                                                 }
 
@@ -987,40 +667,6 @@ impl eframe::App for LauncherApp {
                                                 );
                                             });
                                         });
-
-                                        // State 5: Device stops responding mid-action (Inline timeout alert)
-                                        if dev.has_timeout_error {
-                                            ui.add_space(6.0);
-                                            egui::Frame::group(ui.style())
-                                                .fill(Color32::from_rgb(38, 16, 20))
-                                                .stroke(egui::Stroke::new(1.0, theme::OFFLINE_FG))
-                                                .inner_margin(egui::Margin::symmetric(10, 6))
-                                                .corner_radius(theme::RADIUS)
-                                                .show(ui, |ui| {
-                                                    ui.horizontal(|ui| {
-                                                        ui.label(
-                                                            RichText::new("⚠ TIMEOUT (5000ms):")
-                                                                .font(FontId::monospace(10.0))
-                                                                .strong()
-                                                                .color(theme::OFFLINE_FG),
-                                                        );
-                                                        ui.label(
-                                                            RichText::new("Perangkat tidak merespons perintah. Periksa suplai daya & kabel LAN.")
-                                                                .font(FontId::proportional(11.0))
-                                                                .color(theme::INK),
-                                                        );
-                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                            if ui.button("✕ Tutup").clicked() {
-                                                                retry_device_id = Some(dev.id.clone());
-                                                            }
-                                                            if ui.button("⟳ Coba Lagi").clicked() {
-                                                                retry_device_id = Some(dev.id.clone());
-                                                                copy_notification = Some(format!("Mencoba ulang koneksi ke {}", dev.hostname));
-                                                            }
-                                                        });
-                                                    });
-                                                });
-                                        }
                                     });
                                 ui.add_space(8.0);
                             }
@@ -1030,35 +676,36 @@ impl eframe::App for LauncherApp {
                         self.selected_device_id = Some(id);
                     }
                     if let Some(id) = approved_id {
-                        if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
-                            dev.status = DeviceStatus::Online;
-                            dev.pairing_code = None;
-                            self.notification_msg = Some(format!("Perangkat {} disetujui", dev.hostname));
+                        if self.client.approve_device(&id).is_ok() {
+                            if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
+                                dev.status = DeviceStatus::Online;
+                                dev.pairing_code = None;
+                                self.notification_msg = Some(format!("Perangkat {} disetujui", dev.hostname));
+                            }
                         }
                     }
                     if let Some(id) = rejected_id {
-                        self.devices.retain(|d| d.id != id);
-                        self.notification_msg = Some("Perangkat ditolak dan dihapus dari antrean".to_string());
+                        if self.client.reject_device(&id).is_ok() {
+                            self.devices.retain(|d| d.id != id);
+                            self.notification_msg = Some("Perangkat ditolak dan dihapus dari antrean".to_string());
+                        }
                     }
                     if let Some(id) = forget_id {
-                        self.devices.retain(|d| d.id != id);
-                        self.notification_msg = Some("Perangkat dilupakan".to_string());
+                        if self.client.forget_device(&id).is_ok() {
+                            self.devices.retain(|d| d.id != id);
+                            self.notification_msg = Some("Perangkat dilupakan".to_string());
+                        }
                     }
                     if let Some((id, hostname)) = trigger_rename {
                         self.rename_device_id = Some(id);
                         self.rename_input = hostname;
-                    }
-                    if let Some(id) = retry_device_id {
-                        if let Some(dev) = self.devices.iter_mut().find(|d| d.id == id) {
-                            dev.has_timeout_error = false;
-                        }
                     }
                     if let Some(msg) = copy_notification {
                         self.notification_msg = Some(msg);
                     }
                 }
 
-                // 5. Footer Bar with practical technician metrics
+                // 4. Footer Bar with real technician metrics
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.add_space(2.0);
                     ui.separator();
@@ -1067,7 +714,7 @@ impl eframe::App for LauncherApp {
                         let total_devices = self.devices.len();
                         ui.label(
                             RichText::new(format!(
-                                "Dipindai {} • {} perangkat terdaftar • Port: 8000",
+                                "Dipindai {} • {} perangkat terdaftar",
                                 self.last_scanned_time, total_devices
                             ))
                             .font(FontId::monospace(11.0))
@@ -1083,20 +730,10 @@ impl eframe::App for LauncherApp {
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (status_text, status_color) = match self.sim_state {
-                                SimState::ServerUnreachable => (
-                                    "● Server: Terputus (ECONNREFUSED)",
-                                    theme::OFFLINE_FG,
-                                ),
-                                _ => (
-                                    "○ Server: Terputus (Mode Simulasi Lokal)",
-                                    theme::PENDING_FG,
-                                ),
-                            };
                             ui.label(
-                                RichText::new(status_text)
+                                RichText::new(format!("Server: {} (Mode Simulasi)", self.server_url))
                                     .font(FontId::monospace(11.0))
-                                    .color(status_color),
+                                    .color(theme::PENDING_FG),
                             );
                         });
                     });

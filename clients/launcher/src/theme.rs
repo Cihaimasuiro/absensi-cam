@@ -39,10 +39,6 @@ pub const REJECT_FG: Color32 = Color32::from_rgb(248, 113, 113);
 pub const OUTDATED_FG: Color32 = Color32::from_rgb(180, 185, 200);
 pub const OUTDATED_BG: Color32 = alpha(255, 255, 255, 22);
 
-// Diagnostic & State Banners
-pub const BANNER_WARN_BG: Color32 = alpha(54, 38, 14, 230);
-pub const BANNER_ERR_BG: Color32 = alpha(54, 18, 22, 230);
-
 // Active Tab Inverted Chip (High Contrast)
 pub const TAB_ACTIVE_BG: Color32 = Color32::from_rgb(240, 242, 246);
 pub const TAB_ACTIVE_FG: Color32 = Color32::from_rgb(15, 16, 20);

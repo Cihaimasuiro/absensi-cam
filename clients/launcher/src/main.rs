@@ -98,6 +98,7 @@ impl LauncherApp {
 // -----------------------------------------------------------------------------
 
 struct TableLayout {
+    is_compact: bool,
     col_x: [f32; 7],
     col_w: [f32; 7],
     total_w: f32,
@@ -105,39 +106,84 @@ struct TableLayout {
 
 impl TableLayout {
     fn compute(available_width: f32) -> Self {
-        let col_gap = 14.0;
-        let w_status = 100.0;
-        let w_engine = 105.0;
-        let w_temp = 85.0;
-        let w_time = 105.0;
-        let w_action = 160.0;
+        let is_compact = available_width < 920.0;
 
-        let fixed_sum = w_status + w_engine + w_temp + w_time + w_action + (6.0 * col_gap);
-        let avail_for_fr = (available_width - fixed_sum).max(200.0);
-        let w_device = avail_for_fr * 0.5;
-        let w_address = avail_for_fr * 0.5;
+        if is_compact {
+            // Mode Kompak (< 920px): Sembunyikan 3 kolom telemetri sekunder (Engine, Suhu CPU, Terakhir).
+            // Alokasikan ruang ke Status (90px), Perangkat (fr), Alamat (fr), dan Aksi (150px).
+            let col_gap = 12.0;
+            let w_status = 90.0;
+            let w_action = 150.0;
 
-        let col_w = [
-            w_status,
-            w_device,
-            w_address,
-            w_engine,
-            w_temp,
-            w_time,
-            w_action,
-        ];
+            let fixed_sum = w_status + w_action + (3.0 * col_gap);
+            let avail_for_fr = (available_width - fixed_sum).max(180.0);
+            let w_device = avail_for_fr * 0.5;
+            let w_address = avail_for_fr * 0.5;
 
-        let mut col_x = [0.0; 7];
-        let mut cur = 0.0;
-        for i in 0..7 {
-            col_x[i] = cur;
-            cur += col_w[i] + col_gap;
-        }
+            let col_w = [
+                w_status,
+                w_device,
+                w_address,
+                0.0,
+                0.0,
+                0.0,
+                w_action,
+            ];
 
-        Self {
-            col_x,
-            col_w,
-            total_w: available_width.max(cur - col_gap),
+            let mut col_x = [0.0; 7];
+            col_x[0] = 0.0;
+            col_x[1] = col_x[0] + col_w[0] + col_gap;
+            col_x[2] = col_x[1] + col_w[1] + col_gap;
+            // 3, 4, 5 tersembunyi
+            col_x[3] = 0.0;
+            col_x[4] = 0.0;
+            col_x[5] = 0.0;
+            col_x[6] = col_x[2] + col_w[2] + col_gap;
+
+            Self {
+                is_compact,
+                col_x,
+                col_w,
+                total_w: available_width.max(col_x[6] + col_w[6]),
+            }
+        } else {
+            // Mode Penuh (>= 920px): Tampilkan semua 7 kolom.
+            // Kolom Engine diperlebar dari 105px -> 125px agar 'v0.2.8 · usang' tidak menempel dengan '—'.
+            let col_gap = 14.0;
+            let w_status = 100.0;
+            let w_engine = 125.0;
+            let w_temp = 85.0;
+            let w_time = 105.0;
+            let w_action = 160.0;
+
+            let fixed_sum = w_status + w_engine + w_temp + w_time + w_action + (6.0 * col_gap);
+            let avail_for_fr = (available_width - fixed_sum).max(200.0);
+            let w_device = avail_for_fr * 0.5;
+            let w_address = avail_for_fr * 0.5;
+
+            let col_w = [
+                w_status,
+                w_device,
+                w_address,
+                w_engine,
+                w_temp,
+                w_time,
+                w_action,
+            ];
+
+            let mut col_x = [0.0; 7];
+            let mut cur = 0.0;
+            for i in 0..7 {
+                col_x[i] = cur;
+                cur += col_w[i] + col_gap;
+            }
+
+            Self {
+                is_compact,
+                col_x,
+                col_w,
+                total_w: available_width.max(cur - col_gap),
+            }
         }
     }
 }
@@ -467,8 +513,10 @@ impl eframe::App for LauncherApp {
                         .corner_radius(theme::RADIUS_SM)
                         .inner_margin(egui::Margin::symmetric(20, 16))
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                // Kolom Kiri: Detail teknis perangkat
+                            let is_narrow_banner = ui.available_width() < 820.0;
+
+                            if is_narrow_banner {
+                                // Mode Adaptif Sempit (< 820px): Informasi perangkat di atas, tombol di baris baru
                                 ui.vertical(|ui| {
                                     // Nama perangkat 18px semibold
                                     ui.label(
@@ -514,78 +562,186 @@ impl eframe::App for LauncherApp {
 
                                     ui.add_space(4.0);
 
-                                    // Waktu permintaan & kedaluwarsa (format_relative_time_id sudah berakhiran 'lalu')
+                                    // Waktu permintaan & kedaluwarsa
                                     let rel_time = format_relative_time_id(dev.last_seen_sec);
                                     ui.label(
                                         RichText::new(format!("Meminta {rel_time} · kedaluwarsa 09:48"))
                                             .font(theme::font_caption())
                                             .color(theme::TEKS_REDUP),
                                     );
-                                });
 
-                                // Kolom Kanan: Pilihan Gedung (border 1px #3A403B, tinggi serasi 36px),
-                                // Tombol Padat Amber "Setujui", Tombol Teks Merah "Tolak"
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    // Tombol teks merah "Tolak"
-                                    let reject_btn = egui::Button::new(
-                                        RichText::new("Tolak")
-                                            .font(theme::font_body())
-                                            .color(theme::MERAH_OFFLINE),
-                                    )
-                                    .fill(Color32::TRANSPARENT)
-                                    .stroke(Stroke::NONE);
+                                    ui.add_space(14.0);
 
-                                    if ui.add(reject_btn).clicked() {
-                                        rejected_id = Some(dev.id.clone());
-                                    }
+                                    // Baris baru grup aksi: ComboBox Gedung, Setujui, Tolak
+                                    ui.horizontal(|ui| {
+                                        // Pilihan Gedung: border tunggal bawaan widget ComboBox (tinggi 36px)
+                                        ui.scope(|ui| {
+                                            ui.spacing_mut().interact_size.y = 36.0;
+                                            ui.visuals_mut().widgets.inactive.bg_fill = theme::PERMUKAAN;
+                                            egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
+                                                .selected_text(
+                                                    RichText::new(&self.selected_building)
+                                                        .font(theme::font_body())
+                                                        .color(theme::TEKS),
+                                                )
+                                                .show_ui(ui, |ui| {
+                                                    for b in &self.buildings {
+                                                        ui.selectable_value(
+                                                            &mut self.selected_building,
+                                                            b.clone(),
+                                                            RichText::new(b).font(theme::font_body()),
+                                                        );
+                                                    }
+                                                });
+                                        });
 
-                                    ui.add_space(16.0);
+                                        ui.add_space(16.0);
 
-                                    // SATU-SATUNYA tombol padat di layar: "Setujui" amber #E8B449 dengan teks #1A1405
-                                    let approve_btn = egui::Button::new(
-                                        RichText::new("Setujui")
-                                            .font(theme::font_body_medium())
-                                            .color(theme::TEKS_DI_ATAS_AMBER),
-                                    )
-                                    .fill(theme::AMBER)
-                                    .stroke(Stroke::NONE)
-                                    .corner_radius(theme::RADIUS_SM)
-                                    .min_size(Vec2::new(96.0, 36.0));
+                                        let approve_btn = egui::Button::new(
+                                            RichText::new("Setujui")
+                                                .font(theme::font_body_medium())
+                                                .color(theme::TEKS_DI_ATAS_AMBER),
+                                        )
+                                        .fill(theme::AMBER)
+                                        .stroke(Stroke::NONE)
+                                        .corner_radius(theme::RADIUS_SM)
+                                        .min_size(Vec2::new(96.0, 36.0));
 
-                                    if ui.add(approve_btn).clicked() {
-                                        approved_id = Some(dev.id.clone());
-                                    }
+                                        if ui.add(approve_btn).clicked() {
+                                            approved_id = Some(dev.id.clone());
+                                        }
 
-                                    ui.add_space(16.0);
+                                        ui.add_space(16.0);
 
-                                    // Pilihan Gedung: border 1px #3A403B, tinggi serasi 36px, tanpa label terbalik agar tidak menabrak teks kode di kiri
-                                    ui.scope(|ui| {
-                                        ui.spacing_mut().interact_size.y = 34.0;
-                                        egui::Frame::new()
-                                            .fill(theme::PERMUKAAN)
-                                            .stroke(Stroke::new(1.0, theme::OUTLINE_TOMBOL))
-                                            .corner_radius(theme::RADIUS_SM)
-                                            .inner_margin(egui::Margin::symmetric(10, 2))
-                                            .show(ui, |ui| {
-                                                egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
-                                                    .selected_text(
-                                                        RichText::new(&self.selected_building)
-                                                            .font(theme::font_body())
-                                                            .color(theme::TEKS),
-                                                    )
-                                                    .show_ui(ui, |ui| {
-                                                        for b in &self.buildings {
-                                                            ui.selectable_value(
-                                                                &mut self.selected_building,
-                                                                b.clone(),
-                                                                RichText::new(b).font(theme::font_body()),
-                                                            );
-                                                        }
-                                                    });
-                                            });
+                                        let reject_btn = egui::Button::new(
+                                            RichText::new("Tolak")
+                                                .font(theme::font_body())
+                                                .color(theme::MERAH_OFFLINE),
+                                        )
+                                        .fill(Color32::TRANSPARENT)
+                                        .stroke(Stroke::NONE);
+
+                                        if ui.add(reject_btn).clicked() {
+                                            rejected_id = Some(dev.id.clone());
+                                        }
                                     });
                                 });
-                            });
+                            } else {
+                                // Mode Penuh (>= 820px): Sejajar horizontal kiri-kanan
+                                ui.horizontal(|ui| {
+                                    // Kolom Kiri: Detail teknis perangkat
+                                    ui.vertical(|ui| {
+                                        // Nama perangkat 18px semibold
+                                        ui.label(
+                                            RichText::new(&dev.hostname)
+                                                .font(theme::font_subheading())
+                                                .color(theme::TEKS),
+                                        );
+                                        ui.add_space(4.0);
+
+                                        // MAC 20px mono + label "(cocokkan dengan stiker)" sejajar vertikal
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                RichText::new(&dev.mac_address)
+                                                    .font(theme::font_mac_large())
+                                                    .color(theme::TEKS),
+                                            );
+                                            ui.add_space(6.0);
+                                            ui.label(
+                                                RichText::new("(cocokkan dengan stiker)")
+                                                    .font(theme::font_caption())
+                                                    .color(theme::TEKS_REDUP),
+                                            );
+                                        });
+
+                                        ui.add_space(4.0);
+
+                                        // IP terlihat server (BUKAN dilaporkan perangkat) & kode
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                RichText::new(format!("IP terlihat server: {}", dev.ip_address))
+                                                    .font(theme::font_technical())
+                                                    .color(theme::TEKS_REDUP),
+                                            );
+                                            ui.add_space(12.0);
+                                            if let Some(ref code) = dev.pairing_code {
+                                                ui.label(
+                                                    RichText::new(format!("kode: {code}"))
+                                                        .font(theme::font_technical())
+                                                        .color(theme::AMBER),
+                                                );
+                                            }
+                                        });
+
+                                        ui.add_space(4.0);
+
+                                        // Waktu permintaan & kedaluwarsa
+                                        let rel_time = format_relative_time_id(dev.last_seen_sec);
+                                        ui.label(
+                                            RichText::new(format!("Meminta {rel_time} · kedaluwarsa 09:48"))
+                                                .font(theme::font_caption())
+                                                .color(theme::TEKS_REDUP),
+                                        );
+                                    });
+
+                                    // Kolom Kanan: Pilihan Gedung (border tunggal 1px #3A403B, tinggi 36px),
+                                    // Tombol Padat Amber "Setujui", Tombol Teks Merah "Tolak"
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        // Tombol teks merah "Tolak"
+                                        let reject_btn = egui::Button::new(
+                                            RichText::new("Tolak")
+                                                .font(theme::font_body())
+                                                .color(theme::MERAH_OFFLINE),
+                                        )
+                                        .fill(Color32::TRANSPARENT)
+                                        .stroke(Stroke::NONE);
+
+                                        if ui.add(reject_btn).clicked() {
+                                            rejected_id = Some(dev.id.clone());
+                                        }
+
+                                        ui.add_space(16.0);
+
+                                        // SATU-SATUNYA tombol padat di layar: "Setujui" amber #E8B449 dengan teks #1A1405
+                                        let approve_btn = egui::Button::new(
+                                            RichText::new("Setujui")
+                                                .font(theme::font_body_medium())
+                                                .color(theme::TEKS_DI_ATAS_AMBER),
+                                        )
+                                        .fill(theme::AMBER)
+                                        .stroke(Stroke::NONE)
+                                        .corner_radius(theme::RADIUS_SM)
+                                        .min_size(Vec2::new(96.0, 36.0));
+
+                                        if ui.add(approve_btn).clicked() {
+                                            approved_id = Some(dev.id.clone());
+                                        }
+
+                                        ui.add_space(16.0);
+
+                                        // Pilihan Gedung: border tunggal bawaan widget ComboBox (tinggi serasi 36px)
+                                        ui.scope(|ui| {
+                                            ui.spacing_mut().interact_size.y = 36.0;
+                                            ui.visuals_mut().widgets.inactive.bg_fill = theme::PERMUKAAN;
+                                            egui::ComboBox::from_id_salt(format!("building_select_{}", dev.id))
+                                                .selected_text(
+                                                    RichText::new(&self.selected_building)
+                                                        .font(theme::font_body())
+                                                        .color(theme::TEKS),
+                                                )
+                                                .show_ui(ui, |ui| {
+                                                    for b in &self.buildings {
+                                                        ui.selectable_value(
+                                                            &mut self.selected_building,
+                                                            b.clone(),
+                                                            RichText::new(b).font(theme::font_body()),
+                                                        );
+                                                    }
+                                                });
+                                        });
+                                    });
+                                });
+                            }
                         });
 
                     ui.add_space(12.0);
@@ -788,22 +944,31 @@ impl eframe::App for LauncherApp {
                         }
                     });
                 } else {
-                    // Header Kolom: huruf kapital awal, 12px, redup
-                    let headers = [
-                        "Status",
-                        "Perangkat",
-                        "Alamat",
-                        "Engine",
-                        "Suhu CPU",
-                        "Terakhir",
-                        "Aksi",
-                    ];
+                    // Header Kolom: huruf kapital awal, 12px, redup (adaptif mode kompak)
+                    let headers: &[(&str, usize)] = if layout.is_compact {
+                        &[
+                            ("Status", 0),
+                            ("Perangkat", 1),
+                            ("Alamat", 2),
+                            ("Aksi", 6),
+                        ]
+                    } else {
+                        &[
+                            ("Status", 0),
+                            ("Perangkat", 1),
+                            ("Alamat", 2),
+                            ("Engine", 3),
+                            ("Suhu CPU", 4),
+                            ("Terakhir", 5),
+                            ("Aksi", 6),
+                        ]
+                    };
 
                     let (header_row_rect, _) = ui.allocate_exact_size(Vec2::new(layout.total_w, 24.0), Sense::hover());
-                    for (i, h) in headers.iter().enumerate() {
+                    for (h, col_idx) in headers {
                         let cell_rect = Rect::from_min_size(
-                            Pos2::new(header_row_rect.left() + layout.col_x[i], header_row_rect.top()),
-                            Vec2::new(layout.col_w[i], 24.0),
+                            Pos2::new(header_row_rect.left() + layout.col_x[*col_idx], header_row_rect.top()),
+                            Vec2::new(layout.col_w[*col_idx], 24.0),
                         );
                         ui.scope_builder(
                             egui::UiBuilder::new().max_rect(cell_rect).layout(egui::Layout::left_to_right(egui::Align::Center)),
@@ -920,58 +1085,61 @@ impl eframe::App for LauncherApp {
                                     });
                                 });
 
-                                // 4. Kolom Engine (105px): versi usang tanpa chip
-                                let cell_engine = Rect::from_min_size(
-                                    Pos2::new(row_rect.left() + layout.col_x[3], row_rect.top()),
-                                    Vec2::new(layout.col_w[3], 56.0),
-                                );
-                                child_cell(ui, cell_engine, |ui| {
-                                    if is_outdated {
+                                // 4, 5, 6: Telemetri sekunder (hanya tampil pada mode penuh / !layout.is_compact)
+                                if !layout.is_compact {
+                                    // 4. Kolom Engine (125px): versi usang tanpa chip
+                                    let cell_engine = Rect::from_min_size(
+                                        Pos2::new(row_rect.left() + layout.col_x[3], row_rect.top()),
+                                        Vec2::new(layout.col_w[3], 56.0),
+                                    );
+                                    child_cell(ui, cell_engine, |ui| {
+                                        if is_outdated {
+                                            ui.label(
+                                                RichText::new(format!("{} · usang", dev.engine_version))
+                                                    .font(theme::font_technical())
+                                                    .color(theme::TEKS_REDUP),
+                                            );
+                                        } else {
+                                            ui.label(
+                                                RichText::new(&dev.engine_version)
+                                                    .font(theme::font_technical())
+                                                    .color(text_color),
+                                            );
+                                        }
+                                    });
+
+                                    // 5. Kolom Suhu CPU (85px)
+                                    let cell_temp = Rect::from_min_size(
+                                        Pos2::new(row_rect.left() + layout.col_x[4], row_rect.top()),
+                                        Vec2::new(layout.col_w[4], 56.0),
+                                    );
+                                    child_cell(ui, cell_temp, |ui| {
+                                        let temp_text = if dev.status == DeviceStatus::Online {
+                                            format!("{:.1}°C", dev.temperature_c)
+                                        } else {
+                                            "—".to_string()
+                                        };
                                         ui.label(
-                                            RichText::new(format!("{} · usang", dev.engine_version))
-                                                .font(theme::font_technical())
-                                                .color(theme::TEKS_REDUP),
-                                        );
-                                    } else {
-                                        ui.label(
-                                            RichText::new(&dev.engine_version)
+                                            RichText::new(temp_text)
                                                 .font(theme::font_technical())
                                                 .color(text_color),
                                         );
-                                    }
-                                });
+                                    });
 
-                                // 5. Kolom Suhu CPU (85px)
-                                let cell_temp = Rect::from_min_size(
-                                    Pos2::new(row_rect.left() + layout.col_x[4], row_rect.top()),
-                                    Vec2::new(layout.col_w[4], 56.0),
-                                );
-                                child_cell(ui, cell_temp, |ui| {
-                                    let temp_text = if dev.status == DeviceStatus::Online {
-                                        format!("{:.1}°C", dev.temperature_c)
-                                    } else {
-                                        "—".to_string()
-                                    };
-                                    ui.label(
-                                        RichText::new(temp_text)
-                                            .font(theme::font_technical())
-                                            .color(text_color),
+                                    // 6. Kolom Terakhir (105px)
+                                    let cell_time = Rect::from_min_size(
+                                        Pos2::new(row_rect.left() + layout.col_x[5], row_rect.top()),
+                                        Vec2::new(layout.col_w[5], 56.0),
                                     );
-                                });
-
-                                // 6. Kolom Terakhir (105px)
-                                let cell_time = Rect::from_min_size(
-                                    Pos2::new(row_rect.left() + layout.col_x[5], row_rect.top()),
-                                    Vec2::new(layout.col_w[5], 56.0),
-                                );
-                                child_cell(ui, cell_time, |ui| {
-                                    let rel = format_relative_time_id(dev.last_seen_sec);
-                                    ui.label(
-                                        RichText::new(rel)
-                                            .font(theme::font_caption())
-                                            .color(theme::TEKS_REDUP),
-                                    );
-                                });
+                                    child_cell(ui, cell_time, |ui| {
+                                        let rel = format_relative_time_id(dev.last_seen_sec);
+                                        ui.label(
+                                            RichText::new(rel)
+                                                .font(theme::font_caption())
+                                                .color(theme::TEKS_REDUP),
+                                        );
+                                    });
+                                }
 
                                 // 7. Kolom Aksi (160px): outline button (lebar 100px, tinggi 36) + tombol 3 titik (lebar 36) = total 144px
                                 let cell_action = Rect::from_min_size(
@@ -1263,7 +1431,7 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(Vec2::new(1180.0, 700.0))
-            .with_min_inner_size(Vec2::new(1080.0, 620.0))
+            .with_min_inner_size(Vec2::new(720.0, 480.0))
             .with_title("Absensi-Cam · Perangkat"),
         ..Default::default()
     };
@@ -1314,9 +1482,11 @@ mod tests {
 
     #[test]
     fn test_table_layout_alignment() {
+        // Mode Penuh (>= 920px)
         let layout = TableLayout::compute(1000.0);
+        assert!(!layout.is_compact);
         assert_eq!(layout.col_w[0], 100.0); // Status
-        assert_eq!(layout.col_w[3], 105.0); // Engine
+        assert_eq!(layout.col_w[3], 125.0); // Engine
         assert_eq!(layout.col_w[4], 85.0);  // Suhu CPU
         assert_eq!(layout.col_w[5], 105.0); // Terakhir
         assert_eq!(layout.col_w[6], 160.0); // Aksi
@@ -1325,5 +1495,16 @@ mod tests {
         assert_eq!(layout.col_w[1], layout.col_w[2]);
         // Jarak antar kolom konsisten
         assert_eq!(layout.col_x[1], layout.col_x[0] + layout.col_w[0] + 14.0);
+
+        // Mode Kompak (< 920px)
+        let compact = TableLayout::compute(800.0);
+        assert!(compact.is_compact);
+        assert_eq!(compact.col_w[0], 90.0);
+        assert_eq!(compact.col_w[3], 0.0); // Engine disembunyikan
+        assert_eq!(compact.col_w[4], 0.0); // Suhu CPU disembunyikan
+        assert_eq!(compact.col_w[5], 0.0); // Terakhir disembunyikan
+        assert_eq!(compact.col_w[6], 150.0); // Aksi 150px
+        assert_eq!(compact.col_w[1], compact.col_w[2]);
+        assert_eq!(compact.col_x[6], compact.col_x[2] + compact.col_w[2] + 12.0);
     }
 }

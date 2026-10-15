@@ -24,18 +24,18 @@
         </div>
         <div class="flex gap-2">
             <button type="submit" class="btn btn-utility flex items-center gap-xs">
-                <i data-lucide="filter" class="w-4 h-4"></i> Filter
+                <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
             </button>
             @role('super_admin|admin')
             <div class="flex gap-1 items-center">
                 <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
-                    <i data-lucide="download" class="w-4 h-4"></i> Raw CSV
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
                 </a>
-                <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-primary flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> XLSX
+                <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
+                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-accent-green"></i> XLSX
                 </a>
-                <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-danger flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF
+                <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-accent-orange"></i> PDF
                 </a>
             </div>
             @endrole

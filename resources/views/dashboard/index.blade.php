@@ -15,6 +15,65 @@
 @section('content')
 <div x-data="{ streamIp: '{{ $streamIp }}' }" class="flex flex-col gap-lg">
 
+    {{-- Executive Overview KPI Tiles (Clean Notion Document Style) --}}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+        {{-- Present Today --}}
+        <div class="card stat-tile animate-fade-up">
+            <div class="stat-tile-label">
+                <i data-lucide="user-check" class="w-3.5 h-3.5 text-accent-green"></i>
+                Hadir Hari Ini
+            </div>
+            <div class="stat-tile-value text-accent-green">
+                {{ number_format($presentToday) }}
+            </div>
+            <div class="stat-tile-hint">
+                Dari total {{ number_format($totalStudents) }} anggota aktif
+            </div>
+        </div>
+
+        {{-- Attendance Rate --}}
+        <div class="card stat-tile animate-fade-up">
+            <div class="stat-tile-label">
+                <i data-lucide="activity" class="w-3.5 h-3.5 text-primary"></i>
+                Tingkat Kehadiran
+            </div>
+            <div class="stat-tile-value text-primary">
+                {{ $totalStudents > 0 ? round(($presentToday / $totalStudents) * 100, 1) : 0 }}%
+            </div>
+            <div class="stat-tile-hint">
+                Presensi terverifikasi hari ini
+            </div>
+        </div>
+
+        {{-- Enrolled Face Templates --}}
+        <div class="card stat-tile animate-fade-up">
+            <div class="stat-tile-label">
+                <i data-lucide="scan-face" class="w-3.5 h-3.5 text-ink-muted"></i>
+                Wajah Terdaftar
+            </div>
+            <div class="stat-tile-value text-ink">
+                {{ number_format($totalEnrolled) }}
+            </div>
+            <div class="stat-tile-hint">
+                Template biometrik aktif
+            </div>
+        </div>
+
+        {{-- Online Devices --}}
+        <div class="card stat-tile animate-fade-up">
+            <div class="stat-tile-label">
+                <i data-lucide="cpu" class="w-3.5 h-3.5 text-ink-muted"></i>
+                Terminal Online
+            </div>
+            <div class="stat-tile-value {{ $devicesOnline > 0 ? 'text-accent-green' : 'text-ink-muted' }}">
+                {{ number_format($devicesOnline) }}
+            </div>
+            <div class="stat-tile-hint">
+                Edge Engine aktif (3 mnt)
+            </div>
+        </div>
+    </div>
+
     {{-- Main Live Monitor Grid --}}
     <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-lg">
 
@@ -26,7 +85,7 @@
                     <span class="text-[13px] font-semibold text-ink uppercase tracking-wide">Live Camera Feed</span>
                 </div>
                 <div class="flex items-center gap-xs text-eyebrow text-ink-faint">
-                    <i data-lucide="wifi" class="w-[12px] h-[12px]"></i>
+                    <i data-lucide="wifi" class="w-3 h-3"></i>
                     <select x-model="streamIp" @change="const img = document.getElementById('liveStreamImg'); if (img) img.style.display = 'block';" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer font-medium hover:text-ink transition-colors">
                         @if($devices->isEmpty())
                             <option value="{{ $streamIp }}">Local Edge Engine ({{ $streamIp }})</option>

@@ -89,3 +89,4 @@ target/
 
 clients/edge-engine-rs/*.db
 local_edge.db
+clients/desktop-shell/gen/

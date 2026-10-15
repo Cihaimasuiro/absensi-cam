@@ -134,7 +134,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="text-center text-ink-faint p-xxl">
+                        <td colspan="7" class="text-center text-ink-faint p-xxl">
                             <div class="flex flex-col items-center justify-center gap-sm">
                                 <i data-lucide="cpu" class="w-8 h-8 opacity-50"></i>
                                 Belum ada perangkat. Generate kode pairing untuk mendaftarkan perangkat baru.
@@ -265,7 +265,7 @@
                 <div class="bg-gray-900 text-gray-100 p-3 rounded text-[13px] font-mono whitespace-pre-wrap break-all select-all mb-md" 
                      x-text="newDeviceEnv ? newDeviceEnv : 'SMART_ABSENSI_URL={{ request()->getSchemeAndHttpHost() }}\nSMART_ABSENSI_TOKEN=<RAHASIA_SILAKAN_GENERATE_ULANG_JIKA_LUPA>\nSMART_ABSENSI_DEVICE_ID=' + configDevice.device_code + '\nENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE='">
                 </div>
-                <div class="flex justify-right gap-sm mt-md pt-sm">
+                <div class="flex justify-end gap-sm mt-md pt-sm">
                     <form method="POST" x-bind:action="'/devices/' + configDevice.id + '/reset-token'" @submit="confirmSubmit" data-confirm="Anda yakin ingin MENGGANTI (reset) token lama? Device akan terputus sampai token baru dipasang.">
                         @csrf
                         <button type="submit" class="btn btn-secondary text-danger border-danger/50 hover:bg-danger/10 inline-flex items-center gap-xs">

@@ -27,7 +27,7 @@
                 </div>
                 <div class="flex items-center gap-xs text-eyebrow text-ink-faint">
                     <i data-lucide="wifi" class="w-[12px] h-[12px]"></i>
-                    <select x-model="streamIp" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer font-medium hover:text-ink transition-colors">
+                    <select x-model="streamIp" @change="const img = document.getElementById('liveStreamImg'); if (img) img.style.display = 'block';" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer font-medium hover:text-ink transition-colors">
                         @if($devices->isEmpty())
                             <option value="{{ $streamIp }}">Local Edge Engine ({{ $streamIp }})</option>
                         @else
@@ -45,7 +45,8 @@
                     <i data-lucide="video-off" class="w-8 h-8 opacity-40"></i>
                     <span class="text-[13px] font-mono">Stream Standby / Menghubungkan...</span>
                 </div>
-                <img :src="'http://' + streamIp + ':5000/video_feed'"
+                <img id="liveStreamImg"
+                     :src="'http://' + streamIp + ':5000/video_feed'"
                      alt="Live Stream"
                      class="relative z-5 w-full h-full object-contain"
                      onerror="this.style.display='none'"

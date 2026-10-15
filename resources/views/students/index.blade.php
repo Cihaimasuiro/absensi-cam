@@ -656,12 +656,14 @@
                 status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
                 btn.disabled = false;
                 btn.innerHTML = defaultText;
+                window.refreshIcons?.();
             }
         } catch (err) {
             status.textContent = 'Terjadi kesalahan jaringan.';
             status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
             btn.disabled = false;
             btn.innerHTML = defaultText;
+            window.refreshIcons?.();
         }
     }
 
@@ -728,12 +730,14 @@
                 status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
                 btn.disabled = false;
                 btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah';
+                window.refreshIcons?.();
             }
         } catch (err) {
             status.textContent = 'Terjadi kesalahan jaringan saat menghapus.';
             status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
             btn.disabled = false;
             btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah';
+            window.refreshIcons?.();
         }
     }
 </script>

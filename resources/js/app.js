@@ -7,7 +7,7 @@ import {
     Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-    UserCheck, RefreshCw, PlusCircle, List, Loader2, createIcons
+    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, createIcons
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
@@ -111,6 +111,7 @@ Alpine.data('reportsData', () => ({
         try {
             const res = await fetch(`/reports/student-logs?student_id=${studentId}&date=${date}`);
             this.logs = await res.json();
+            setTimeout(() => window.refreshIcons?.(), 50);
         } catch (e) {
             console.error(e);
         } finally {
@@ -148,22 +149,28 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
 window.Alpine = Alpine
 Alpine.start()
 
-createIcons({
-    icons: {
-        ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
-        Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
-        Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
-        FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
-        AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-        UserCheck, RefreshCw, PlusCircle, List, Loader2
-    }
-})
+const lucideIcons = {
+    ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
+    Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
+    Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
+    FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
+    AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
+    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check
+};
+
+export function refreshIcons() {
+    createIcons({ icons: lucideIcons });
+}
+
+refreshIcons();
+window.refreshIcons = refreshIcons;
+window.lucide = { createIcons: refreshIcons };
 
 // ═════════════════════════════════════════════════════════════════════
-// Modern Web Animations: Lenis Smooth Scroll, GSAP, & React Bits
+// Modern Web Animations: Lenis Smooth Scroll & GSAP
 // ═════════════════════════════════════════════════════════════════════
 
-// 1. Lenis Smooth Scroll (Hardware-accelerated, respects prefers-reduced-motion)
+// 1. Lenis Smooth Scroll (Hardware-accelerated, synced with GSAP ticker)
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const lenis = new Lenis({
         duration: 0.9,
@@ -174,11 +181,10 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         touchMultiplier: 1.5,
     });
 
-    function raf(time) {
-        lenis.raf(time);
-        requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
+    gsap.ticker.add((time) => {
+        lenis.raf(time * 1000);
+    });
+    gsap.ticker.lagSmoothing(0);
     window.__lenis = lenis;
 }
 

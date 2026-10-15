@@ -1,4 +1,6 @@
 import Alpine from '@alpinejs/csp'
+import Lenis from 'lenis'
+import gsap from 'gsap'
 import {
     ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
     Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
@@ -155,4 +157,81 @@ createIcons({
         AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
         UserCheck, RefreshCw, PlusCircle, List, Loader2
     }
-})  
+})
+
+// ═════════════════════════════════════════════════════════════════════
+// Modern Web Animations: Lenis Smooth Scroll, GSAP, & React Bits
+// ═════════════════════════════════════════════════════════════════════
+
+// 1. Lenis Smooth Scroll (Hardware-accelerated, respects prefers-reduced-motion)
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const lenis = new Lenis({
+        duration: 0.9,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 0.95,
+        touchMultiplier: 1.5,
+    });
+
+    function raf(time) {
+        lenis.raf(time);
+        requestAnimationFrame(raf);
+    }
+    requestAnimationFrame(raf);
+    window.__lenis = lenis;
+}
+
+// 2. React Bits: Spotlight Card cursor radial highlight
+function initSpotlightCards() {
+    document.querySelectorAll('.spotlight-card').forEach((card) => {
+        if (card.__hasSpotlight) return;
+        card.__hasSpotlight = true;
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+}
+
+// 3. GSAP Micro-Interactions & Stagger Entrance
+function initGsapInteractions() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Entrance animation for dashboard elements
+    const fadeCards = document.querySelectorAll('.animate-fade-up');
+    if (fadeCards.length > 0) {
+        gsap.from(fadeCards, {
+            opacity: 0,
+            y: 10,
+            duration: 0.4,
+            stagger: 0.05,
+            ease: 'power2.out',
+            clearProps: 'all'
+        });
+    }
+
+    // Recent activity rows stagger entrance
+    const activityRows = document.querySelectorAll('.animate-row');
+    if (activityRows.length > 0) {
+        gsap.from(activityRows, {
+            opacity: 0,
+            x: -6,
+            duration: 0.35,
+            stagger: 0.03,
+            ease: 'power1.out',
+            clearProps: 'all'
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initSpotlightCards();
+    initGsapInteractions();
+});
+
+window.initSpotlightCards = initSpotlightCards;
+window.gsap = gsap;

@@ -250,4 +250,81 @@ nav[aria-label="Pagination"] a {
   }
   .data-table tbody tr:last-child td { border-bottom: none; }
   .data-table tbody tr:hover { background: var(--color-canvas-soft); }
+
+  /* ─── Spotlight Card (React Bits Pattern) ──────────────────── */
+  .spotlight-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .spotlight-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(450px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(0, 117, 222, 0.05), transparent 70%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1;
+  }
+  .spotlight-card:hover::before {
+    opacity: 1;
+  }
+  .spotlight-card:hover {
+    border-color: rgba(0, 117, 222, 0.25);
+  }
+
+  /* ─── Compact KPI Stat Tile (Rule 6 Compliant) ─────────────── */
+  .stat-tile {
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .stat-tile-label {
+    font-size: var(--text-eyebrow);
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xxs);
+  }
+  .stat-tile-value {
+    font-size: var(--text-heading-2);
+    font-weight: 700;
+    color: var(--color-ink);
+    line-height: 1.1;
+    margin-top: var(--spacing-xxs);
+  }
+  .stat-tile-hint {
+    font-size: var(--text-eyebrow);
+    color: var(--color-ink-faint);
+    margin-top: var(--spacing-xxs);
+  }
+
+  /* ─── Pulse Dot Live Indicator ──────────────────────────────── */
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background-color: #1aae39;
+    box-shadow: 0 0 0 0 rgba(26, 174, 57, 0.7);
+    animation: livePulse 2s infinite;
+  }
+  @keyframes livePulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(26, 174, 57, 0.6);
+    }
+    70% {
+      box-shadow: 0 0 0 6px rgba(26, 174, 57, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(26, 174, 57, 0);
+    }
+  }
 }

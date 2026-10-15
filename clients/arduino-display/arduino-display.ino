@@ -20,9 +20,9 @@ const int LED_GREEN_PIN = 10;
 const int LED_RED_PIN = 11;
 const int BUZZER_PIN = 12;
 
-// Baud rate serial: 115200 (standar) atau 2000000 (2 Mbps mode ekstrem)
+// Baud rate serial: 1000000 (1 Mbps teruji 0% error) atau 115200
 #ifndef BAUD_RATE
-#define BAUD_RATE 115200
+#define BAUD_RATE 1000000
 #endif
 
 // Konstanta Dual-Mode Protocol

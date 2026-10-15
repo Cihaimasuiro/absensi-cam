@@ -21,17 +21,15 @@ impl EdgeDb {
         let db = Builder::new_local(db_path.as_ref()).build().await?;
         let conn = db.connect()?;
 
-        // Aktifkan WAL mode dan synchronous normal untuk concurrency aman bersama Python
-        let _ = conn
-            .execute_batch(
-
-                r#"
-                PRAGMA journal_mode = WAL;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA busy_timeout = 5000;
-                "#,
-            )
-            .await;
+        // Aktifkan WAL mode dan synchronous normal untuk concurrency aman
+        conn.execute_batch(
+            r#"
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA busy_timeout = 5000;
+            "#,
+        )
+        .await?;
 
         let edge_db = Self { db, conn };
         edge_db.migrate().await?;

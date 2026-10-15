@@ -225,7 +225,7 @@
                 <div class="mb-md">
                     <label class="form-label">Alamat IP (LAN)</label>
                     <input type="text" name="ip_address" class="form-input" x-model="editDevice.ip_address" placeholder="Contoh: 192.168.1.50">
-                    <p class="text-[11px] text-ink-muted mt-1">Digunakan untuk melihat video streaming di halaman dashboard.</p>
+                    <p class="text-[11px] text-ink-muted mt-1">Digunakan untuk melihat video streaming di halaman Live Kamera.</p>
                 </div>
 
                 <div class="mb-md">

@@ -34,8 +34,8 @@
         <ul class="flex flex-col gap-[2px] transition-all duration-300 px-xs [.sidebar-collapsed_&]:md:px-1">
             <li>
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('dashboard') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Dashboard</span>
+                    <i data-lucide="video" class="w-4 h-4 shrink-0"></i>
+                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Live Kamera</span>
                 </a>
             </li>
 
@@ -117,7 +117,7 @@
                 <ul class="flex items-center gap-1.5 text-[12px] text-ink-muted">
                     <li>
                         <a href="{{ route('dashboard') }}" class="flex items-center gap-1 hover:text-primary transition-colors">
-                            <i data-lucide="home" class="w-3.5 h-3.5"></i> Dashboard
+                            <i data-lucide="video" class="w-3.5 h-3.5"></i> Live Kamera
                         </a>
                     </li>
                     <li><span class="text-hairline">/</span></li>

@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Dashboard')
+@section('title', 'Live Kamera')
 
 @section('header-actions')
     <div class="flex items-center gap-xs">

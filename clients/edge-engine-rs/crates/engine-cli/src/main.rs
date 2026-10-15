@@ -822,70 +822,215 @@ async fn run_stream(
 
     #[cfg(not(target_os = "linux"))]
     {
-        info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
+        use std::io::Read;
+
         let tx_frame_clone = tx_frame.clone();
         let hub_mock = hub.clone();
         let running_mock = running_clone.clone();
         let cam_fps_mock = cam_fps_shared.clone();
+        let overlay_hub_draw = overlay_hub.clone();
 
-        let test_img_candidates = [
-            PathBuf::from("test_face.png"),
-            PathBuf::from("crates/engine-vision/test_face.png"),
-            PathBuf::from("../crates/engine-vision/test_face.png"),
-            PathBuf::from("clients/edge-engine-rs/crates/engine-vision/test_face.png"),
-            PathBuf::from("packages/models/test_face.png"),
-        ];
+        let cam_idx: u32 = if device.starts_with("/dev/video") {
+            device.trim_start_matches("/dev/video").parse().unwrap_or(0)
+        } else {
+            device.parse().unwrap_or(0)
+        };
 
-        let mut base_rgb = vec![128u8; (width * height * 3) as usize];
-        for cand in &test_img_candidates {
-            if cand.exists() {
-                if let Ok(dyn_img) = image::open(cand) {
-                    info!("Memuat test face image untuk simulasi kamera: {:?}", cand);
-                    let rgb_img = dyn_img.to_rgb8();
-                    let resized = image::imageops::resize(
-                        &rgb_img,
-                        width,
-                        height,
-                        image::imageops::FilterType::Triangle,
-                    );
-                    base_rgb = resized.into_raw();
-                    break;
+        let py_script = format!(
+            "import cv2, sys\n\
+             cap = cv2.VideoCapture({}, cv2.CAP_DSHOW)\n\
+             cap.set(cv2.CAP_PROP_FRAME_WIDTH, {})\n\
+             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, {})\n\
+             if not cap.isOpened(): sys.exit(1)\n\
+             while True:\n\
+                 ret, frame = cap.read()\n\
+                 if not ret: break\n\
+                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n\
+                 sys.stdout.buffer.write(rgb.tobytes())\n\
+                 sys.stdout.buffer.flush()\n\
+             cap.release()",
+            cam_idx, width, height
+        );
+
+        let spawned_cam = std::process::Command::new("python")
+            .args(["-c", &py_script])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+
+        let mut webcam_active = false;
+
+        if let Ok(mut child) = spawned_cam {
+            if let Some(mut stdout) = child.stdout.take() {
+                let frame_len = (width * height * 3) as usize;
+                let mut initial_frame = vec![0u8; frame_len];
+
+                if stdout.read_exact(&mut initial_frame).is_ok() {
+                    info!("Webcam fisik Windows (index {}) aktif terhubung via DirectShow.", cam_idx);
+                    webcam_active = true;
+
+                    let tx_cam = tx_frame_clone.clone();
+                    let hub_cam = hub_mock.clone();
+                    let running_cam = running_mock.clone();
+                    let cam_fps_cam = cam_fps_mock.clone();
+                    let overlay_cam = overlay_hub_draw.clone();
+
+                    std::thread::Builder::new()
+                        .name("windows-webcam-feeder".to_string())
+                        .spawn(move || {
+                            let mut raw_buf = initial_frame;
+                            let mut draw_buf = vec![0u8; frame_len];
+                            let mut jpeg_buf = Vec::with_capacity(frame_len / 4);
+                            let mut frame_count: u32 = 0;
+                            let mut last_fps_time = Instant::now();
+
+                            loop {
+                                if !running_cam.load(Ordering::Relaxed) {
+                                    let _ = child.kill();
+                                    break;
+                                }
+
+                                tx_cam.try_send(AiFrame::Rgb {
+                                    data: Bytes::copy_from_slice(&raw_buf),
+                                    width,
+                                    height,
+                                }).ok();
+
+                                draw_buf.copy_from_slice(&raw_buf);
+                                let state = overlay_cam.latest();
+
+                                if !state.status.is_empty() {
+                                    engine_vision::draw_text(
+                                        &mut draw_buf,
+                                        width as usize,
+                                        height as usize,
+                                        10,
+                                        10,
+                                        &state.status,
+                                        (56, 189, 248),
+                                        Some((0, 0, 0)),
+                                    );
+                                }
+
+                                for face in &state.faces {
+                                    let bbox = [face.x, face.y, face.width, face.height];
+                                    let color = engine_vision::parse_hex_color(&face.color);
+                                    engine_vision::draw_rect(&mut draw_buf, width as usize, height as usize, &bbox, color, 2);
+
+                                    let score_y = (face.y + face.height - 24).max(0);
+                                    engine_vision::draw_text(
+                                        &mut draw_buf,
+                                        width as usize,
+                                        height as usize,
+                                        face.x + 4,
+                                        score_y,
+                                        &face.score_text,
+                                        color,
+                                        Some((0, 0, 0)),
+                                    );
+
+                                    let name_y = (face.y + face.height - 10).max(0);
+                                    engine_vision::draw_text(
+                                        &mut draw_buf,
+                                        width as usize,
+                                        height as usize,
+                                        face.x + 4,
+                                        name_y,
+                                        &face.name_text,
+                                        color,
+                                        Some((0, 0, 0)),
+                                    );
+                                }
+
+                                if engine_vision::encode_rgb_to_jpeg_into(&draw_buf, width, height, 75, &mut jpeg_buf).is_ok() {
+                                    hub_cam.publish(Bytes::copy_from_slice(&jpeg_buf));
+                                }
+
+                                frame_count += 1;
+                                let elapsed = last_fps_time.elapsed();
+                                if elapsed.as_secs_f32() >= 1.0 {
+                                    let fps = frame_count as f32 / elapsed.as_secs_f32();
+                                    cam_fps_cam.store((fps * 10.0) as u32, Ordering::Relaxed);
+                                    frame_count = 0;
+                                    last_fps_time = Instant::now();
+                                }
+
+                                if stdout.read_exact(&mut raw_buf).is_err() {
+                                    warn!("Stream webcam fisik terputus.");
+                                    let _ = child.kill();
+                                    break;
+                                }
+                            }
+                        })
+                        .expect("Failed to spawn windows webcam feeder thread");
+                } else {
+                    warn!("Webcam fisik tidak merespons frame pertama, beralih ke simulated camera feeder.");
+                    let _ = child.kill();
                 }
             }
         }
 
-        std::thread::Builder::new()
-            .name("mock-camera-feeder".to_string())
-            .spawn(move || {
-                info!("Simulated camera feeder thread aktif (30 FPS).");
-                let mut jpeg_buf = Vec::with_capacity((width * height / 4) as usize);
-                let mut frame_count: u32 = 0;
-                let mut last_fps_time = Instant::now();
+        if !webcam_active {
+            info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
+            let test_img_candidates = [
+                PathBuf::from("test_face.png"),
+                PathBuf::from("crates/engine-vision/test_face.png"),
+                PathBuf::from("../crates/engine-vision/test_face.png"),
+                PathBuf::from("clients/edge-engine-rs/crates/engine-vision/test_face.png"),
+                PathBuf::from("packages/models/test_face.png"),
+            ];
 
-                while running_mock.load(Ordering::Relaxed) {
-                    if engine_vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
-                        let b = Bytes::copy_from_slice(&jpeg_buf);
-                        hub_mock.publish(b);
-                        tx_frame_clone.try_send(AiFrame::Rgb {
-                            data: Bytes::copy_from_slice(&base_rgb),
+            let mut base_rgb = vec![128u8; (width * height * 3) as usize];
+            for cand in &test_img_candidates {
+                if cand.exists() {
+                    if let Ok(dyn_img) = image::open(cand) {
+                        info!("Memuat test face image untuk simulasi kamera: {:?}", cand);
+                        let rgb_img = dyn_img.to_rgb8();
+                        let resized = image::imageops::resize(
+                            &rgb_img,
                             width,
                             height,
-                        }).ok();
+                            image::imageops::FilterType::Triangle,
+                        );
+                        base_rgb = resized.into_raw();
+                        break;
                     }
-
-                    frame_count += 1;
-                    let elapsed = last_fps_time.elapsed();
-                    if elapsed.as_secs_f32() >= 1.0 {
-                        let fps = frame_count as f32 / elapsed.as_secs_f32();
-                        cam_fps_mock.store((fps * 10.0) as u32, Ordering::Relaxed);
-                        frame_count = 0;
-                        last_fps_time = Instant::now();
-                    }
-
-                    std::thread::sleep(Duration::from_millis(33)); // ~30 FPS
                 }
-            })
-            .expect("Failed to spawn mock camera feeder thread");
+            }
+
+            std::thread::Builder::new()
+                .name("mock-camera-feeder".to_string())
+                .spawn(move || {
+                    info!("Simulated camera feeder thread aktif (30 FPS).");
+                    let mut jpeg_buf = Vec::with_capacity((width * height / 4) as usize);
+                    let mut frame_count: u32 = 0;
+                    let mut last_fps_time = Instant::now();
+
+                    while running_mock.load(Ordering::Relaxed) {
+                        if engine_vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
+                            let b = Bytes::copy_from_slice(&jpeg_buf);
+                            hub_mock.publish(b);
+                            tx_frame_clone.try_send(AiFrame::Rgb {
+                                data: Bytes::copy_from_slice(&base_rgb),
+                                width,
+                                height,
+                            }).ok();
+                        }
+
+                        frame_count += 1;
+                        let elapsed = last_fps_time.elapsed();
+                        if elapsed.as_secs_f32() >= 1.0 {
+                            let fps = frame_count as f32 / elapsed.as_secs_f32();
+                            cam_fps_mock.store((fps * 10.0) as u32, Ordering::Relaxed);
+                            frame_count = 0;
+                            last_fps_time = Instant::now();
+                        }
+
+                        std::thread::sleep(Duration::from_millis(33)); // ~30 FPS
+                    }
+                })
+                .expect("Failed to spawn mock camera feeder thread");
+        }
     }
 
     // Jalankan Axum HTTP stream server

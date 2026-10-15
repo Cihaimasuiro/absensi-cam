@@ -75,12 +75,12 @@
                     </td>
                     <td class="text-right">
                         @if($student->has_active_consent ?? true)
-                        <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="text-[13px] {{ $student->faceTemplate ? 'text-primary' : 'text-accent' }} font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
-                            <i data-lucide="{{ $student->faceTemplate ? 'user-check' : 'camera' }}" class="w-3 h-3"></i> {{ $student->faceTemplate ? 'Kelola Wajah' : 'Wajah' }}
+                        <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="text-[12.5px] {{ $student->faceTemplate ? 'text-primary' : 'text-ink-muted hover:text-ink' }} font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
+                            <i data-lucide="{{ $student->faceTemplate ? 'user-check' : 'camera' }}" class="w-3.5 h-3.5"></i> {{ $student->faceTemplate ? 'Kelola Wajah' : 'Wajah' }}
                         </button>
                         @endif
-                        <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
-                            <i data-lucide="edit" class="w-3 h-3"></i> Edit
+                        <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="text-[12.5px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
+                            <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit
                         </button>
                         <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
                             @csrf
@@ -293,10 +293,10 @@
         </button>
     </div>
     
-    <div class="mb-sm p-sm bg-gray-50 border border-hairline rounded-md">
+    <div class="mb-sm p-sm bg-canvas-soft border border-hairline rounded-md">
         <p class="text-[12px] text-ink-muted mb-xs">Gunakan format template yang telah disediakan agar proses impor berjalan lancar.</p>
-        <a href="{{ route('students.template') }}" class="btn btn-utility text-xs py-1 px-3 inline-flex items-center gap-xs">
-            <i data-lucide="download" class="w-3 h-3"></i> Unduh Template Excel
+        <a href="{{ route('students.template') }}" class="btn btn-utility inline-flex items-center gap-xs">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Unduh Template Excel
         </a>
     </div>
 
@@ -304,7 +304,7 @@
         @csrf
         <div class="mb-sm">
             <label class="form-label">Berkas Excel (.xlsx / .xls)</label>
-            <input type="file" name="file" accept=".xlsx, .xls" required class="text-[13px] form-input">
+            <input type="file" name="file" accept=".xlsx, .xls" required class="text-[12.5px] form-input">
         </div>
         <p class="text-[11px] text-ink-faint mb-md">Sistem otomatis mendaftarkan anggota tanpa profil wajah. Profil wajah dapat di-enroll menyusul.</p>
         <div class="flex justify-end gap-xs">
@@ -315,10 +315,10 @@
 </dialog>
 
 {{-- Bulk Enroll Modal --}}
-<dialog id="bulkEnrollModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[450px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog id="bulkEnrollModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg max-w-[460px] w-full m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="folder-up" class="w-4 h-4 text-accent"></i> Bulk Enroll (via ZIP)
+        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
+            <i data-lucide="folder-up" class="w-4 h-4 text-primary"></i> Bulk Enroll (via ZIP)
         </h3>
         <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
@@ -328,24 +328,24 @@
         @csrf
         <div class="mb-sm">
             <label class="form-label">Berkas ZIP Foto</label>
-            <input type="file" name="zip_file" accept=".zip" required class="text-[13px] form-input">
+            <input type="file" name="zip_file" accept=".zip" required class="text-[12.5px] form-input">
         </div>
-        <p class="text-[12px] text-ink-faint mb-md">Penting: Namai foto siswa dengan Kode/NIS mereka (contoh: <code>12345.jpg</code> atau <code>12345.png</code>) lalu masukkan ke dalam satu file ZIP.</p>
+        <p class="text-[11.5px] text-ink-faint mb-md">Penting: Namai foto siswa dengan Kode/NIS mereka (contoh: <code>12345.jpg</code> atau <code>12345.png</code>) lalu masukkan ke dalam satu file ZIP.</p>
         <div class="mb-sm flex items-center gap-xs">
             <input type="checkbox" name="has_consent" value="1" required id="bulkConsent">
-            <label for="bulkConsent" class="text-[12px] text-ink-faint">Saya mengonfirmasi bahwa semua siswa dalam ZIP ini telah menyetujui pemrosesan data wajah.</label>
+            <label for="bulkConsent" class="text-[11.5px] text-ink-faint">Saya mengonfirmasi bahwa semua siswa dalam ZIP ini telah menyetujui pemrosesan data wajah.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
             <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="btn btn-utility">Batal</button>
-            <button type="submit" class="btn btn-primary bg-accent hover:bg-accent/90 border-accent text-white">Mulai Proses Massal</button>
+            <button type="submit" class="btn btn-primary">Mulai Proses Massal</button>
         </div>
     </form>
 </dialog>
 {{-- Enroll Modal (CRUD Wajah) --}}
-<dialog id="enrollModal" onclick="if(event.target === this) closeEnrollModal()" oncancel="closeEnrollModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[460px] w-full backdrop:bg-black/40 shadow-2xl m-auto">
+<dialog id="enrollModal" onclick="if(event.target === this) closeEnrollModal()" oncancel="closeEnrollModal()" class="p-lg max-w-[460px] w-full m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="camera" class="w-4 h-4 text-accent"></i> <span id="enrollModalTitle">Kelola Wajah</span>
+        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
+            <i data-lucide="camera" class="w-4 h-4 text-primary"></i> <span id="enrollModalTitle">Kelola Wajah</span>
         </h3>
         <button onclick="closeEnrollModal()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
             <i data-lucide="x" class="w-4 h-4"></i>
@@ -354,32 +354,32 @@
     
     <div class="text-center mb-sm">
         <div class="flex items-center justify-center gap-xs mb-sm">
-            <span class="text-[13px] text-ink-faint">Anggota:</span>
-            <strong id="enrollStudentName" class="text-ink text-[14px]"></strong>
+            <span class="text-[12.5px] text-ink-faint">Anggota:</span>
+            <strong id="enrollStudentName" class="text-ink text-[13px]"></strong>
             <span id="enrollStatusBadge" class="badge"></span>
         </div>
         
         <div class="flex gap-2 mb-sm border-b border-hairline">
-            <button type="button" id="tabCurrent" onclick="switchEnrollTab('current')" class="hidden flex-1 pb-xs text-[13px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer">Foto Terdaftar</button>
-            <button type="button" id="tabCamera" onclick="switchEnrollTab('camera')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Kamera Web</button>
-            <button type="button" id="tabUpload" onclick="switchEnrollTab('upload')" class="flex-1 pb-xs text-[13px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Upload Berkas</button>
+            <button type="button" id="tabCurrent" onclick="switchEnrollTab('current')" class="hidden flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer">Foto Terdaftar</button>
+            <button type="button" id="tabCamera" onclick="switchEnrollTab('camera')" class="flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Kamera Web</button>
+            <button type="button" id="tabUpload" onclick="switchEnrollTab('upload')" class="flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Upload Berkas</button>
         </div>
 
         {{-- Current Enrolled Face View --}}
         <div id="viewCurrent" class="hidden relative bg-canvas-soft rounded-lg p-md flex flex-col items-center justify-center border border-hairline min-h-[260px]">
             <img id="currentFaceImg" src="" alt="Foto Wajah" class="hidden max-h-[220px] max-w-full rounded-md border border-hairline object-cover shadow-sm mb-xs">
-            <div id="currentFacePlaceholder" class="hidden p-lg bg-surface border border-hairline rounded-lg text-ink-muted text-[13px] flex flex-col items-center gap-xs">
-                <i data-lucide="user-check" class="w-8 h-8 text-success"></i>
+            <div id="currentFacePlaceholder" class="hidden p-lg bg-surface border border-hairline rounded-lg text-ink-muted text-[12.5px] flex flex-col items-center gap-xs">
+                <i data-lucide="user-check" class="w-7 h-7 text-accent-green"></i>
                 <p class="m-0">Data biometrik aktif pada mesin absensi.</p>
                 <p class="text-[11px] text-ink-faint m-0">File foto mentah sebelumnya tidak diarsipkan di server.</p>
             </div>
-            <p id="currentFaceDate" class="text-[12px] text-ink-muted mt-xs"></p>
+            <p id="currentFaceDate" class="text-[11.5px] text-ink-muted mt-xs"></p>
         </div>
 
         {{-- Camera View --}}
         <div id="viewCamera" class="relative bg-black rounded-lg overflow-hidden h-[300px] flex items-center justify-center border border-hairline">
             <video id="enrollVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
-            <div id="enrollLoading" class="absolute inset-0 bg-surface/80 flex items-center justify-center text-ink-faint text-[13px]">
+            <div id="enrollLoading" class="absolute inset-0 bg-surface/80 flex items-center justify-center text-ink-faint text-[12.5px]">
                 Membuka Kamera...
             </div>
             <canvas id="enrollCanvas" class="hidden"></canvas>
@@ -388,30 +388,30 @@
         {{-- Upload View --}}
         <div id="viewUpload" class="hidden relative bg-canvas-soft rounded-lg h-[300px] flex flex-col items-center justify-center border border-hairline border-dashed p-md">
             <i data-lucide="upload-cloud" class="w-8 h-8 text-ink-faint mb-xs"></i>
-            <p class="text-[13px] text-ink-faint mb-sm">Pilih foto wajah (.jpg, .png) max 5MB.</p>
-            <input type="file" id="enrollFileInput" accept="image/jpeg,image/png,image/webp" class="text-[12px] text-ink w-full max-w-[250px] file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-[12px] file:bg-primary/10 file:text-primary hover:file:bg-primary/20">
+            <p class="text-[12.5px] text-ink-faint mb-sm">Pilih foto wajah (.jpg, .png) max 5MB.</p>
+            <input type="file" id="enrollFileInput" accept="image/jpeg,image/png,image/webp" class="text-[12px] text-ink w-full max-w-[250px] file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11.5px] file:bg-primary/10 file:text-primary hover:file:bg-primary/20">
             <img id="enrollPreview" class="hidden mt-sm max-h-[150px] rounded border border-hairline object-cover">
         </div>
     </div>
 
-    <div id="enrollStatus" class="hidden p-xs text-center text-[13px] rounded mb-sm"></div>
+    <div id="enrollStatus" class="hidden p-xs text-center text-[12px] rounded mb-sm"></div>
 
     <div class="flex items-center justify-between mt-md pt-xs border-t border-hairline">
         <div>
-            <button type="button" id="btnDeleteFace" onclick="deleteFaceTemplate()" class="hidden btn btn-danger text-[12px] inline-flex items-center gap-[4px]">
+            <button type="button" id="btnDeleteFace" onclick="deleteFaceTemplate()" class="hidden btn btn-danger text-[11.5px] inline-flex items-center gap-1">
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah
             </button>
         </div>
         <div class="flex gap-xs">
             <button type="button" onclick="closeEnrollModal()" class="btn btn-utility">Tutup</button>
-            <button type="button" id="btnRetakeFace" onclick="switchEnrollTab('camera')" class="hidden btn btn-secondary text-[13px] inline-flex items-center gap-[4px]">
+            <button type="button" id="btnRetakeFace" onclick="switchEnrollTab('camera')" class="hidden btn btn-secondary text-[12.5px] inline-flex items-center gap-1">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Ganti Wajah
             </button>
-            <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary bg-accent hover:bg-accent/90 border-accent text-white inline-flex items-center gap-[4px]">
-                <i data-lucide="camera" class="w-4 h-4"></i> Ambil & Simpan
+            <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary inline-flex items-center gap-1">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i> Ambil & Simpan
             </button>
-            <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary inline-flex items-center gap-[4px]">
-                <i data-lucide="upload" class="w-4 h-4"></i> Simpan Wajah
+            <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary inline-flex items-center gap-1">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i> Simpan Wajah
             </button>
         </div>
     </div>

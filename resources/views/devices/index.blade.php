@@ -10,7 +10,7 @@
 
 <div class="flex items-center justify-between mb-md">
     <h1 class="text-[18px] font-bold text-ink">Daftar Perangkat</h1>
-    <button type="button" @click="addDeviceModal = true" class="btn-primary inline-flex items-center gap-xs">
+    <button type="button" @click="addDeviceModal = true" class="btn btn-primary inline-flex items-center gap-xs">
         <i data-lucide="plus" class="w-4 h-4"></i> Tambah Perangkat
     </button>
 </div>
@@ -18,13 +18,13 @@
 <div>
     @if(isset($pendingPairings) && $pendingPairings->isNotEmpty())
         {{-- Pending Pairing Requests (Device-Initiated) --}}
-        <div class="card p-0 mb-md overflow-hidden border border-amber-300">
-            <div class="px-md py-xs bg-amber-50 border-b border-amber-200 flex items-center justify-between">
-                <div class="text-[13px] font-semibold text-amber-900 flex items-center gap-xs">
-                    <i data-lucide="radio" class="w-4 h-4 text-amber-600"></i>
+        <div class="card p-0 mb-md overflow-hidden border border-hairline">
+            <div class="px-md py-xs bg-canvas-soft border-b border-hairline flex items-center justify-between">
+                <div class="text-[13px] font-semibold text-ink flex items-center gap-xs">
+                    <i data-lucide="radio" class="w-4 h-4 text-accent-orange"></i>
                     Perangkat Menunggu Persetujuan ({{ $pendingPairings->count() }})
                 </div>
-                <div class="text-[11px] text-amber-800">
+                <div class="text-[11px] text-ink-faint">
                     Cocokkan MAC address dengan stiker fisik pada perangkat
                 </div>
             </div>
@@ -49,7 +49,7 @@
                             <td class="font-mono text-[12px] text-ink-muted">
                                 {{ $pairing->ip_address ?? '-' }}
                                 @if($pairing->ip_address === $clientIp)
-                                    <span class="text-[10px] text-amber-700 font-semibold">(LAN Anda)</span>
+                                    <span class="text-[10px] text-accent-orange font-semibold">(LAN Anda)</span>
                                 @endif
                             </td>
                             <td class="text-caption text-ink-muted">{{ $pairing->created_at->diffForHumans() }}</td>
@@ -67,12 +67,12 @@
                             </td>
                             <td class="text-right">
                                 <div class="flex items-center justify-end gap-xs">
-                                    <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn-primary py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
+                                    <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn btn-primary py-1 px-2.5 text-[11.5px] inline-flex items-center gap-1">
                                         <i data-lucide="check" class="w-3 h-3"></i> Setujui
                                     </button>
                                     <form method="POST" action="{{ route('devices.pairing.reject', $pairing) }}" class="inline">
                                         @csrf
-                                        <button type="submit" class="btn-danger py-1 px-2 text-[12px] inline-flex items-center gap-[4px]">
+                                        <button type="submit" class="btn-danger py-1 px-2 text-[11.5px] inline-flex items-center gap-1">
                                             <i data-lucide="x" class="w-3 h-3"></i> Tolak
                                         </button>
                                     </form>
@@ -116,20 +116,22 @@
                         <td class="text-caption text-ink-muted">
                             {{ $device->last_heartbeat_at ? $device->last_heartbeat_at->diffForHumans() : 'Belum pernah' }}
                         </td>
-                        <td class="text-right flex items-center justify-end gap-2">
-                            <button type="button" @click="openEdit({{ $device->toJson() }})" class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
-                                <i data-lucide="edit" class="w-3 h-3"></i> Edit
-                            </button>
-                            <button type="button" @click="openConfig({{ $device->toJson() }})" class="btn-secondary hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
-                                <i data-lucide="key" class="w-3 h-3"></i> Konfigurasi (.env)
-                            </button>
-                            <form method="POST" action="{{ route('devices.destroy', $device) }}" class="inline"
-                                  @submit="confirmSubmit" data-confirm="Hapus perangkat ini secara permanen? Peringatan: Data absensi dari mesin ini akan ikut terhapus.">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-[4px] px-2 py-1 text-[12px]">
-                                    <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                        <td class="text-right">
+                            <div class="flex items-center justify-end gap-xs">
+                                <button type="button" @click="openEdit({{ $device->toJson() }})" class="btn btn-utility inline-flex items-center gap-1">
+                                    <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
-                            </form>
+                                <button type="button" @click="openConfig({{ $device->toJson() }})" class="btn btn-utility inline-flex items-center gap-1">
+                                    <i data-lucide="key" class="w-3 h-3"></i> Konfigurasi (.env)
+                                </button>
+                                <form method="POST" action="{{ route('devices.destroy', $device) }}" class="inline"
+                                      @submit="confirmSubmit" data-confirm="Hapus perangkat ini secara permanen? Peringatan: Data absensi dari mesin ini akan ikut terhapus.">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-1 px-1.5 py-1 text-[11.5px]">
+                                        <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 @empty

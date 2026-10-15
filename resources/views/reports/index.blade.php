@@ -22,7 +22,7 @@
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input pl-9 w-full">
             </div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-xs">
             <button type="submit" class="btn btn-utility flex items-center gap-xs">
                 <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
             </button>
@@ -87,10 +87,10 @@
                     @role('super_admin|admin')
                     <td>
                         <div class="flex gap-xs items-center">
-                            <button type="button" class="btn btn-utility text-xs py-1 px-2" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
+                            <button type="button" class="btn btn-utility py-1 px-2 text-[11.5px]" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
                                 Koreksi
                             </button>
-                            <button type="button" class="btn btn-secondary text-xs py-1 px-2" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
+                            <button type="button" class="btn btn-utility py-1 px-2 text-[11.5px]" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
                                 <i data-lucide="list" class="w-3 h-3"></i> Log
                             </button>
                         </div>
@@ -118,9 +118,9 @@
 </div>
 
 @role('super_admin|admin')
-<dialog x-ref="correctionModal" @click="$event.target === $refs.correctionModal && closeCorrectionModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[420px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog x-ref="correctionModal" @click="$event.target === $refs.correctionModal && closeCorrectionModal()" class="p-lg max-w-[440px] w-full m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs text-ink">
+        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Koreksi Absensi
         </h3>
         <button type="button" @click="closeCorrectionModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
@@ -152,9 +152,9 @@
 </dialog>
 @endrole
 
-<dialog x-ref="logsModal" @click="$event.target === $refs.logsModal && closeLogsModal()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[500px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+<dialog x-ref="logsModal" @click="$event.target === $refs.logsModal && closeLogsModal()" class="p-lg max-w-[500px] w-full m-auto">
     <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs text-ink">
+        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
             <i data-lucide="history" class="w-4 h-4 text-primary"></i> Riwayat Deteksi
         </h3>
         <button type="button" @click="closeLogsModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">

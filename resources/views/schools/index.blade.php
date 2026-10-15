@@ -28,39 +28,39 @@
                             <td class="font-mono text-[12px] text-ink-muted">{{ $school->code }}</td>
                             <td class="font-medium text-ink">{{ $school->name }}</td>
                             <td class="text-right whitespace-nowrap">
-                                <button data-school="{{ json_encode($school) }}" @click="openEditSchool" aria-label="Edit Organisasi" class="text-[13px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-[4px]">
+                                <button data-school="{{ json_encode($school) }}" @click="openEditSchool" aria-label="Edit Organisasi" class="text-[12.5px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
                                 <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus organisasi ini?">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" aria-label="Hapus Organisasi" class="btn-danger hover:underline inline-flex items-center gap-[4px] mr-sm">
+                                    <button type="submit" aria-label="Hapus Organisasi" class="btn-danger hover:underline inline-flex items-center gap-1 mr-sm text-[12px]">
                                         <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                                     </button>
                                 </form>
-                                <button @click="toggleRow('classrooms-{{$school->id}}')" aria-label="Toggle Daftar Kelas" class="btn btn-utility py-1 px-2 text-xs">
+                                <button @click="toggleRow('classrooms-{{$school->id}}')" aria-label="Toggle Daftar Kelas" class="btn btn-utility py-1 px-2.5 text-[11.5px]">
                                     <i data-lucide="chevron-down" class="w-3 h-3"></i> Kelas ({{ $school->classrooms_count }})
                                 </button>
                             </td>
                         </tr>
                         <tr id="classrooms-{{$school->id}}" x-show="openRows.includes('classrooms-{{$school->id}}')" x-cloak class="bg-canvas-soft">
-                            <td colspan="4" class="p-4 border-b border-hairline">
+                            <td colspan="4" class="p-md border-b border-hairline">
                                 <div class="flex justify-between items-center mb-sm">
-                                    <h4 class="font-semibold text-sm">Daftar Kelas / Grup</h4>
-                                    <div class="flex gap-2">
-                                        <button @click="openBulkEdit({{$school->id}})" class="btn btn-primary py-1 px-3 text-xs">
+                                    <h4 class="font-semibold text-[13px] text-ink">Daftar Kelas / Grup</h4>
+                                    <div class="flex gap-xs">
+                                        <button @click="openBulkEdit({{$school->id}})" class="btn btn-primary py-1 px-2.5 text-[11.5px]">
                                             <i data-lucide="clock" class="w-3 h-3"></i> Update Waktu Massal
                                         </button>
-                                        <button @click="openCreateClassroom({{$school->id}})" class="btn btn-utility py-1 px-3 text-xs">
+                                        <button @click="openCreateClassroom({{$school->id}})" class="btn btn-utility py-1 px-2.5 text-[11.5px]">
                                             <i data-lucide="plus" class="w-3 h-3"></i> Tambah Kelas
                                         </button>
                                     </div>
                                 </div>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
+                                <div class="overflow-x-auto rounded-md border border-hairline bg-surface">
+                                    <table class="data-table">
                                         <thead>
-                                            <tr class="text-ink-muted">
-                                                <th class="py-1">Nama</th>
+                                            <tr>
+                                                <th>Nama</th>
                                                 <th>Kode</th>
                                                 <th>Tipe</th>
                                                 <th>Masuk</th>
@@ -70,20 +70,20 @@
                                         </thead>
                                         <tbody>
                                             @foreach($school->classrooms as $classroom)
-                                                <tr class="border-t border-hairline border-dashed">
-                                                    <td class="py-2">{{ $classroom->name }}</td>
-                                                    <td>{{ $classroom->code ?? '-' }}</td>
+                                                <tr>
+                                                    <td class="font-medium text-ink">{{ $classroom->name }}</td>
+                                                    <td class="font-mono text-[11.5px] text-ink-muted">{{ $classroom->code ?? '-' }}</td>
                                                     <td>
                                                         @if($classroom->type === 'staff')
-                                                            <span class="badge badge-primary text-[11px]">Staf</span>
+                                                            <span class="badge badge-primary text-[10.5px]">Staf</span>
                                                         @else
-                                                            <span class="badge badge-success text-[11px]">Siswa</span>
+                                                            <span class="badge badge-success text-[10.5px]">Siswa</span>
                                                         @endif
                                                     </td>
-                                                    <td>{{ substr($classroom->start_time, 0, 5) }}</td>
-                                                    <td>{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
+                                                    <td class="font-mono text-[11.5px]">{{ substr($classroom->start_time, 0, 5) }}</td>
+                                                    <td class="font-mono text-[11.5px]">{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
                                                     <td class="text-right">
-                                                        <button data-classroom="{{ json_encode($classroom) }}" @click="openEditClassroom" class="text-primary hover:underline">Edit</button>
+                                                        <button data-classroom="{{ json_encode($classroom) }}" @click="openEditClassroom" class="text-primary hover:underline text-[12px] font-medium border-none bg-transparent cursor-pointer">Edit</button>
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -108,9 +108,9 @@
     </div>
 
     {{-- Create Modal --}}
-    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()" class="p-lg max-w-[420px] w-full m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-            <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
+            <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Organisasi
             </h3>
             <button type="button" @click="$refs.createModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
@@ -142,7 +142,7 @@
     </dialog>
 
     {{-- Edit Modal --}}
-    <dialog x-ref="editModal" @click="$event.target === $refs.editModal && $refs.editModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <dialog x-ref="editModal" @click="$event.target === $refs.editModal && $refs.editModal.close()" class="p-lg max-w-[420px] w-full m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Organisasi
@@ -185,7 +185,7 @@
     </dialog>
 
     {{-- Classroom Create Modal --}}
-    <dialog x-ref="createClassroomModal" @click="$event.target === $refs.createClassroomModal && $refs.createClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <dialog x-ref="createClassroomModal" @click="$event.target === $refs.createClassroomModal && $refs.createClassroomModal.close()" class="p-lg max-w-[420px] w-full m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Kelas
@@ -235,7 +235,7 @@
     </dialog>
 
     {{-- Classroom Edit Modal --}}
-    <dialog x-ref="editClassroomModal" @click="$event.target === $refs.editClassroomModal && $refs.editClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <dialog x-ref="editClassroomModal" @click="$event.target === $refs.editClassroomModal && $refs.editClassroomModal.close()" class="p-lg max-w-[420px] w-full m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-2" class="w-4 h-4 text-primary"></i> Edit Kelas
@@ -279,10 +279,10 @@
                 </div>
             </div>
             
-            <div class="p-sm bg-red-50 text-red-700 text-xs rounded border border-red-200 mb-md mt-sm flex items-start gap-2">
-                <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i>
+            <div class="p-sm bg-canvas-soft text-ink-secondary text-[11.5px] rounded-md border border-hairline mb-md mt-sm flex items-start gap-xs">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-accent-orange mt-0.5 shrink-0"></i>
                 <div>
-                    <strong>⚠️ Peringatan Retroaktif:</strong>
+                    <strong class="text-ink">Peringatan Retroaktif:</strong>
                     Perubahan waktu masuk atau toleransi akan berlaku surut pada perhitungan status DTR masa lalu. Pastikan perubahan disengaja.
                 </div>
             </div>
@@ -295,7 +295,7 @@
     </dialog>
 
     {{-- Classroom Bulk Edit Modal --}}
-    <dialog x-ref="bulkEditClassroomModal" @click="$event.target === $refs.bulkEditClassroomModal && $refs.bulkEditClassroomModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
+    <dialog x-ref="bulkEditClassroomModal" @click="$event.target === $refs.bulkEditClassroomModal && $refs.bulkEditClassroomModal.close()" class="p-lg max-w-[420px] w-full m-auto">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="clock" class="w-4 h-4 text-primary"></i> Update Waktu Massal

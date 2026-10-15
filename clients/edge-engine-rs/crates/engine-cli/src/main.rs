@@ -3,6 +3,10 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use engine_core::{models::OutboxRecord, EdgeDb};
 use engine_server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
+use engine_hardware::{
+    detect_rfid_device, ArduinoBridge, FramebufferDisplay, LinuxGpio, RfidTapEvent,
+    SerialRfidReader, TftRleStreamer,
+};
 use engine_sync::SyncWorker;
 use engine_vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 use std::collections::HashMap;
@@ -119,6 +123,30 @@ enum Commands {
 
         #[arg(long)]
         min_face_size: Option<f32>,
+
+        #[arg(long)]
+        arduino_port: Option<String>,
+
+        #[arg(long)]
+        arduino_baud: Option<u32>,
+
+        #[arg(long, default_value_t = false)]
+        arduino_stream: bool,
+
+        #[arg(long)]
+        framebuffer: Option<String>,
+
+        #[arg(long)]
+        rfid_port: Option<String>,
+
+        #[arg(long)]
+        gpio_green: Option<u32>,
+
+        #[arg(long)]
+        gpio_red: Option<u32>,
+
+        #[arg(long)]
+        gpio_buzzer: Option<u32>,
     },
 }
 
@@ -150,6 +178,14 @@ async fn main() -> Result<()> {
             liveness_margin,
             confirm_frames,
             min_face_size,
+            arduino_port,
+            arduino_baud,
+            arduino_stream,
+            framebuffer,
+            rfid_port,
+            gpio_green,
+            gpio_red,
+            gpio_buzzer,
         }) => {
             run_stream(
                 device,
@@ -168,6 +204,14 @@ async fn main() -> Result<()> {
                 liveness_margin,
                 confirm_frames,
                 min_face_size,
+                arduino_port,
+                arduino_baud,
+                arduino_stream,
+                framebuffer,
+                rfid_port,
+                gpio_green,
+                gpio_red,
+                gpio_buzzer,
             )
             .await?;
         }
@@ -259,6 +303,14 @@ async fn run_stream(
     liveness_margin_opt: Option<f32>,
     confirm_frames_opt: Option<u32>,
     min_face_size_opt: Option<f32>,
+    arduino_port_opt: Option<String>,
+    arduino_baud_opt: Option<u32>,
+    arduino_stream_opt: bool,
+    framebuffer_opt: Option<String>,
+    rfid_port_opt: Option<String>,
+    gpio_green_opt: Option<u32>,
+    gpio_red_opt: Option<u32>,
+    gpio_buzzer_opt: Option<u32>,
 ) -> Result<()> {
     let cooldown_secs = cooldown_opt
         .or_else(|| {
@@ -292,6 +344,50 @@ async fn run_stream(
         })
         .unwrap_or(80.0);
 
+    let resolved_arduino_port = arduino_port_opt
+        .or_else(|| env::var("ARDUINO_PORT").ok())
+        .or_else(|| env::var("SERIAL_BRIDGE_PORT").ok());
+
+    let resolved_arduino_baud = arduino_baud_opt
+        .or_else(|| {
+            env::var("ARDUINO_BAUD")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+        })
+        .unwrap_or(115200);
+
+    let resolved_arduino_stream = arduino_stream_opt
+        || env::var("ARDUINO_STREAM")
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(false);
+
+    let resolved_framebuffer = framebuffer_opt.or_else(|| env::var("FRAMEBUFFER_DEV").ok());
+
+    let resolved_rfid_port = rfid_port_opt
+        .or_else(|| env::var("RFID_PORT").ok())
+        .or_else(detect_rfid_device);
+
+    let resolved_gpio_green = gpio_green_opt
+        .or_else(|| {
+            env::var("GPIO_GREEN_PIN")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+        });
+
+    let resolved_gpio_red = gpio_red_opt
+        .or_else(|| {
+            env::var("GPIO_RED_PIN")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+        });
+
+    let resolved_gpio_buzzer = gpio_buzzer_opt
+        .or_else(|| {
+            env::var("GPIO_BUZZER_PIN")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+        });
+
     println!("--------------------------------------------------");
     println!(" Smart Absensi MJPEG Stream & AI Engine (Rust)");
     println!(" Device         : {}", device);
@@ -304,7 +400,71 @@ async fn run_stream(
     println!(" Konfirmasi     : {} frame berturut-turut (dengan Spoof Veto)", confirm_frames);
     println!(" Min Face Size  : {:.0}px", min_face_size);
     println!(" Cooldown       : {} detik", cooldown_secs);
+    if let Some(ref fb) = resolved_framebuffer {
+        println!(" Framebuffer    : {}", fb);
+    }
+    if let Some(ref ard) = resolved_arduino_port {
+        println!(" Arduino TFT    : {} ({} baud, Stream: {})", ard, resolved_arduino_baud, resolved_arduino_stream);
+    }
+    if let Some(ref rfid) = resolved_rfid_port {
+        println!(" RFID Reader    : {}", rfid);
+    }
+    if resolved_gpio_green.is_some() || resolved_gpio_red.is_some() || resolved_gpio_buzzer.is_some() {
+        println!(
+            " GPIO Sysfs     : Green={:?}, Red={:?}, Buzzer={:?}",
+            resolved_gpio_green, resolved_gpio_red, resolved_gpio_buzzer
+        );
+    }
     println!("--------------------------------------------------");
+
+    let gpio = Arc::new(LinuxGpio::new(
+        resolved_gpio_green,
+        resolved_gpio_red,
+        resolved_gpio_buzzer,
+    ));
+
+    let arduino_bridge: Option<Arc<ArduinoBridge>> = if let Some(ref port) = resolved_arduino_port {
+        let bridge = ArduinoBridge::new(port, resolved_arduino_baud);
+        if bridge.connect() {
+            let _ = bridge.standby(Some("SILAKAN HADAP KAMERA"));
+            Some(Arc::new(bridge))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let fb_display: Arc<std::sync::Mutex<Option<FramebufferDisplay>>> = Arc::new(std::sync::Mutex::new(
+        if let Some(ref fb_dev) = resolved_framebuffer {
+            match FramebufferDisplay::open(fb_dev, 320, 240) {
+                Ok(fb) => Some(fb),
+                Err(e) => {
+                    warn!("Gagal membuka Framebuffer {}: {:#}", fb_dev, e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    ));
+
+    let tft_streamer: Option<Arc<std::sync::Mutex<TftRleStreamer>>> = if resolved_arduino_stream {
+        if let Some(ref port) = resolved_arduino_port {
+            let mut streamer = TftRleStreamer::new(port, resolved_arduino_baud);
+            match streamer.connect() {
+                Ok(()) => Some(Arc::new(std::sync::Mutex::new(streamer))),
+                Err(e) => {
+                    warn!("Gagal menghubungkan TFT RLE Streamer: {:#}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let hub = FrameHub::new();
     let overlay_hub = OverlayHub::new();
@@ -380,6 +540,85 @@ async fn run_stream(
         }
     }
 
+    // Inisialisasi Reader RFID Fisik jika terpasang (USB / UART Serial)
+    if let Some(ref rfid_p) = resolved_rfid_port {
+        let rfid_reader = SerialRfidReader::new(rfid_p, 9600);
+        let (tx_rfid, mut rx_rfid) = tokio::sync::mpsc::channel::<RfidTapEvent>(16);
+        if let Err(e) = rfid_reader.start_reading(tx_rfid) {
+            warn!("Gagal mengaktifkan Serial RFID Reader di [{}]: {:#}", rfid_p, e);
+        } else {
+            let db_rfid = db.clone();
+            let templates_rfid = templates.clone();
+            let gpio_rfid = gpio.clone();
+            let arduino_rfid = arduino_bridge.clone();
+            let recent_history_rfid = recent_history.clone();
+            let cooldown_secs_rfid = cooldown_secs;
+
+            tokio::spawn(async move {
+                let mut rfid_cooldowns: HashMap<String, Instant> = HashMap::new();
+                info!("Worker Listener Kartu RFID aktif di background.");
+
+                while let Some(evt) = rx_rfid.recv().await {
+                    let uid = evt.card_uid;
+                    let now = Instant::now();
+                    if let Some(&last) = rfid_cooldowns.get(&uid) {
+                        if now.duration_since(last).as_secs() < cooldown_secs_rfid {
+                            continue;
+                        }
+                    }
+                    rfid_cooldowns.insert(uid.clone(), now);
+
+                    // Cocokkan UID kartu dengan student_id atau nama anggota
+                    let matched = templates_rfid.iter().find(|t| t.student_id == uid || t.name.contains(&uid));
+                    let (sid, name) = if let Some(t) = matched {
+                        (t.student_id.clone(), t.name.clone())
+                    } else {
+                        (uid.clone(), format!("Kartu {}", uid))
+                    };
+
+                    let now_dt = chrono::Local::now();
+                    let display_time = now_dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                    let utc_captured_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+                    let att_uuid = uuid::Uuid::new_v4().to_string();
+
+                    info!("💳 [PRESENSI RFID DITERIMA] {} (ID: {})", name, sid);
+
+                    // Beri feedback audio/visual ke hardware
+                    gpio_rfid.trigger_success();
+                    if let Some(ref ard) = arduino_rfid {
+                        let _ = ard.recognized(&name, &display_time);
+                    }
+
+                    if let Ok(mut hist) = recent_history_rfid.lock() {
+                        hist.insert(0, AttendanceLogItem {
+                            student_id: sid.clone(),
+                            name: name.clone(),
+                            captured_at: display_time,
+                            direction: "in".to_string(),
+                        });
+                        if hist.len() > 20 {
+                            hist.truncate(20);
+                        }
+                    }
+
+                    let record = OutboxRecord {
+                        id: att_uuid,
+                        student_id: sid,
+                        captured_at: utc_captured_at,
+                        direction: "in".to_string(),
+                        score: 1.0,
+                        liveness_score: 1.0,
+                        time_source: "rfid".to_string(),
+                        synced: 0,
+                    };
+                    if let Err(e) = db_rfid.insert_attendance(&record).await {
+                        error!("Gagal menyimpan absensi kartu RFID ke outbox: {:#}", e);
+                    }
+                }
+            });
+        }
+    }
+
     // 2. Setup Decoupled AI Pipeline Channel (kapasitas 1, non-blocking)
     #[allow(dead_code)]
     enum AiFrame {
@@ -446,6 +685,8 @@ async fn run_stream(
                             let running_ai = running.clone();
                             let templates_ai = templates.clone();
                             let db_ai = db.clone();
+                            let gpio_ai = gpio.clone();
+                            let arduino_ai = arduino_bridge.clone();
                             let mut liveness_ai = liveness_res;
                             let tokio_handle = tokio::runtime::Handle::current();
                             let engine_start = Instant::now();
@@ -544,6 +785,12 @@ async fn run_stream(
                                              }
 
                                              if !is_real {
+                                                 // Feedback hardware: tolak spoofing
+                                                 gpio_ai.trigger_rejected();
+                                                 if let Some(ref ard) = arduino_ai {
+                                                     let _ = ard.spoof();
+                                                 }
+
                                                  // VETO SPOOF: Jika terdeteksi spoof, batalkan/reset konfirmasi siswa mana pun di dekat koordinat ini
                                                  for (sid, track) in tracking_map.iter_mut() {
                                                      let dist = ((cx - track.last_center.0).powi(2) + (cy - track.last_center.1).powi(2)).sqrt();
@@ -667,6 +914,12 @@ async fn run_stream(
                                                              name, student_id, score * 100.0, logit_margin, liveness_prob, confirm_frames_ai
                                                          );
 
+                                                         // Beri feedback audio/visual ke hardware (2 bip pendek + LED hijau)
+                                                         gpio_ai.trigger_success();
+                                                         if let Some(ref ard) = arduino_ai {
+                                                             let _ = ard.recognized(name, &display_time);
+                                                         }
+
                                                          let log_item = AttendanceLogItem {
                                                              student_id: student_id.to_string(),
                                                              name: name.to_string(),
@@ -766,13 +1019,17 @@ async fn run_stream(
         let mut last_fps_time = Instant::now();
 
         let overlay_hub_draw = overlay_hub.clone();
+        let fb_display_draw = fb_display.clone();
+        let tft_streamer_draw = tft_streamer.clone();
+        let has_physical_display = resolved_framebuffer.is_some() || resolved_arduino_stream;
+        let mut last_tft_frame = Instant::now();
 
         engine_vision::camera::linux::spawn_capture_thread_decoupled(
             device,
             width,
             height,
             running_clone,
-            move || hub_viewers.has_viewers(),
+            move || hub_viewers.has_viewers() || has_physical_display,
             move |jpeg_bytes, _format, _w, _h| {
                 // 1. Publikasikan frame JPEG hasil encode ke HTTP streamer (FrameHub)
                 hub_clone.publish(Bytes::copy_from_slice(jpeg_bytes));
@@ -849,6 +1106,25 @@ async fn run_stream(
                         Some((0, 0, 0)),
                     );
                 }
+
+                // 3. Render ke Framebuffer SBC (/dev/fb0, /dev/fb1) jika aktif
+                if let Ok(mut fb_guard) = fb_display_draw.lock() {
+                    if let Some(ref mut fb) = *fb_guard {
+                        let _ = fb.render_frame(rgb, w, h);
+                    }
+                }
+
+                // 4. Stream PiP RLE ke Arduino TFT jika aktif (dipace ~10 FPS)
+                if let Some(ref tft_st) = tft_streamer_draw {
+                    let now = Instant::now();
+                    if now.duration_since(last_tft_frame) >= Duration::from_millis(100) {
+                        last_tft_frame = now;
+                        let rle = TftRleStreamer::encode_frame_rle(rgb, w, h, 80, 60, 160, 120, true);
+                        if let Ok(mut st_guard) = tft_st.lock() {
+                            let _ = st_guard.send_frame(&rle);
+                        }
+                    }
+                }
             }),
         );
     }
@@ -907,6 +1183,8 @@ async fn run_stream(
                     let running_cam = running_mock.clone();
                     let cam_fps_cam = cam_fps_mock.clone();
                     let overlay_cam = overlay_hub_draw.clone();
+                    let fb_display_cam = fb_display.clone();
+                    let tft_streamer_cam = tft_streamer.clone();
 
                     std::thread::Builder::new()
                         .name("windows-webcam-feeder".to_string())
@@ -916,6 +1194,7 @@ async fn run_stream(
                             let mut jpeg_buf = Vec::with_capacity(frame_len / 4);
                             let mut frame_count: u32 = 0;
                             let mut last_fps_time = Instant::now();
+                            let mut last_tft_frame = Instant::now();
 
                             loop {
                                 if !running_cam.load(Ordering::Relaxed) {
@@ -977,6 +1256,23 @@ async fn run_stream(
 
                                 if engine_vision::encode_rgb_to_jpeg_into(&draw_buf, width, height, 75, &mut jpeg_buf).is_ok() {
                                     hub_cam.publish(Bytes::copy_from_slice(&jpeg_buf));
+                                }
+
+                                if let Ok(mut fb_guard) = fb_display_cam.lock() {
+                                    if let Some(ref mut fb) = *fb_guard {
+                                        let _ = fb.render_frame(&draw_buf, width, height);
+                                    }
+                                }
+
+                                if let Some(ref tft_st) = tft_streamer_cam {
+                                    let now = Instant::now();
+                                    if now.duration_since(last_tft_frame) >= Duration::from_millis(100) {
+                                        last_tft_frame = now;
+                                        let rle = TftRleStreamer::encode_frame_rle(&draw_buf, width, height, 80, 60, 160, 120, true);
+                                        if let Ok(mut st_guard) = tft_st.lock() {
+                                            let _ = st_guard.send_frame(&rle);
+                                        }
+                                    }
                                 }
 
                                 frame_count += 1;
@@ -1076,6 +1372,7 @@ async fn run_stream(
         _ = wait_for_shutdown_signal() => {
             info!("Menghentikan camera capture dan AI background worker...");
             running.store(false, Ordering::Relaxed);
+            gpio.reset_all();
         }
     }
 

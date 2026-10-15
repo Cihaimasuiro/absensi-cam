@@ -675,6 +675,7 @@ dependencies = [
  "clap",
  "dotenvy",
  "engine-core",
+ "engine-hardware",
  "engine-server",
  "engine-sync",
  "engine-vision",
@@ -707,6 +708,9 @@ name = "engine-hardware"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
+ "serde",
+ "serde_json",
  "serialport",
  "tokio",
  "tracing",

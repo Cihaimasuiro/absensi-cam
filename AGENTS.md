@@ -61,6 +61,17 @@
    - **Strict Schema Stability**: Never alter edge API routes or payload schemas without backward compatibility. Poisoned records must be quarantined (`synced = -1` on edge) to prevent queue head-of-line blocking.
    - **Report Aggregation**: Even with edge cooldowns (default 300s), DTR reports must aggregate check-in via `MIN(captured_at)` and check-out via `MAX(captured_at)` per student per day.
 
+9. **ECC (Enterprise Claude Code) Integration & Execution Capabilities:**
+   - **Local Cache Location**: ECC is locally installed and accessible at `C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\`.
+   - **Immediate Agent Execution**: Directly read, adopt, and execute any of ECC's 311 skills, 71 agents, and workflows from the local cache on demand without extra setup (e.g., `tdd-guide`, `security-scan`, `plan-prd`, `code-review`, `performance-optimizer`).
+   - **Native Antigravity Workspace Integration**:
+     - Built-in adapter maps components directly into Antigravity's `.agents/` structure:
+       - Rules: `rules/` → `.agents/rules/`
+       - Skills: `skills/` → `.agents/skills/`
+       - Commands / Workflows: `commands/` → `.agents/workflows/`
+       - Agents: `agents/` → `.agents/agents/` (maps Claude tools to Antigravity tools and models to `flash`/`pro`).
+     - Workspace installation command when requested: `& "C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\install.ps1" --profile minimal --target antigravity`.
+
 # Laravel Enterprise Development Rules
 
 # 1. Core Architecture

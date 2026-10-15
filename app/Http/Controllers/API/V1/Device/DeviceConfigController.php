@@ -26,7 +26,7 @@ class DeviceConfigController extends Controller
         $firstGroup = $groups->first();
         
         $config = [
-            'cooldown_seconds'          => 60,
+            'cooldown_seconds'          => 10,
             'groups'                    => $groups->map(fn($g) => [
                 'id' => $g->id,
                 'name' => $g->name,

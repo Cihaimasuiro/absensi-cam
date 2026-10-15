@@ -45,13 +45,31 @@ static int historyCount = 0;
 static char json_buf[160];
 static uint8_t json_idx = 0;
 
+// Kontrol Bus TFT MAR2406 (Port C: A0=RD, A1=WR, A2=CD/RS, A3=CS)
+#define RD_PORT PORTC
+#define WR_PORT PORTC
+#define CD_PORT PORTC
+#define CS_PORT PORTC
+#define RD_PIN  PC0
+#define WR_PIN  PC1
+#define CD_PIN  PC2
+#define CS_PIN  PC3
+
+#define CS_LOW   CS_PORT &= ~(1 << CS_PIN)
+#define CS_HIGH  CS_PORT |=  (1 << CS_PIN)
+#define CD_LOW   CD_PORT &= ~(1 << CD_PIN)
+#define CD_HIGH  CD_PORT |=  (1 << CD_PIN)
+#define WR_LOW   WR_PORT &= ~(1 << WR_PIN)
+#define WR_HIGH  WR_PORT |=  (1 << WR_PIN)
+#define RD_HIGH  RD_PORT |=  (1 << RD_PIN)
+
 // Penulisan 1 byte ke 8-bit bus MAR2406 (D0-D7) & pulsa WR (Pin A1 / PORTC1)
 // D0..D1 = Pin 8, 9 (PORTB 0..1), D2..D7 = Pin 2..7 (PORTD 2..7)
 static inline void write8_fast(uint8_t d) {
   PORTB = (PORTB & 0xFC) | (d & 0x03);
   PORTD = (PORTD & 0x03) | (d & 0xFC);
-  PORTC &= ~(1 << 1); // WR LOW (Strobe aktif)
-  PORTC |=  (1 << 1); // WR HIGH
+  WR_LOW;
+  WR_HIGH;
 }
 
 // Menulis 1 piksel 16-bit RGB565 ke bus layar
@@ -60,13 +78,25 @@ static inline void write16_fast(uint8_t hi, uint8_t lo) {
   write8_fast(lo);
 }
 
-// Konversi warna RGB332 (1 byte) ke RGB565 (2 byte) dengan kanal hijau akurat
+// Urutan Memory Write ILI9341 yang Benar (Sesuai Spesifikasi Protokol v3 Poin 3.1)
+static inline void tft_start_write(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+  tft.setAddrWindow(x0, y0, x1, y1);
+  RD_HIGH;
+  CS_LOW;
+  CD_LOW;
+  write8_fast(0x2C); // Memory Write (0x2C)
+  CD_HIGH;
+}
+
+static inline void tft_end_write() {
+  CS_HIGH;
+  RD_HIGH;
+}
+
+// Rumus Koreksi RGB332 -> RGB565 (Protokol v3 Poin 3.4)
 static inline void rgb332_to_565_bytes(uint8_t c, uint8_t &hi, uint8_t &lo) {
-  uint8_t r = c & 0xE0;         // RRR00000
-  uint8_t g = (c << 3) & 0xE0;  // GGG00000
-  uint8_t b = (c << 6);         // BB000000
-  hi = r | (r >> 3) | (g >> 5);
-  lo = g | (b >> 3) | (b >> 5) | (b >> 7);
+  hi = (c & 0xE0) | ((c >> 3) & 0x18) | ((c >> 2) & 0x07);
+  lo = ((c & 0x1C) << 3) | ((c & 0x03) << 3) | ((c & 0x03) << 1) | ((c & 0x03) >> 1);
 }
 
 void beep(int duration_ms) {
@@ -81,6 +111,7 @@ void drawHistory();
 void addHistory(const char* time, const char* name, uint16_t color);
 void processCommand(const char* jsonString);
 void handleBinaryRleFrame();
+void runSelftest();
 
 void setup() {
   Serial.begin(BAUD_RATE);
@@ -96,15 +127,17 @@ void setup() {
 
   // Inisialisasi Layar TFT 2.4"
   uint16_t ID = tft.readID();
-  if (ID == 0xD3D3) ID = 0x9486; // Workaround untuk varian shield MAR2406
+  if (ID == 0xD3D3) ID = 0x9486; // Workaround hanya jika controller mengembalikan 0xD3D3
   tft.begin(ID);
   tft.setRotation(1); // Mode Landscape (320x240)
 
   drawStaticUI();
   updateStatus("MEMULAI SISTEM...", YELLOW);
 
-  // Kirim event siap ke SBC
-  Serial.println("{\"evt\":\"ready\",\"fw\":\"2.0.0-dualmode\"}");
+  // Kirim event siap ke SBC dengan LCD ID terverifikasi
+  char ready_msg[64];
+  snprintf(ready_msg, sizeof(ready_msg), "{\"evt\":\"ready\",\"lcd_id\":\"0x%04X\",\"fw\":\"3.0.0\"}", ID);
+  Serial.println(ready_msg);
 }
 
 void loop() {
@@ -165,8 +198,8 @@ void handleBinaryRleFrame() {
     return;
   }
 
-  // Set Address Window ILI9341
-  tft.setAddrWindow(x, y, x + w - 1, y + h - 1);
+  // Mulai transaksi bus paralel ILI9341 Memory Write (0x2C)
+  tft_start_write(x, y, x + w - 1, y + h - 1);
 
   // Dekompresi RLE piksel langsung ke layar
   while (true) {
@@ -190,8 +223,55 @@ void handleBinaryRleFrame() {
     }
   }
 
+  // Tutup transaksi bus (CS HIGH)
+  tft_end_write();
+
   // Kirim sinyal ACK (0x06) ke SBC bahwa frame selesai digambar
   Serial.write(ACK_BYTE);
+}
+
+// Fase 0: Selftest Jalur Bus Paralel & Verifikasi Warna Layar
+void runSelftest() {
+  uint16_t ID = tft.readID();
+
+  // 1. Bar Merah Penuh (320x48)
+  tft_start_write(0, 0, 319, 47);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0xF8, 0x00);
+  tft_end_write();
+
+  // 2. Bar Hijau Penuh (320x48)
+  tft_start_write(0, 48, 319, 95);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0x07, 0xE0);
+  tft_end_write();
+
+  // 3. Bar Biru Penuh (320x48)
+  tft_start_write(0, 96, 319, 143);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0x00, 0x1F);
+  tft_end_write();
+
+  // 4. Bar Putih Penuh (320x48)
+  tft_start_write(0, 144, 319, 191);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0xFF, 0xFF);
+  tft_end_write();
+
+  // 5. Bar Gradasi Abu-abu (320x48, 16 step)
+  tft_start_write(0, 192, 319, 239);
+  for (uint16_t y = 0; y < 48; y++) {
+    for (uint16_t step = 0; step < 16; step++) {
+      uint8_t v5 = (step * 31) / 15;
+      uint8_t v6 = (step * 63) / 15;
+      uint16_t gray = (v5 << 11) | (v6 << 5) | v5;
+      for (uint8_t px = 0; px < 20; px++) {
+        write16_fast((uint8_t)(gray >> 8), (uint8_t)(gray & 0xFF));
+      }
+    }
+  }
+  tft_end_write();
+
+  // Balas event ke SBC
+  char msg[64];
+  snprintf(msg, sizeof(msg), "{\"evt\":\"selftest_ok\",\"lcd_id\":\"0x%04X\",\"fw\":\"3.0.0\"}", ID);
+  Serial.println(msg);
 }
 
 void processCommand(const char* jsonString) {
@@ -253,6 +333,9 @@ void processCommand(const char* jsonString) {
     } else if (buzzer && strcmp(buzzer, "1long") == 0) {
       beep(500);
     }
+  }
+  else if (strcmp(cmd, "selftest") == 0) {
+    runSelftest();
   }
 }
 

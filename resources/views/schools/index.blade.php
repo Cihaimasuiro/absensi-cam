@@ -1,14 +1,14 @@
 @extends('layouts.app')
 @section('title', 'Manajemen Organisasi')
 
+@section('header-actions')
+    <button @click="$refs.createModal.showModal()" aria-label="Tambah Organisasi" class="btn btn-primary inline-flex items-center gap-xs">
+        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Organisasi
+    </button>
+@endsection
+
 @section('content')
 <div x-data="schoolsData">
-    <div class="flex items-center justify-between mb-md">
-        <h1 class="text-[18px] font-bold text-ink">Daftar Organisasi</h1>
-        <button @click="$refs.createModal.showModal()" aria-label="Tambah Organisasi" class="btn btn-primary inline-flex items-center gap-xs">
-            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Organisasi
-        </button>
-    </div>
 
     <div class="card p-0 overflow-hidden">
         <div class="overflow-x-auto">

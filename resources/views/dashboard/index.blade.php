@@ -30,12 +30,6 @@
                     <span class="text-[12.5px] font-semibold text-ink uppercase tracking-wide group-hover:text-primary transition-colors">
                         Live Camera Feed
                     </span>
-                    <span class="badge font-mono text-[10px] py-0 px-1.5" :class="{
-                        'badge-success': status === 'online',
-                        'badge-warning': status === 'connecting',
-                        'badge-neutral': status === 'offline'
-                    }" x-text="status === 'online' ? 'LIVE' : (status === 'connecting' ? 'CONNECTING...' : 'OFFLINE')">
-                    </span>
                 </button>   
                 <div class="flex items-center gap-xs text-eyebrow text-ink-faint">
                     <i data-lucide="wifi" class="w-3 h-3"></i>

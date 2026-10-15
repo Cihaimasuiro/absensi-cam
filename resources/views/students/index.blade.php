@@ -1,12 +1,8 @@
 @extends('layouts.app')
 @section('title', 'Manajemen Anggota')
 
-@section('content')
-<div x-data>
-
-<div class="flex items-center justify-between mb-md">
-    <h1 class="text-[18px] font-bold text-ink">Daftar Anggota</h1>
-    <div x-data class="flex items-center gap-xs">
+@section('header-actions')
+    <div class="flex items-center gap-xs">
         <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
         </button>
@@ -17,7 +13,10 @@
             <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
         </button>
     </div>
-</div>
+@endsection
+
+@section('content')
+<div x-data>
 
 {{-- Search & Filter --}}
 <div class="card p-sm px-md mb-md">

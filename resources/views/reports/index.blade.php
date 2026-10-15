@@ -81,9 +81,7 @@
                             -
                         @endif
                     </td>
-                    <td>
-                        <span class="badge badge-muted">{{ $log->total_logs }}x</span>
-                    </td>
+                    <td class="font-mono text-[12px] text-ink-muted">{{ $log->total_logs }}x</td>
                     @role('super_admin|admin')
                     <td>
                         <div class="flex gap-xs items-center">

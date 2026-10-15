@@ -1,19 +1,18 @@
 @extends('layouts.app')
 @section('title', 'Manajemen Perangkat')
 
+@section('header-actions')
+    <button type="button" @click="addDeviceModal = true" class="btn btn-primary inline-flex items-center gap-xs">
+        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Perangkat
+    </button>
+@endsection
+
 @section('content')
 <div x-data="devicesData(
     {{ session('show_edit_device') ? session('show_edit_device') : 'null' }}, 
     {{ session('show_config_device') ? session('show_config_device') : 'null' }},
     {{ session('new_device_env') ? json_encode(session('new_device_env')) : 'null' }}
 )">
-
-<div class="flex items-center justify-between mb-md">
-    <h1 class="text-[18px] font-bold text-ink">Daftar Perangkat</h1>
-    <button type="button" @click="addDeviceModal = true" class="btn btn-primary inline-flex items-center gap-xs">
-        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Perangkat
-    </button>
-</div>
 
 <div>
     @if(isset($pendingPairings) && $pendingPairings->isNotEmpty())

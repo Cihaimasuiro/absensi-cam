@@ -177,6 +177,7 @@ nav[aria-label="Pagination"] a {
   .badge-warning  { background: #fef9c3; color: #854d0e; }
   .badge-danger   { background: #fee2e2; color: #991b1b; }
   .badge-muted    { background: var(--color-canvas-soft); color: var(--color-ink-muted); }
+  .badge-neutral  { background: var(--color-canvas-soft); color: var(--color-ink-faint); }
 
   /* ─── Alerts ─────────────────────────────────────────────────── */
   .alert {

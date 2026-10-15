@@ -182,22 +182,7 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     window.__lenis = lenis;
 }
 
-// 2. React Bits: Spotlight Card cursor radial highlight
-function initSpotlightCards() {
-    document.querySelectorAll('.spotlight-card').forEach((card) => {
-        if (card.__hasSpotlight) return;
-        card.__hasSpotlight = true;
-        card.addEventListener('mousemove', (e) => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
-    });
-}
-
-// 3. GSAP Micro-Interactions & Stagger Entrance
+// 2. GSAP Micro-Interactions & Stagger Entrance
 function initGsapInteractions() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -229,9 +214,7 @@ function initGsapInteractions() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initSpotlightCards();
     initGsapInteractions();
 });
 
-window.initSpotlightCards = initSpotlightCards;
 window.gsap = gsap;

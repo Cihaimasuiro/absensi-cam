@@ -15,70 +15,11 @@
 @section('content')
 <div x-data="{ streamIp: '{{ $streamIp }}' }" class="flex flex-col gap-lg">
 
-    {{-- 1. Compact KPI Tiles (Rule 6 Compliant: High-Density & Clean) --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
-        {{-- Present Today --}}
-        <div class="spotlight-card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="user-check" class="w-[14px] h-[14px] text-accent-green"></i>
-                Hadir Hari Ini
-            </div>
-            <div class="stat-tile-value text-accent-green">
-                {{ number_format($presentToday) }}
-            </div>
-            <div class="stat-tile-hint">
-                Dari total {{ number_format($totalStudents) }} anggota aktif
-            </div>
-        </div>
-
-        {{-- Attendance Rate --}}
-        <div class="spotlight-card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="activity" class="w-[14px] h-[14px] text-primary"></i>
-                Tingkat Kehadiran
-            </div>
-            <div class="stat-tile-value text-primary">
-                {{ $totalStudents > 0 ? round(($presentToday / $totalStudents) * 100, 1) : 0 }}%
-            </div>
-            <div class="stat-tile-hint">
-                Presensi terverifikasi hari ini
-            </div>
-        </div>
-
-        {{-- Enrolled Face Templates --}}
-        <div class="spotlight-card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="scan-face" class="w-[14px] h-[14px] text-ink-muted"></i>
-                Wajah Terdaftar
-            </div>
-            <div class="stat-tile-value text-ink">
-                {{ number_format($totalEnrolled) }}
-            </div>
-            <div class="stat-tile-hint">
-                Template biometrik aktif
-            </div>
-        </div>
-
-        {{-- Online Devices --}}
-        <div class="spotlight-card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="cpu" class="w-[14px] h-[14px] text-ink-muted"></i>
-                Terminal Online
-            </div>
-            <div class="stat-tile-value {{ $devicesOnline > 0 ? 'text-accent-green' : 'text-ink-muted' }}">
-                {{ number_format($devicesOnline) }}
-            </div>
-            <div class="stat-tile-hint">
-                Edge Engine aktif (3 mnt terakhir)
-            </div>
-        </div>
-    </div>
-
-    {{-- 2. Main Live Monitor Grid --}}
+    {{-- Main Live Monitor Grid --}}
     <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-lg">
 
         {{-- Live Camera Viewport --}}
-        <div class="spotlight-card p-md flex flex-col animate-fade-up">
+        <div class="card p-md flex flex-col animate-fade-up">
             <div class="flex justify-between items-center mb-md pb-xs border-b border-hairline">
                 <div class="flex items-center gap-xs">
                     <span class="live-dot"></span>
@@ -118,7 +59,7 @@
         </div>
 
         {{-- Real-Time Attendance Activity Feed --}}
-        <div class="spotlight-card p-md flex flex-col h-[520px] animate-fade-up">
+        <div class="card p-md flex flex-col h-[520px] animate-fade-up">
             <div class="text-[13px] font-semibold text-ink mb-md pb-xs border-b border-hairline flex items-center justify-between">
                 <span class="flex items-center gap-xs uppercase tracking-wide">
                     <i data-lucide="activity" class="w-[14px] h-[14px] text-accent-green"></i>

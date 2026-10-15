@@ -251,31 +251,6 @@ nav[aria-label="Pagination"] a {
   .data-table tbody tr:last-child td { border-bottom: none; }
   .data-table tbody tr:hover { background: var(--color-canvas-soft); }
 
-  /* ─── Spotlight Card (React Bits Pattern) ──────────────────── */
-  .spotlight-card {
-    position: relative;
-    overflow: hidden;
-    background: var(--color-surface);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-lg);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .spotlight-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(450px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(0, 117, 222, 0.05), transparent 70%);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 1;
-  }
-  .spotlight-card:hover::before {
-    opacity: 1;
-  }
-  .spotlight-card:hover {
-    border-color: rgba(0, 117, 222, 0.25);
-  }
 
   /* ─── Compact KPI Stat Tile (Rule 6 Compliant) ─────────────── */
   .stat-tile {

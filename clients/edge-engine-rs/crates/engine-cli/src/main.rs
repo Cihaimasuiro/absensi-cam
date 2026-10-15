@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use engine_core::{models::OutboxRecord, EdgeDb};
 use engine_server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
 use engine_sync::SyncWorker;
-use engine_vision::{FaceDetector, FaceRecognizer, LivenessDetector};
+use engine_vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -208,6 +208,7 @@ fn find_model_path(base_dirs: &[PathBuf], candidates: &[&str]) -> Option<PathBuf
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_stream(
     device: String,
     port: u16,
@@ -426,6 +427,10 @@ async fn run_stream(
                                     info!("AI Vision Worker thread aktif (decoupled).");
                                     let mut cooldown_map: HashMap<String, Instant> = initial_cooldowns_ai;
                                     let mut tracking_map: HashMap<String, TrackedStudent> = HashMap::new();
+                                    let mut vision_metrics = VisionMetricsAggregator::new();
+                                    if vision_metrics.is_enabled() {
+                                        info!("Vision metrics logging aktif (EDGE_VISION_METRICS=1), agregasi per 60 detik.");
+                                    }
 
                                     while running_ai.load(Ordering::Relaxed) {
                                         let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
@@ -455,6 +460,8 @@ async fn run_stream(
                                                  continue;
                                              }
                                          };
+
+                                         vision_metrics.record_frame(&frame_rgb, w as usize, h as usize, (w * 3) as usize, &faces);
 
                                          let mut current_boxes = Vec::new();
 
@@ -921,9 +928,9 @@ async fn run_sync(
         .or_else(|| env::var("MODEL_VERSION").ok())
         .unwrap_or_else(|| "v1.0-yunet".to_string());
 
-    let env_path = if Path::new("/opt/smart-absensi/edge-engine/.env").exists() {
-        PathBuf::from("/opt/smart-absensi/edge-engine/.env")
-    } else if Path::new("/opt/smart-absensi/edge-engine").exists() {
+    let env_path = if Path::new("/opt/smart-absensi/edge-engine/.env").exists()
+        || Path::new("/opt/smart-absensi/edge-engine").exists()
+    {
         PathBuf::from("/opt/smart-absensi/edge-engine/.env")
     } else {
         PathBuf::from(".env")

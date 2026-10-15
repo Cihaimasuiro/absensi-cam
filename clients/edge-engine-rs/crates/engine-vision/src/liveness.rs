@@ -115,6 +115,7 @@ impl LivenessDetector {
 
     /// Crops square ROI centered at (cx, cy) with size `crop_size`, handles reflection padding,
     /// and resizes via bilinear interpolation to NCHW [3, target_size, target_size] normalized to [0.0, 1.0].
+    #[allow(clippy::too_many_arguments)]
     fn crop_and_resize(
         image_rgb: &[u8],
         img_w: usize,

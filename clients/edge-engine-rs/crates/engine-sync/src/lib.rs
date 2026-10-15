@@ -1,3 +1,7 @@
+#![allow(clippy::cloned_ref_to_slice_refs)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::manual_is_multiple_of)]
+
 use anyhow::{Context, Result};
 use engine_core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload, OutboxRecord};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};

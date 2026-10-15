@@ -1,4 +1,4 @@
-/// Built-in pure-Rust 8x8 bitmap font and video overlay primitives (zero external font dependencies).
+//! Built-in pure-Rust 8x8 bitmap font and video overlay primitives (zero external font dependencies).
 
 pub const FONT_WIDTH: usize = 8;
 pub const FONT_HEIGHT: usize = 8;
@@ -211,6 +211,7 @@ fn get_char_bitmap(c: char) -> &'static [u8] {
 }
 
 /// Draws an ASCII string onto an RGB8 buffer with optional background bounding rectangle
+#[allow(clippy::too_many_arguments)]
 pub fn draw_text(
     rgb: &mut [u8],
     width: usize,
@@ -257,15 +258,14 @@ pub fn draw_text(
         }
 
         let glyph = get_char_bitmap(c);
-        for row in 0..8 {
+        for (row, &byte) in glyph.iter().enumerate().take(8) {
             let py = y + row as i32;
             if py < 0 || py >= height as i32 {
                 continue;
             }
-            let byte = glyph[row];
             for col in 0..8 {
                 if (byte & (0x80 >> col)) != 0 {
-                    let px = char_x + col as i32;
+                    let px = char_x + col;
                     if px >= 0 && px < width as i32 {
                         let idx = (py as usize * width + px as usize) * 3;
                         if idx + 2 < rgb.len() {

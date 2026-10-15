@@ -136,7 +136,7 @@ void setup() {
 
   // Kirim event siap ke SBC dengan LCD ID terverifikasi
   char ready_msg[64];
-  snprintf(ready_msg, sizeof(ready_msg), "{\"evt\":\"ready\",\"lcd_id\":\"0x%04X\",\"fw\":\"3.0.0\"}", ID);
+  snprintf(ready_msg, sizeof(ready_msg), "{\"evt\":\"ready\",\"lcd_id\":\"0x%04X\",\"fw\":\"2.1.0\"}", ID);
   Serial.println(ready_msg);
 }
 
@@ -231,38 +231,44 @@ void handleBinaryRleFrame() {
 }
 
 // Fase 0: Selftest Jalur Bus Paralel & Verifikasi Warna Layar
+// Menguji urutan 0x2C Memory Write + ekspansi RGB332 -> RGB565 nyata
 void runSelftest() {
   uint16_t ID = tft.readID();
+  uint8_t hi, lo;
 
-  // 1. Bar Merah Penuh (320x48)
+  // 1. Bar Merah Penuh (320x48) - RGB332: 0xE0
+  rgb332_to_565_bytes(0xE0, hi, lo);
   tft_start_write(0, 0, 319, 47);
-  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0xF8, 0x00);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(hi, lo);
   tft_end_write();
 
-  // 2. Bar Hijau Penuh (320x48)
+  // 2. Bar Hijau Penuh (320x48) - RGB332: 0x1C
+  rgb332_to_565_bytes(0x1C, hi, lo);
   tft_start_write(0, 48, 319, 95);
-  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0x07, 0xE0);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(hi, lo);
   tft_end_write();
 
-  // 3. Bar Biru Penuh (320x48)
+  // 3. Bar Biru Penuh (320x48) - RGB332: 0x03
+  rgb332_to_565_bytes(0x03, hi, lo);
   tft_start_write(0, 96, 319, 143);
-  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0x00, 0x1F);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(hi, lo);
   tft_end_write();
 
-  // 4. Bar Putih Penuh (320x48)
+  // 4. Bar Putih Penuh (320x48) - RGB332: 0xFF
+  rgb332_to_565_bytes(0xFF, hi, lo);
   tft_start_write(0, 144, 319, 191);
-  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(0xFF, 0xFF);
+  for (uint32_t i = 0; i < 320UL * 48UL; i++) write16_fast(hi, lo);
   tft_end_write();
 
-  // 5. Bar Gradasi Abu-abu (320x48, 16 step)
+  // 5. Bar Gradasi Abu-abu (320x48) - 16 tingkat gray RGB332
   tft_start_write(0, 192, 319, 239);
   for (uint16_t y = 0; y < 48; y++) {
     for (uint16_t step = 0; step < 16; step++) {
-      uint8_t v5 = (step * 31) / 15;
-      uint8_t v6 = (step * 63) / 15;
-      uint16_t gray = (v5 << 11) | (v6 << 5) | v5;
+      uint8_t v = (step * 7) / 15; // 0..7
+      uint8_t c = (v << 5) | (v << 2) | (v >> 1); // RRRGGGBB seimbang
+      rgb332_to_565_bytes(c, hi, lo);
       for (uint8_t px = 0; px < 20; px++) {
-        write16_fast((uint8_t)(gray >> 8), (uint8_t)(gray & 0xFF));
+        write16_fast(hi, lo);
       }
     }
   }
@@ -270,7 +276,7 @@ void runSelftest() {
 
   // Balas event ke SBC
   char msg[64];
-  snprintf(msg, sizeof(msg), "{\"evt\":\"selftest_ok\",\"lcd_id\":\"0x%04X\",\"fw\":\"3.0.0\"}", ID);
+  snprintf(msg, sizeof(msg), "{\"evt\":\"selftest_ok\",\"lcd_id\":\"0x%04X\",\"fw\":\"2.1.0\"}", ID);
   Serial.println(msg);
 }
 

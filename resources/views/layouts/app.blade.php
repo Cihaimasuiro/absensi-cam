@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script>
         if (localStorage.getItem('sidebarCollapsed') === 'true') {
@@ -21,9 +25,7 @@
 <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 bg-canvas border-r border-hairline flex flex-col transition-all duration-300 ease-in-out z-50 shadow-sm md:translate-x-0 w-[260px] [.sidebar-collapsed_&]:md:w-[80px] overflow-hidden">
     <div class="h-[72px] flex items-center border-b border-hairline shrink-0 px-lg transition-all duration-300 overflow-hidden">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-sm">
-            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shrink-0 transition-all duration-300">
-                <i data-lucide="scan-face" class="w-5 h-5"></i>
-            </div>
+            <img src="{{ asset('images/logo.png') }}" class="w-8 h-8 rounded-lg object-contain shrink-0 transition-all duration-300" alt="Logo">
             <span class="text-[18px] font-bold text-ink tracking-tight whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[200px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Smart Absensi</span>
         </a>
     </div>

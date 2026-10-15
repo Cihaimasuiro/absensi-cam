@@ -680,6 +680,7 @@ dependencies = [
  "engine-sync",
  "engine-vision",
  "image",
+ "serialport",
  "tokio",
  "tracing",
  "tracing-subscriber",

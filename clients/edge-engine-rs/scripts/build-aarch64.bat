@@ -19,7 +19,7 @@ where cargo-zigbuild >nul 2>nul
 if %errorlevel% equ 0 (
     echo Using cargo-zigbuild with target aarch64-unknown-linux-gnu.2.28...
     rustup target add aarch64-unknown-linux-gnu 2>nul
-    cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release --bin engine-cli
+    cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release --bin engine-cli --bin serial_bench
     if !errorlevel! neq 0 (
         echo ERROR: cargo-zigbuild failed.
         exit /b 1

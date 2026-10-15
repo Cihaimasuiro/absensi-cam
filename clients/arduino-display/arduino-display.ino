@@ -60,6 +60,15 @@ static inline void write16_fast(uint8_t hi, uint8_t lo) {
   write8_fast(lo);
 }
 
+// Konversi warna RGB332 (1 byte) ke RGB565 (2 byte) dengan kanal hijau akurat
+static inline void rgb332_to_565_bytes(uint8_t c, uint8_t &hi, uint8_t &lo) {
+  uint8_t r = c & 0xE0;         // RRR00000
+  uint8_t g = (c << 3) & 0xE0;  // GGG00000
+  uint8_t b = (c << 6);         // BB000000
+  hi = r | (r >> 3) | (g >> 5);
+  lo = g | (b >> 3) | (b >> 5) | (b >> 7);
+}
+
 void beep(int duration_ms) {
   digitalWrite(BUZZER_PIN, HIGH);
   delay(duration_ms);

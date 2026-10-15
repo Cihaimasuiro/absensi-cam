@@ -208,6 +208,39 @@ fn find_model_path(base_dirs: &[PathBuf], candidates: &[&str]) -> Option<PathBuf
     None
 }
 
+async fn wait_for_shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C signal handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to install SIGTERM signal handler: {:#}", e);
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Menerima sinyal Ctrl+C (SIGINT), memulai shutdown tertib...");
+        },
+        _ = terminate => {
+            tracing::info!("Menerima sinyal SIGTERM dari systemd, memulai shutdown tertib...");
+        },
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_stream(
     device: String,
@@ -1040,8 +1073,8 @@ async fn run_stream(
                 error!("Stream server error: {:#}", e);
             }
         }
-        _ = tokio::signal::ctrl_c() => {
-            info!("Menerima Ctrl+C, menghentikan stream server...");
+        _ = wait_for_shutdown_signal() => {
+            info!("Menghentikan camera capture dan AI background worker...");
             running.store(false, Ordering::Relaxed);
         }
     }
@@ -1116,8 +1149,8 @@ async fn run_sync(
         _ = worker_handle => {
             warn!("Worker task berhenti.");
         }
-        _ = tokio::signal::ctrl_c() => {
-            info!("Menerima Ctrl+C, mematikan daemon secara tertib...");
+        _ = wait_for_shutdown_signal() => {
+            info!("Mematikan sync daemon secara tertib...");
         }
     }
 

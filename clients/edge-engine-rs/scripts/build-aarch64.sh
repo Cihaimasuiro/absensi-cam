@@ -39,6 +39,10 @@ fi
 
 if [ -f "${OUTPUT_BIN}" ]; then
     echo ""
+    echo "=== Generating SHA256SUMS ==="
+    (cd "$(dirname "${OUTPUT_BIN}")" && sha256sum "$(basename "${OUTPUT_BIN}")" > SHA256SUMS)
+    cat "$(dirname "${OUTPUT_BIN}")/SHA256SUMS"
+    echo ""
     echo "=== Build Success! ==="
     echo "Binary: ${OUTPUT_BIN}"
     echo "To deploy to Orange Pi:"

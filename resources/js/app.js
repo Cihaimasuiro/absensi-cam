@@ -146,6 +146,29 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
     }
 }));
 
+Alpine.data('cameraFeedData', (defaultIp = '') => ({
+    streamIp: defaultIp,
+    status: 'connecting',
+    reconnect() {
+        this.status = 'connecting';
+        const img = document.getElementById('liveStreamImg');
+        if (img) {
+            img.style.display = 'block';
+            img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
+        }
+    },
+    onStreamLoad() {
+        this.status = 'online';
+        const img = document.getElementById('liveStreamImg');
+        if (img) img.style.display = 'block';
+    },
+    onStreamError() {
+        this.status = 'offline';
+        const img = document.getElementById('liveStreamImg');
+        if (img) img.style.display = 'none';
+    }
+}));
+
 window.Alpine = Alpine
 Alpine.start()
 

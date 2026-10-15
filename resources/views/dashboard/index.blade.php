@@ -13,18 +13,7 @@
 @endsection
 
 @section('content')
-<div x-data="{
-    streamIp: '{{ $streamIp }}',
-    status: 'connecting',
-    reconnect() {
-        this.status = 'connecting';
-        const img = document.getElementById('liveStreamImg');
-        if (img) {
-            img.style.display = 'block';
-            img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
-        }
-    }
-}" class="flex flex-col gap-lg">
+<div x-data="cameraFeedData('{{ $streamIp }}')" class="flex flex-col gap-lg">
 
     {{-- Main Live Monitor Grid --}}
     <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-lg">
@@ -75,8 +64,8 @@
                      :src="'http://' + streamIp + ':5000/video_feed'"
                      alt="Live Stream"
                      class="relative z-5 w-full h-full object-contain"
-                     @load="status = 'online'; $el.style.display='block'"
-                     @error="status = 'offline'; $el.style.display='none'">
+                     x-on:load="onStreamLoad()"
+                     x-on:error="onStreamError()">
             </div>
 
             <div class="flex justify-between items-center pt-xs mt-xs text-[11px] text-ink-faint font-mono">

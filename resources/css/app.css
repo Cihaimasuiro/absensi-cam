@@ -307,15 +307,31 @@ nav[aria-label="Pagination"] a {
     margin-top: var(--spacing-xxs);
   }
 
-  /* ─── Pulse Dot Live Indicator ──────────────────────────────── */
+  /* ─── State-Driven Live Dot Indicator ──────────────────────── */
   .live-dot {
     width: 7px;
     height: 7px;
     border-radius: 9999px;
+    display: inline-block;
+    shrink: 0;
+    transition: background-color 0.2s ease;
+  }
+  .live-dot-online {
     background-color: #1aae39;
     box-shadow: 0 0 0 0 rgba(26, 174, 57, 0.7);
     animation: livePulse 2s infinite;
   }
+  .live-dot-connecting {
+    background-color: #dd5b00;
+    box-shadow: 0 0 0 0 rgba(221, 91, 0, 0.6);
+    animation: connectingPulse 1.5s infinite;
+  }
+  .live-dot-offline {
+    background-color: #a39e98;
+    box-shadow: none;
+    animation: none;
+  }
+
   @keyframes livePulse {
     0% {
       box-shadow: 0 0 0 0 rgba(26, 174, 57, 0.6);
@@ -325,6 +341,18 @@ nav[aria-label="Pagination"] a {
     }
     100% {
       box-shadow: 0 0 0 0 rgba(26, 174, 57, 0);
+    }
+  }
+
+  @keyframes connectingPulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(221, 91, 0, 0.5);
+    }
+    70% {
+      box-shadow: 0 0 0 5px rgba(221, 91, 0, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(221, 91, 0, 0);
     }
   }
 }

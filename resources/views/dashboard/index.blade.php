@@ -13,66 +13,18 @@
 @endsection
 
 @section('content')
-<div x-data="{ streamIp: '{{ $streamIp }}' }" class="flex flex-col gap-lg">
-
-    {{-- Executive Overview KPI Tiles (Clean Notion Document Style) --}}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
-        {{-- Present Today --}}
-        <div class="card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="user-check" class="w-3.5 h-3.5 text-accent-green"></i>
-                Hadir Hari Ini
-            </div>
-            <div class="stat-tile-value text-accent-green">
-                {{ number_format($presentToday) }}
-            </div>
-            <div class="stat-tile-hint">
-                Dari total {{ number_format($totalStudents) }} anggota aktif
-            </div>
-        </div>
-
-        {{-- Attendance Rate --}}
-        <div class="card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="activity" class="w-3.5 h-3.5 text-primary"></i>
-                Tingkat Kehadiran
-            </div>
-            <div class="stat-tile-value text-primary">
-                {{ $totalStudents > 0 ? round(($presentToday / $totalStudents) * 100, 1) : 0 }}%
-            </div>
-            <div class="stat-tile-hint">
-                Presensi terverifikasi hari ini
-            </div>
-        </div>
-
-        {{-- Enrolled Face Templates --}}
-        <div class="card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="scan-face" class="w-3.5 h-3.5 text-ink-muted"></i>
-                Wajah Terdaftar
-            </div>
-            <div class="stat-tile-value text-ink">
-                {{ number_format($totalEnrolled) }}
-            </div>
-            <div class="stat-tile-hint">
-                Template biometrik aktif
-            </div>
-        </div>
-
-        {{-- Online Devices --}}
-        <div class="card stat-tile animate-fade-up">
-            <div class="stat-tile-label">
-                <i data-lucide="cpu" class="w-3.5 h-3.5 text-ink-muted"></i>
-                Terminal Online
-            </div>
-            <div class="stat-tile-value {{ $devicesOnline > 0 ? 'text-accent-green' : 'text-ink-muted' }}">
-                {{ number_format($devicesOnline) }}
-            </div>
-            <div class="stat-tile-hint">
-                Edge Engine aktif (3 mnt)
-            </div>
-        </div>
-    </div>
+<div x-data="{
+    streamIp: '{{ $streamIp }}',
+    status: 'connecting',
+    reconnect() {
+        this.status = 'connecting';
+        const img = document.getElementById('liveStreamImg');
+        if (img) {
+            img.style.display = 'block';
+            img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
+        }
+    }
+}" class="flex flex-col gap-lg">
 
     {{-- Main Live Monitor Grid --}}
     <div class="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-lg">
@@ -80,13 +32,25 @@
         {{-- Live Camera Viewport --}}
         <div class="card p-md flex flex-col animate-fade-up">
             <div class="flex justify-between items-center mb-md pb-xs border-b border-hairline">
-                <div class="flex items-center gap-xs">
-                    <span class="live-dot"></span>
-                    <span class="text-[13px] font-semibold text-ink uppercase tracking-wide">Live Camera Feed</span>
-                </div>
+                <button type="button" @click="reconnect()" class="flex items-center gap-xs bg-transparent border-none p-0 cursor-pointer group text-left" title="Klik untuk memuat ulang koneksi kamera">
+                    <span class="live-dot" :class="{
+                        'live-dot-online': status === 'online',
+                        'live-dot-connecting': status === 'connecting',
+                        'live-dot-offline': status === 'offline'
+                    }"></span>
+                    <span class="text-[12.5px] font-semibold text-ink uppercase tracking-wide group-hover:text-primary transition-colors">
+                        Live Camera Feed
+                    </span>
+                    <span class="badge font-mono text-[10px] py-0 px-1.5" :class="{
+                        'badge-success': status === 'online',
+                        'badge-warning': status === 'connecting',
+                        'badge-neutral': status === 'offline'
+                    }" x-text="status === 'online' ? 'LIVE' : (status === 'connecting' ? 'CONNECTING...' : 'OFFLINE')">
+                    </span>
+                </button>   
                 <div class="flex items-center gap-xs text-eyebrow text-ink-faint">
                     <i data-lucide="wifi" class="w-3 h-3"></i>
-                    <select x-model="streamIp" @change="const img = document.getElementById('liveStreamImg'); if (img) img.style.display = 'block';" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer font-medium hover:text-ink transition-colors">
+                    <select x-model="streamIp" @change="reconnect()" class="bg-transparent border-none text-ink-faint text-eyebrow focus:ring-0 p-0 cursor-pointer font-medium hover:text-ink transition-colors">
                         @if($devices->isEmpty())
                             <option value="{{ $streamIp }}">Local Edge Engine ({{ $streamIp }})</option>
                         @else
@@ -100,16 +64,19 @@
             </div>
 
             <div class="bg-black aspect-video relative rounded-sm overflow-hidden flex items-center justify-center group border border-hairline/50">
-                <div class="absolute inset-0 flex flex-col items-center justify-center text-ink-faint z-0 gap-sm">
-                    <i data-lucide="video-off" class="w-8 h-8 opacity-40"></i>
-                    <span class="text-[13px] font-mono">Stream Standby / Menghubungkan...</span>
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-ink-faint z-0 gap-xs p-md text-center">
+                    <i data-lucide="video-off" class="w-8 h-8 opacity-40 mb-1"></i>
+                    <span class="text-[12px] font-mono" x-text="status === 'connecting' ? 'Menghubungkan ke kamera...' : 'Kamera Offline / Standby'"></span>
+                    <button type="button" @click="reconnect()" class="btn btn-utility text-[11px] py-1 px-3 mt-xs inline-flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Muat Ulang Stream
+                    </button>
                 </div>
                 <img id="liveStreamImg"
                      :src="'http://' + streamIp + ':5000/video_feed'"
                      alt="Live Stream"
                      class="relative z-5 w-full h-full object-contain"
-                     onerror="this.style.display='none'"
-                     onload="this.style.display='block'">
+                     @load="status = 'online'; $el.style.display='block'"
+                     @error="status = 'offline'; $el.style.display='none'">
             </div>
 
             <div class="flex justify-between items-center pt-xs mt-xs text-[11px] text-ink-faint font-mono">

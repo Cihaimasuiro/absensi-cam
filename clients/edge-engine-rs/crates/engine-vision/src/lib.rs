@@ -1,9 +1,12 @@
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 pub mod camera;
 pub mod recognizer;
 pub mod alignment;
 pub mod detector;
 pub mod liveness;
 pub mod overlay;
+pub mod metrics;
 
 pub use alignment::align_face_to_tensor_nchw;
 pub use detector::{FaceDetection, FaceDetector};
@@ -11,6 +14,7 @@ pub use liveness::{LivenessDetector, LivenessResult, DEFAULT_PASS_MARGIN};
 pub use recognizer::{init_onnx_runtime, FaceRecognizer, REFERENCE_POINTS};
 pub use overlay::{draw_rect, draw_text, parse_hex_color};
 pub use camera::PixelFormat;
+pub use metrics::{VisionMetricsAggregator, calculate_central_roi_luma};
 
 /// Convert a single YUV triplet (BT.601) into RGB8
 #[inline(always)]

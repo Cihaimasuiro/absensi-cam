@@ -123,7 +123,7 @@ impl FaceDetector {
                     }
                     let score = prod.sqrt();
 
-                    let cx = (c as f32 + bbox_slice[idx * 4 + 0]) * s as f32;
+                    let cx = (c as f32 + bbox_slice[idx * 4]) * s as f32;
                     let cy = (r as f32 + bbox_slice[idx * 4 + 1]) * s as f32;
                     let w = bbox_slice[idx * 4 + 2].exp() * s as f32;
                     let h = bbox_slice[idx * 4 + 3].exp() * s as f32;

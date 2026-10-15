@@ -25,6 +25,10 @@ if %errorlevel% equ 0 (
         exit /b 1
     )
     echo.
+    echo === Generating SHA256SUMS ===
+    powershell -NoProfile -Command "(Get-FileHash target\aarch64-unknown-linux-gnu\release\engine-cli -Algorithm SHA256).Hash.ToLower() + '  smart-absensi-sync' | Out-File -Encoding ascii target\aarch64-unknown-linux-gnu\release\SHA256SUMS"
+    type target\aarch64-unknown-linux-gnu\release\SHA256SUMS
+    echo.
     echo === Build Success! ===
     echo Binary: target\aarch64-unknown-linux-gnu\release\engine-cli
     goto :eof

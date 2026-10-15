@@ -14,8 +14,17 @@
     </style>
 </head>
 <body>
-    <h2>Laporan Daily Time Record (DTR)</h2>
-    <p>Periode: {{ $start }} s/d {{ $end }}</p>
+    <table style="width: 100%; border: none; margin-bottom: 12px; border-bottom: 2px solid #222;">
+        <tr>
+            <td style="width: 70px; border: none; vertical-align: middle; padding: 0 10px 8px 0;">
+                <img src="{{ public_path('images/logo.png') }}" style="width: 60px; height: 60px;">
+            </td>
+            <td style="border: none; vertical-align: middle; padding-bottom: 8px;">
+                <h2 style="margin: 0; padding: 0; font-size: 16px; text-transform: uppercase;">Laporan Daily Time Record (DTR)</h2>
+                <p style="margin: 3px 0 0 0; font-size: 11px; color: #555;">Smart Absensi Face Recognition System &bull; Periode: {{ $start }} s/d {{ $end }}</p>
+            </td>
+        </tr>
+    </table>
 
     <table>
         <thead>

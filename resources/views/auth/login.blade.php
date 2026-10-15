@@ -4,15 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — Smart Absensi</title>
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen flex items-center justify-center p-md">
 
     <div class="card p-xl w-full max-w-[400px]">
         <div class="text-center mb-lg">
-            <div class="w-12 h-12 rounded-lg bg-primary mx-auto flex items-center justify-center text-white mb-md">
-                <i data-lucide="scan-face" class="w-7 h-7"></i>
-            </div>
+            <img src="{{ asset('images/logo-auth.png') }}" class="w-24 h-24 mx-auto object-contain mb-sm" alt="Logo">
             <h1 class="text-[24px] font-bold text-ink tracking-tight mb-xs">Smart Absensi</h1>
             <p class="text-caption text-ink-muted">Sign in to manage devices and enrollments</p>
         </div>

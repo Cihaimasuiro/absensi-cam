@@ -365,7 +365,16 @@ async fn run_stream(
 
     let resolved_rfid_port = rfid_port_opt
         .or_else(|| env::var("RFID_PORT").ok())
-        .or_else(detect_rfid_device);
+        .filter(|p| !p.trim().is_empty() && p != "none" && p != "off")
+        .or_else(|| {
+            detect_rfid_device().filter(|dev| {
+                if let Some(ref ard) = resolved_arduino_port {
+                    dev != ard
+                } else {
+                    true
+                }
+            })
+        });
 
     let resolved_gpio_green = gpio_green_opt
         .or_else(|| {

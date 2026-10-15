@@ -72,6 +72,15 @@
        - Agents: `agents/` → `.agents/agents/` (maps Claude tools to Antigravity tools and models to `flash`/`pro`).
      - Workspace installation command when requested: `& "C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\install.ps1" --profile minimal --target antigravity`.
 
+10. **Active Runtime Skills & MCP Inventory:**
+    - **Accessible MCP Servers (126 Tools Total)**:
+      - `rea` (Reverse Engineering Assistant): 103 tools (binary analysis, decompiler, ADB inspection, Electron, and Web runtime).
+      - `notion-mcp-server`: 23 tools (Notion API for pages, databases, blocks, and comments).
+    - **Installed Skills Registry**:
+      - **Active Session Runtime**: 36 registered skills (20 prompt-loaded + 16 trimmed for context budget including `ponytail`, `security-audit`, `performance-optimization`).
+      - **Local Disk Customizations**: 268 skills installed across `d:\Github\absensi-cam\.agents\skills` (`modern-web-animations`) and `~/.gemini/config/plugins` (`agent-skills`, `low-level-dev-skills`, `superpowers`, `ponytail`).
+      - **ECC Local Cache**: 311 skills and 71 agents at `C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\`.
+
 # Laravel Enterprise Development Rules
 
 # 1. Core Architecture

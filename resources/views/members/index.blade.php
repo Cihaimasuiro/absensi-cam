@@ -3,10 +3,10 @@
 
 @section('header-actions')
     <div class="flex items-center gap-xs">
-        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
+        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-secondary inline-flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
         </button>
-        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-utility inline-flex items-center gap-xs">
+        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-secondary inline-flex items-center gap-xs">
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Import Excel
         </button>
         <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary inline-flex items-center gap-xs">
@@ -18,97 +18,264 @@
 @section('content')
 <div x-data>
 
-{{-- Search & Filter --}}
-<div class="card p-sm px-md mb-md">
-    <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-sm items-center">
-        <div class="relative flex-1 min-w-[200px] max-w-[320px]">
-            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
-            <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari Kode atau Nama…" class="form-input pl-9 w-full">
+@if(! ($isRoster ?? false))
+    {{-- LEVEL 1: RUANG / KELAS DIRECTORY --}}
+    
+    {{-- Search & Global Access Bar --}}
+    <div class="card p-sm px-md mb-md flex flex-wrap gap-sm items-center justify-between">
+        <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-sm items-center flex-1 max-w-[480px]">
+            <div class="relative flex-1 min-w-[200px]">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
+                <input type="text" name="search" placeholder="Cari langsung nama atau kode anggota…" class="form-input pl-9 w-full">
+            </div>
+            <button type="submit" class="btn btn-secondary">Cari Anggota</button>
+        </form>
+        <div class="flex items-center gap-xs">
+            <a href="{{ route('students.index', ['view_all' => 1]) }}" class="btn btn-secondary inline-flex items-center gap-xs">
+                <i data-lucide="users" class="w-4 h-4"></i> Lihat Semua Anggota ({{ $totalMembers ?? 0 }})
+            </a>
         </div>
-        <select name="classroom_id" onchange="this.form.submit()" class="form-select text-[13px] w-auto">
-            <option value="">-- Semua Ruang / Kelas --</option>
-            @foreach($classrooms as $c)
-                <option value="{{ $c->id }}" {{ request('classroom_id') == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
-            @endforeach
-        </select>
-        <button type="submit" class="btn btn-utility">Cari</button>
-        @if(request('search') || request('classroom_id'))
-            <a href="{{ route('students.index') }}" class="text-[12px] text-ink-faint hover:text-ink">Reset</a>
-        @endif
-    </form>
-</div>
+    </div>
 
-{{-- Table --}}
-<div class="card p-0 overflow-hidden">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Kode / NIS</th>
-                <th>Nama Lengkap</th>
-                <th>Ruang / Kelas</th>
-                <th>Organisasi / Gedung</th>
-                <th>Template Wajah</th>
-                <th class="text-right">Aksi</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($students ?? [] as $student)
-                <tr>
-                    <td class="font-mono text-[12px]">{{ $student->code }}</td>
-                    <td class="font-medium text-ink">{{ $student->name }}</td>
-                    <td class="text-ink-muted text-[13px]">{{ $student->classroom->name ?? $student->group->name ?? '-' }}</td>
-                    <td>{{ $student->school->name ?? '-' }}</td>
-                    <td>
-                        @if($student->faceTemplate)
+    {{-- Classrooms Grid --}}
+    <div class="mb-lg">
+        <div class="flex items-center justify-between mb-sm">
+            <h3 class="text-[14px] font-semibold text-ink uppercase tracking-wide flex items-center gap-xs">
+                <i data-lucide="door-open" class="w-4 h-4 text-primary"></i> Daftar Ruang / Kelas
+            </h3>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+            @forelse($classroomsWithStats ?? [] as $room)
+                <a href="{{ route('students.index', ['classroom_id' => $room->id]) }}" class="card p-md no-underline text-ink hover:border-primary transition-all duration-150 flex flex-col justify-between group cursor-pointer bg-surface">
+                    <div>
+                        <div class="flex items-start justify-between gap-xs mb-xs">
                             <div class="flex items-center gap-xs">
-                                @if($student->faceTemplate->photo_path)
-                                    <img src="{{ route('students.photo', $student) }}" alt="{{ $student->name }}" class="w-6 h-6 rounded-full object-cover border border-hairline shrink-0">
-                                @endif
-                                <span class="badge badge-success">
-                                    <i data-lucide="check-circle-2" class="w-3 h-3"></i> Terdaftar
-                                </span>
+                                <div class="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+                                    <i data-lucide="{{ $room->type === 'staff' ? 'briefcase' : 'graduation-cap' }}" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors leading-tight">
+                                        {{ $room->name }}
+                                    </h4>
+                                    <div class="text-[11px] text-ink-muted font-mono leading-tight mt-0.5">
+                                        {{ $room->code ?? 'Kode: -' }}
+                                    </div>
+                                </div>
                             </div>
-                        @else
-                            <span class="badge badge-muted">Kosong</span>
-                        @endif
-                    </td>
-                    <td class="text-right">
-                        @if($student->has_active_consent ?? true)
-                        <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="text-[12.5px] {{ $student->faceTemplate ? 'text-primary' : 'text-ink-muted hover:text-ink' }} font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
-                            <i data-lucide="{{ $student->faceTemplate ? 'user-check' : 'camera' }}" class="w-3.5 h-3.5"></i> {{ $student->faceTemplate ? 'Kelola Wajah' : 'Wajah' }}
-                        </button>
-                        @endif
-                        <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="text-[12.5px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
-                            <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit
-                        </button>
-                        <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-[4px]">
-                                <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="6" class="text-center text-ink-faint p-xxl">
-                        <div class="flex flex-col items-center justify-center gap-sm">
-                            <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
-                            Tidak ada anggota terdaftar.
+                            <span class="badge {{ $room->type === 'staff' ? 'badge-primary' : 'badge-success' }} text-[10.5px]">
+                                {{ $room->type === 'staff' ? 'Staf' : 'Siswa' }}
+                            </span>
                         </div>
-                    </td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
 
-    @if(isset($students) && $students->hasPages())
-        <div class="p-sm px-md border-t border-hairline bg-canvas-soft">
-            {{ $students->links('pagination::tailwind') }}
+                        <div class="flex flex-col gap-0.5 text-caption text-ink-muted my-xs pt-xs border-t border-hairline/60">
+                            <div class="flex items-center justify-between">
+                                <span class="text-ink-faint">Organisasi / Gedung:</span>
+                                <span class="font-medium text-ink truncate max-w-[160px]">{{ $room->school->name ?? $room->building->name ?? '-' }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-ink-faint">Jam Masuk:</span>
+                                <span class="font-mono">{{ substr($room->start_time, 0, 5) }} (Toleransi: {{ $room->late_tolerance_minutes ?? '0' }}m)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-xs mt-xs border-t border-hairline bg-canvas-soft/50 -mx-md -mb-md px-md py-xs rounded-b-md">
+                        <div class="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                            <i data-lucide="users" class="w-3.5 h-3.5 text-ink-muted"></i>
+                            {{ $room->students_count }} Anggota
+                        </div>
+                        <div class="flex items-center gap-1 text-[11px] {{ $room->enrolled_count === $room->students_count && $room->students_count > 0 ? 'text-accent-green' : 'text-ink-muted' }}">
+                            <i data-lucide="camera" class="w-3 h-3"></i>
+                            {{ $room->enrolled_count }}/{{ $room->students_count }} Wajah
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-ink-faint group-hover:translate-x-0.5 transition-transform"></i>
+                        </div>
+                    </div>
+                </a>
+            @empty
+                <div class="col-span-full card p-xl text-center text-ink-faint">
+                    <i data-lucide="door-closed" class="w-8 h-8 opacity-40 mx-auto mb-xs"></i>
+                    Belum ada ruang / kelas yang terdaftar. Tambahkan kelas di menu Manajemen Organisasi.
+                </div>
+            @endforelse
+
+            {{-- Unassigned Members Card --}}
+            @if(isset($unassignedCount) && $unassignedCount > 0)
+                <a href="{{ route('students.index', ['classroom_id' => 'unassigned']) }}" class="card p-md no-underline text-ink border-dashed hover:border-primary transition-all duration-150 flex flex-col justify-between group cursor-pointer bg-canvas-soft/30">
+                    <div>
+                        <div class="flex items-start justify-between gap-xs mb-xs">
+                            <div class="flex items-center gap-xs">
+                                <div class="w-8 h-8 rounded-md bg-canvas-soft border border-hairline text-ink-muted flex items-center justify-center shrink-0 group-hover:border-primary group-hover:text-primary transition-colors">
+                                    <i data-lucide="user-minus" class="w-4 h-4"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors leading-tight">
+                                        Tanpa Ruang / Kelas
+                                    </h4>
+                                    <div class="text-[11px] text-ink-faint leading-tight mt-0.5">
+                                        Anggota Umum / Belum Ditempatkan
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="badge badge-neutral text-[10.5px]">Umum</span>
+                        </div>
+                        <p class="text-caption text-ink-muted my-xs pt-xs border-t border-hairline/60">
+                            Daftar anggota yang belum terhubung dengan kelas aktif manapun.
+                        </p>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-xs mt-xs border-t border-hairline bg-canvas-soft -mx-md -mb-md px-md py-xs rounded-b-md">
+                        <div class="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                            <i data-lucide="users" class="w-3.5 h-3.5 text-ink-muted"></i>
+                            {{ $unassignedCount }} Anggota
+                        </div>
+                        <div class="flex items-center gap-1 text-[11px] text-ink-muted">
+                            <i data-lucide="camera" class="w-3 h-3"></i>
+                            {{ $unassignedEnrolled ?? 0 }}/{{ $unassignedCount }} Wajah
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-ink-faint group-hover:translate-x-0.5 transition-transform"></i>
+                        </div>
+                    </div>
+                </a>
+            @endif
         </div>
-    @endif
-</div>
+    </div>
+
+@else
+    {{-- LEVEL 2: ROSTER VIEW (ANGGOTA DALAM KELAS) --}}
+
+    {{-- Breadcrumb & Back Action Bar --}}
+    <div class="card p-sm px-md mb-md flex flex-wrap gap-sm items-center justify-between">
+        <div class="flex items-center gap-sm flex-wrap">
+            <a href="{{ route('students.index') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1">
+                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Daftar Ruang / Kelas
+            </a>
+            <span class="text-hairline">|</span>
+            <div class="flex items-center gap-xs">
+                @if(isset($activeClassroom) && $activeClassroom)
+                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
+                        <i data-lucide="{{ $activeClassroom->type === 'staff' ? 'briefcase' : 'graduation-cap' }}" class="w-4 h-4 text-primary"></i>
+                        {{ $activeClassroom->name }}
+                    </span>
+                    <span class="badge {{ $activeClassroom->type === 'staff' ? 'badge-primary' : 'badge-success' }} text-[10.5px]">
+                        {{ $activeClassroom->type === 'staff' ? 'Staf' : 'Siswa' }}
+                    </span>
+                    <span class="text-caption text-ink-muted ml-xs">
+                        ({{ $activeClassroom->school->name ?? 'Organisasi' }} &bull; {{ $students->total() }} Anggota)
+                    </span>
+                @elseif(request('classroom_id') === 'unassigned')
+                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
+                        <i data-lucide="user-minus" class="w-4 h-4 text-ink-muted"></i>
+                        Tanpa Ruang / Kelas (Umum)
+                    </span>
+                    <span class="text-caption text-ink-muted ml-xs">
+                        ({{ $students->total() }} Anggota)
+                    </span>
+                @else
+                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
+                        <i data-lucide="users" class="w-4 h-4 text-primary"></i>
+                        Semua Anggota
+                    </span>
+                    <span class="text-caption text-ink-muted ml-xs">
+                        ({{ $students->total() }} Anggota)
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        {{-- Filter & Search Form --}}
+        <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-xs items-center">
+            @if(request('classroom_id'))
+                <input type="hidden" name="classroom_id" value="{{ request('classroom_id') }}">
+            @endif
+            <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"></i>
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama/kode…" class="form-input pl-8 py-1 text-[12px] w-[180px]">
+            </div>
+            <select name="filter" onchange="this.form.submit()" class="form-select py-1 text-[12px] w-auto">
+                <option value="">Semua Wajah</option>
+                <option value="enrolled" {{ request('filter') === 'enrolled' ? 'selected' : '' }}>Wajah Terdaftar</option>
+                <option value="non-enrolled" {{ request('filter') === 'non-enrolled' ? 'selected' : '' }}>Belum Terdaftar</option>
+            </select>
+            <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+            @if(request('search') || request('filter'))
+                <a href="{{ route('students.index', ['classroom_id' => request('classroom_id')]) }}" class="btn-link text-ink-faint ml-xs">Reset</a>
+            @endif
+        </form>
+    </div>
+
+    {{-- Table --}}
+    <div class="card p-0 overflow-hidden">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Kode / NIS</th>
+                    <th>Nama Lengkap</th>
+                    <th>Ruang / Kelas</th>
+                    <th>Organisasi / Gedung</th>
+                    <th>Template Wajah</th>
+                    <th class="text-right">Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($students ?? [] as $student)
+                    <tr>
+                        <td class="font-mono text-[12px]">{{ $student->code }}</td>
+                        <td class="font-medium text-ink">{{ $student->name }}</td>
+                        <td class="text-ink-muted text-[13px]">{{ $student->classroom->name ?? $student->group->name ?? '-' }}</td>
+                        <td>{{ $student->school->name ?? '-' }}</td>
+                        <td>
+                            @if($student->faceTemplate)
+                                <div class="flex items-center gap-xs">
+                                    @if($student->faceTemplate->photo_path)
+                                        <img src="{{ route('students.photo', $student) }}" alt="{{ $student->name }}" class="w-6 h-6 rounded-full object-cover border border-hairline shrink-0">
+                                    @endif
+                                    <span class="badge badge-success">
+                                        <i data-lucide="check-circle-2" class="w-3 h-3"></i> Terdaftar
+                                    </span>
+                                </div>
+                            @else
+                                <span class="badge badge-muted">Kosong</span>
+                            @endif
+                        </td>
+                        <td class="text-right">
+                            @if($student->has_active_consent ?? true)
+                            <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="btn-link mr-sm {{ $student->faceTemplate ? 'text-primary' : 'text-ink-muted' }}">
+                                <i data-lucide="{{ $student->faceTemplate ? 'user-check' : 'camera' }}" class="w-3.5 h-3.5"></i> {{ $student->faceTemplate ? 'Kelola Wajah' : 'Wajah' }}
+                            </button>
+                            @endif
+                            <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="btn-link mr-sm">
+                                <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit
+                            </button>
+                            <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn-danger-link">
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" class="text-center text-ink-faint p-xxl">
+                            <div class="flex flex-col items-center justify-center gap-sm">
+                                <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
+                                Tidak ada anggota ditemukan di ruang / kelas ini.
+                            </div>
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+
+        @if(isset($students) && $students->hasPages())
+            <div class="p-sm px-md border-t border-hairline bg-canvas-soft">
+                {{ $students->links('pagination::tailwind') }}
+            </div>
+        @endif
+    </div>
+
+@endif
 
 {{-- Create Modal --}}
 <dialog id="createModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[440px] w-full backdrop:bg-black/40 shadow-xl m-auto">
@@ -116,7 +283,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota
         </h3>
-        <button type="button" onclick="document.getElementById('createModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('createModal').close()" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -153,7 +320,7 @@
                 <select id="createSchool" name="school_id" onchange="filterClassrooms('create')" class="form-select @error('school_id') border-danger @enderror">
                     <option value="">-- Pilih --</option>
                     @foreach($schools as $school)
-                        <option value="{{ $school->id }}" {{ old('school_id') == $school->id ? 'selected' : '' }}>{{ $school->name }}</option>
+                        <option value="{{ $school->id }}" {{ (old('school_id') == $school->id || (isset($activeClassroom) && $activeClassroom && $activeClassroom->school_id == $school->id)) ? 'selected' : '' }}>{{ $school->name }}</option>
                     @endforeach
                 </select>
                 @error('school_id')
@@ -166,7 +333,7 @@
             <select id="createClassroom" name="classroom_id" class="form-select @error('classroom_id') border-danger @enderror">
                 <option value="">-- Tanpa Kelas / Umum --</option>
                 @foreach($classrooms as $classroom)
-                    <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}" {{ old('classroom_id') == $classroom->id ? 'selected' : '' }}>
+                    <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}" {{ (old('classroom_id') == $classroom->id || (isset($activeClassroom) && $activeClassroom && $activeClassroom->id == $classroom->id)) ? 'selected' : '' }}>
                         {{ $classroom->name }}
                     </option>
                 @endforeach
@@ -196,7 +363,7 @@
             <label for="createConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('createModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('createModal').close()" class="btn btn-secondary">Batal</button>
             <button type="submit" class="btn btn-primary">Simpan</button>
         </div>
     </form>
@@ -208,7 +375,7 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota
         </h3>
-        <button type="button" onclick="document.getElementById('editModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('editModal').close()" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -275,7 +442,7 @@
             <label for="editConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('editModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('editModal').close()" class="btn btn-secondary">Batal</button>
             <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
         </div>
     </form>
@@ -287,14 +454,14 @@
         <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
             <i data-lucide="file-spreadsheet" class="w-4 h-4 text-primary"></i> Import Anggota (Excel)
         </h3>
-        <button type="button" onclick="document.getElementById('importModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('importModal').close()" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
     
     <div class="mb-sm p-sm bg-canvas-soft border border-hairline rounded-md">
         <p class="text-[12px] text-ink-muted mb-xs">Gunakan format template yang telah disediakan agar proses impor berjalan lancar.</p>
-        <a href="{{ route('students.template') }}" class="btn btn-utility inline-flex items-center gap-xs">
+        <a href="{{ route('students.template') }}" class="btn btn-secondary inline-flex items-center gap-xs">
             <i data-lucide="download" class="w-3.5 h-3.5"></i> Unduh Template Excel
         </a>
     </div>
@@ -307,7 +474,7 @@
         </div>
         <p class="text-[11px] text-ink-faint mb-md">Sistem otomatis mendaftarkan anggota tanpa profil wajah. Profil wajah dapat di-enroll menyusul.</p>
         <div class="flex justify-end gap-xs">
-            <button type="button" onclick="document.getElementById('importModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('importModal').close()" class="btn btn-secondary">Batal</button>
             <button type="submit" class="btn btn-primary">Import Data</button>
         </div>
     </form>
@@ -319,7 +486,7 @@
         <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
             <i data-lucide="folder-up" class="w-4 h-4 text-primary"></i> Bulk Enroll (via ZIP)
         </h3>
-        <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -335,7 +502,7 @@
             <label for="bulkConsent" class="text-[11.5px] text-ink-faint">Saya mengonfirmasi bahwa semua siswa dalam ZIP ini telah menyetujui pemrosesan data wajah.</label>
         </div>
         <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="btn btn-utility">Batal</button>
+            <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="btn btn-secondary">Batal</button>
             <button type="submit" class="btn btn-primary">Mulai Proses Massal</button>
         </div>
     </form>
@@ -346,7 +513,7 @@
         <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
             <i data-lucide="camera" class="w-4 h-4 text-primary"></i> <span id="enrollModalTitle">Kelola Wajah</span>
         </h3>
-        <button onclick="closeEnrollModal()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button onclick="closeEnrollModal()" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -397,19 +564,19 @@
 
     <div class="flex items-center justify-between mt-md pt-xs border-t border-hairline">
         <div>
-            <button type="button" id="btnDeleteFace" onclick="deleteFaceTemplate()" class="hidden btn btn-danger text-[11.5px] inline-flex items-center gap-1">
+            <button type="button" id="btnDeleteFace" onclick="deleteFaceTemplate()" class="hidden btn btn-danger btn-sm">
                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah
             </button>
         </div>
         <div class="flex gap-xs">
-            <button type="button" onclick="closeEnrollModal()" class="btn btn-utility">Tutup</button>
-            <button type="button" id="btnRetakeFace" onclick="switchEnrollTab('camera')" class="hidden btn btn-secondary text-[12.5px] inline-flex items-center gap-1">
+            <button type="button" onclick="closeEnrollModal()" class="btn btn-secondary">Tutup</button>
+            <button type="button" id="btnRetakeFace" onclick="switchEnrollTab('camera')" class="hidden btn btn-secondary btn-sm">
                 <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Ganti Wajah
             </button>
-            <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary inline-flex items-center gap-1">
+            <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary">
                 <i data-lucide="camera" class="w-3.5 h-3.5"></i> Ambil & Simpan
             </button>
-            <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary inline-flex items-center gap-1">
+            <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary">
                 <i data-lucide="upload" class="w-3.5 h-3.5"></i> Simpan Wajah
             </button>
         </div>

@@ -28,17 +28,17 @@
                             <td class="font-mono text-[12px] text-ink-muted">{{ $school->code }}</td>
                             <td class="font-medium text-ink">{{ $school->name }}</td>
                             <td class="text-right whitespace-nowrap">
-                                <button data-school="{{ json_encode($school) }}" @click="openEditSchool" aria-label="Edit Organisasi" class="text-[12.5px] text-primary font-medium border-none bg-transparent cursor-pointer mr-sm hover:underline inline-flex items-center gap-1">
+                                <button data-school="{{ json_encode($school) }}" @click="openEditSchool" aria-label="Edit Organisasi" class="btn-link mr-sm">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
                                 <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus organisasi ini?">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" aria-label="Hapus Organisasi" class="btn-danger hover:underline inline-flex items-center gap-1 mr-sm text-[12px]">
+                                    <button type="submit" aria-label="Hapus Organisasi" class="btn-danger-link mr-sm">
                                         <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                                     </button>
                                 </form>
-                                <button @click="toggleRow('classrooms-{{$school->id}}')" aria-label="Toggle Daftar Kelas" class="btn btn-utility py-1 px-2.5 text-[11.5px]">
+                                <button @click="toggleRow('classrooms-{{$school->id}}')" aria-label="Toggle Daftar Kelas" class="btn btn-secondary btn-sm">
                                     <i data-lucide="chevron-down" class="w-3 h-3"></i> Kelas ({{ $school->classrooms_count }})
                                 </button>
                             </td>
@@ -48,10 +48,10 @@
                                 <div class="flex justify-between items-center mb-sm">
                                     <h4 class="font-semibold text-[13px] text-ink">Daftar Kelas / Grup</h4>
                                     <div class="flex gap-xs">
-                                        <button @click="openBulkEdit({{$school->id}})" class="btn btn-primary py-1 px-2.5 text-[11.5px]">
+                                        <button @click="openBulkEdit({{$school->id}})" class="btn btn-secondary btn-sm">
                                             <i data-lucide="clock" class="w-3 h-3"></i> Update Waktu Massal
                                         </button>
-                                        <button @click="openCreateClassroom({{$school->id}})" class="btn btn-utility py-1 px-2.5 text-[11.5px]">
+                                        <button @click="openCreateClassroom({{$school->id}})" class="btn btn-secondary btn-sm">
                                             <i data-lucide="plus" class="w-3 h-3"></i> Tambah Kelas
                                         </button>
                                     </div>
@@ -83,7 +83,7 @@
                                                     <td class="font-mono text-[11.5px]">{{ substr($classroom->start_time, 0, 5) }}</td>
                                                     <td class="font-mono text-[11.5px]">{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
                                                     <td class="text-right">
-                                                        <button data-classroom="{{ json_encode($classroom) }}" @click="openEditClassroom" class="text-primary hover:underline text-[12px] font-medium border-none bg-transparent cursor-pointer">Edit</button>
+                                                        <button data-classroom="{{ json_encode($classroom) }}" @click="openEditClassroom" class="btn-link">Edit</button>
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -113,7 +113,7 @@
             <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Organisasi
             </h3>
-            <button type="button" @click="$refs.createModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.createModal.close()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -135,7 +135,7 @@
                 @error('description') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="flex justify-end gap-xs mt-md">
-                <button type="button" @click="$refs.createModal.close()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="$refs.createModal.close()" class="btn btn-secondary">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan</button>
             </div>
         </form>
@@ -147,7 +147,7 @@
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Organisasi
             </h3>
-            <button type="button" @click="$refs.editModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.editModal.close()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -178,7 +178,7 @@
                 @error('is_active') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
             </div>
             <div class="flex justify-end gap-xs mt-md">
-                <button type="button" @click="$refs.editModal.close()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="$refs.editModal.close()" class="btn btn-secondary">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
             </div>
         </form>
@@ -190,7 +190,7 @@
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Kelas
             </h3>
-            <button type="button" @click="$refs.createClassroomModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.createClassroomModal.close()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -228,7 +228,7 @@
                 </div>
             </div>
             <div class="flex justify-end gap-xs mt-md">
-                <button type="button" @click="$refs.createClassroomModal.close()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="$refs.createClassroomModal.close()" class="btn btn-secondary">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan</button>
             </div>
         </form>
@@ -240,7 +240,7 @@
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="edit-2" class="w-4 h-4 text-primary"></i> Edit Kelas
             </h3>
-            <button type="button" @click="$refs.editClassroomModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.editClassroomModal.close()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -288,7 +288,7 @@
             </div>
 
             <div class="flex justify-end gap-xs">
-                <button type="button" @click="$refs.editClassroomModal.close()" class="btn btn-utility">Batal</button>
+                <button type="button" @click="$refs.editClassroomModal.close()" class="btn btn-secondary">Batal</button>
                 <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
             </div>
         </form>
@@ -300,7 +300,7 @@
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="clock" class="w-4 h-4 text-primary"></i> Update Waktu Massal
             </h3>
-            <button type="button" @click="$refs.bulkEditClassroomModal.close()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.bulkEditClassroomModal.close()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -343,8 +343,8 @@
             </div>
 
             <div class="flex justify-end gap-xs">
-                <button type="button" @click="$refs.bulkEditClassroomModal.close()" class="btn btn-utility">Batal</button>
-                <button type="submit" :disabled="!confirmRetroactive" class="btn btn-danger disabled:opacity-50 disabled:cursor-not-allowed">Terapkan Massal</button>
+                <button type="button" @click="$refs.bulkEditClassroomModal.close()" class="btn btn-secondary">Batal</button>
+                <button type="submit" :disabled="!confirmRetroactive" class="btn btn-danger">Terapkan Massal</button>
             </div>
         </form>
     </dialog>

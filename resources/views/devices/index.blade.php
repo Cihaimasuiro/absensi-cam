@@ -66,12 +66,12 @@
                             </td>
                             <td class="text-right">
                                 <div class="flex items-center justify-end gap-xs">
-                                    <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn btn-primary py-1 px-2.5 text-[11.5px] inline-flex items-center gap-1">
+                                    <button type="submit" form="approve-form-{{ $pairing->id }}" class="btn btn-primary btn-sm">
                                         <i data-lucide="check" class="w-3 h-3"></i> Setujui
                                     </button>
                                     <form method="POST" action="{{ route('devices.pairing.reject', $pairing) }}" class="inline">
                                         @csrf
-                                        <button type="submit" class="btn-danger py-1 px-2 text-[11.5px] inline-flex items-center gap-1">
+                                        <button type="submit" class="btn-danger-link">
                                             <i data-lucide="x" class="w-3 h-3"></i> Tolak
                                         </button>
                                     </form>
@@ -117,16 +117,16 @@
                         </td>
                         <td class="text-right">
                             <div class="flex items-center justify-end gap-xs">
-                                <button type="button" @click="openEdit({{ $device->toJson() }})" class="btn btn-utility inline-flex items-center gap-1">
+                                <button type="button" @click="openEdit({{ $device->toJson() }})" class="btn-link">
                                     <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                 </button>
-                                <button type="button" @click="openConfig({{ $device->toJson() }})" class="btn btn-utility inline-flex items-center gap-1">
+                                <button type="button" @click="openConfig({{ $device->toJson() }})" class="btn-link">
                                     <i data-lucide="key" class="w-3 h-3"></i> Konfigurasi (.env)
                                 </button>
                                 <form method="POST" action="{{ route('devices.destroy', $device) }}" class="inline"
                                       @submit="confirmSubmit" data-confirm="Hapus perangkat ini secara permanen? Peringatan: Data absensi dari mesin ini akan ikut terhapus.">
                                     @csrf @method('DELETE')
-                                    <button type="submit" class="btn-danger hover:underline inline-flex items-center gap-1 px-1.5 py-1 text-[11.5px]">
+                                    <button type="submit" class="btn-danger-link">
                                         <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                                     </button>
                                 </form>
@@ -149,13 +149,13 @@
 </div>
 
 {{-- Add Device Modal --}}
-<div x-show="addDeviceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;">
+<div x-show="addDeviceModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" x-cloak>
     <div @click.away="addDeviceModal = false" class="card p-lg animate-fade-in-up" style="width: 400px; max-width: 90vw;">
         <div class="flex justify-between items-center mb-xs border-b border-hairline pb-xs">
             <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
                 <i data-lucide="plus-circle" class="w-4 h-4 text-primary"></i> Tambah Perangkat
             </h2>
-            <button type="button" @click="addDeviceModal = false" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="addDeviceModal = false" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -194,13 +194,13 @@
 </div>
 
 {{-- Edit Device Modal --}}
-<div x-show="editDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-cloak>
+<div x-show="editDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" x-cloak>
     <div @click.away="closeEdit()" class="card p-lg animate-fade-in-up" style="width: 500px; max-width: 90vw;">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
                 <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Perangkat
             </h2>
-            <button type="button" @click="closeEdit()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="closeEdit()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -248,13 +248,13 @@
 </div>
 
 {{-- Config Device Modal --}}
-<div x-show="configDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-cloak>
+<div x-show="configDevice" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" x-cloak>
     <div @click.away="closeConfig()" class="card p-lg animate-fade-in-up" style="width: 650px; max-width: 95vw;">
         <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
             <h2 class="text-[16px] font-bold text-ink flex items-center gap-xs">
                 <i data-lucide="key" class="w-4 h-4 text-primary"></i> Konfigurasi Perangkat
             </h2>
-            <button type="button" @click="closeConfig()" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="closeConfig()" aria-label="Tutup Modal" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -269,7 +269,7 @@
                 <div class="flex justify-end gap-sm mt-md pt-sm">
                     <form method="POST" x-bind:action="'/devices/' + configDevice.id + '/reset-token'" @submit="confirmSubmit" data-confirm="Anda yakin ingin MENGGANTI (reset) token lama? Device akan terputus sampai token baru dipasang.">
                         @csrf
-                        <button type="submit" class="btn btn-secondary text-danger border-danger/50 hover:bg-danger/10 inline-flex items-center gap-xs">
+                        <button type="submit" class="btn btn-danger-outline btn-sm">
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i> Generate Ulang Token
                         </button>
                     </form>

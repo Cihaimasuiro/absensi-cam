@@ -1,6 +1,22 @@
 @extends('layouts.app')
 @section('title', 'Laporan Presensi')
 
+@section('header-actions')
+    @role('super_admin|admin')
+    <div class="flex items-center gap-xs">
+        <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-secondary">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+        </a>
+        <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-secondary">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-accent-green"></i> XLSX
+        </a>
+        <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-secondary">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-accent-orange"></i> PDF
+        </a>
+    </div>
+    @endrole
+@endsection
+
 @section('content')
 <div x-data="reportsData">
 
@@ -22,23 +38,13 @@
                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input pl-9 w-full">
             </div>
         </div>
-        <div class="flex gap-xs">
-            <button type="submit" class="btn btn-utility flex items-center gap-xs">
+        <div class="flex gap-xs items-center">
+            <button type="submit" class="btn btn-primary inline-flex items-center gap-xs">
                 <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
             </button>
-            @role('super_admin|admin')
-            <div class="flex gap-1 items-center">
-                <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
-                    <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
-                </a>
-                <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-accent-green"></i> XLSX
-                </a>
-                <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-utility flex items-center gap-xs text-[12px]">
-                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-accent-orange"></i> PDF
-                </a>
-            </div>
-            @endrole
+            @if(request('start_date') || request('end_date') || request('search'))
+                <a href="{{ route('reports.index') }}" class="text-[12px] text-ink-faint hover:text-ink transition-colors ml-xs">Reset</a>
+            @endif
         </div>
     </form>
 </div>
@@ -85,10 +91,10 @@
                     @role('super_admin|admin')
                     <td>
                         <div class="flex gap-xs items-center">
-                            <button type="button" class="btn btn-utility py-1 px-2 text-[11.5px]" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
+                            <button type="button" class="btn btn-secondary btn-sm" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
                                 Koreksi
                             </button>
-                            <button type="button" class="btn btn-utility py-1 px-2 text-[11.5px]" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
+                            <button type="button" class="btn btn-secondary btn-sm" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
                                 <i data-lucide="list" class="w-3 h-3"></i> Log
                             </button>
                         </div>
@@ -121,7 +127,7 @@
         <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
             <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Koreksi Absensi
         </h3>
-        <button type="button" @click="closeCorrectionModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" @click="closeCorrectionModal" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
@@ -143,7 +149,7 @@
             <textarea name="reason" id="correction_reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
         </div>
         <div class="flex justify-end gap-xs mt-sm">
-            <button type="button" @click="closeCorrectionModal" class="btn btn-utility">Batal</button>
+            <button type="button" @click="closeCorrectionModal" class="btn btn-secondary">Batal</button>
             <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
         </div>
     </form>
@@ -155,7 +161,7 @@
         <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
             <i data-lucide="history" class="w-4 h-4 text-primary"></i> Riwayat Deteksi
         </h3>
-        <button type="button" @click="closeLogsModal" aria-label="Tutup Modal" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+        <button type="button" @click="closeLogsModal" aria-label="Tutup Modal" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>

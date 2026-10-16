@@ -7,7 +7,8 @@ import {
     Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, createIcons
+    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
+    Sparkles, ShieldCheck, Eye, createIcons
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
@@ -146,26 +147,191 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
     }
 }));
 
-Alpine.data('cameraFeedData', (defaultIp = '') => ({
+Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0, initialLogs = []) => ({
     streamIp: defaultIp,
     status: 'connecting',
+    isFullscreen: false,
+    currentTime: '',
+    clockTimer: null,
+    pollTimer: null,
+    eventSource: null,
+    recentLogs: Array.isArray(initialLogs) ? initialLogs : [],
+    presentCount: initialPresent,
+    filterDirection: 'all',
+    lastSyncTime: '',
+    isRefreshing: false,
+
+    get filteredLogs() {
+        if (this.filterDirection === 'all') return this.recentLogs;
+        return this.recentLogs.filter(log => log.direction === this.filterDirection);
+    },
+
+    init() {
+        this.updateClock();
+        this.clockTimer = setInterval(() => this.updateClock(), 1000);
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.pollRecentLogs();
+            }
+        });
+
+        this.pollTimer = setInterval(() => {
+            if (!document.hidden) {
+                this.pollRecentLogs();
+            }
+        }, 6000);
+
+        document.addEventListener('fullscreenchange', () => {
+            this.isFullscreen = !!document.fullscreenElement;
+        });
+
+        this.initSSE();
+        setTimeout(() => window.refreshIcons?.(), 50);
+    },
+
+    destroy() {
+        if (this.clockTimer) clearInterval(this.clockTimer);
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        this.closeSSE();
+    },
+
+    updateClock() {
+        const now = new Date();
+        this.currentTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+    },
+
     reconnect() {
         this.status = 'connecting';
+        this.isRefreshing = true;
         const img = document.getElementById('liveStreamImg');
         if (img) {
             img.style.display = 'block';
             img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
         }
+        this.initSSE();
+        this.pollRecentLogs();
+        setTimeout(() => {
+            this.isRefreshing = false;
+        }, 800);
     },
+
+    toggleFullscreen() {
+        const viewport = this.$refs.cameraViewport;
+        if (!viewport) return;
+
+        if (!document.fullscreenElement) {
+            viewport.requestFullscreen?.().catch(() => {});
+        } else {
+            document.exitFullscreen?.().catch(() => {});
+        }
+    },
+
+    captureSnapshot() {
+        const snapshotUrl = 'http://' + this.streamIp + ':5000/snapshot.jpg?t=' + Date.now();
+        window.open(snapshotUrl, '_blank');
+    },
+
+    async pollRecentLogs() {
+        try {
+            const res = await fetch('/live-camera/recent');
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data && Array.isArray(data.logs)) {
+                this.recentLogs = data.logs;
+                if (typeof data.present_today === 'number') {
+                    this.presentCount = data.present_today;
+                }
+                const now = new Date();
+                this.lastSyncTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                setTimeout(() => window.refreshIcons?.(), 50);
+            }
+        } catch (e) {
+            // Silently ignore polling network failures
+        }
+    },
+
     onStreamLoad() {
         this.status = 'online';
         const img = document.getElementById('liveStreamImg');
         if (img) img.style.display = 'block';
     },
+
     onStreamError() {
         this.status = 'offline';
         const img = document.getElementById('liveStreamImg');
         if (img) img.style.display = 'none';
+        this.clearOverlay();
+    },
+
+    initSSE() {
+        this.closeSSE();
+        try {
+            const sseUrl = 'http://' + this.streamIp + ':5000/events';
+            this.eventSource = new EventSource(sseUrl);
+            this.eventSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    this.renderOverlay(data);
+                } catch (err) {}
+            };
+            this.eventSource.onerror = () => {
+                this.closeSSE();
+            };
+        } catch (e) {}
+    },
+
+    closeSSE() {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+        }
+        this.clearOverlay();
+    },
+
+    renderOverlay(data) {
+        const canvas = this.$refs.overlayCanvas;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        if (data.frame_width && data.frame_height) {
+            if (canvas.width !== data.frame_width || canvas.height !== data.frame_height) {
+                canvas.width = data.frame_width;
+                canvas.height = data.frame_height;
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (data.faces && data.faces.length > 0) {
+            for (const face of data.faces) {
+                ctx.save();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = face.color || '#10b981';
+                ctx.strokeRect(face.x, face.y, face.width, face.height);
+
+                const label = face.name_text || '';
+                const score = face.score_text || '';
+                ctx.font = 'bold 12px monospace, sans-serif';
+                const textWidth = Math.max(ctx.measureText(label).width, ctx.measureText(score).width);
+
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                ctx.fillRect(face.x, face.y + face.height - 32, textWidth + 12, 32);
+
+                ctx.fillStyle = face.color || '#10b981';
+                if (score) ctx.fillText(score, face.x + 6, face.y + face.height - 18);
+                ctx.fillText(label, face.x + 6, face.y + face.height - 5);
+                ctx.restore();
+            }
+        }
+    },
+
+    clearOverlay() {
+        const canvas = this.$refs.overlayCanvas;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 }));
 
@@ -178,7 +344,8 @@ const lucideIcons = {
     Building, Menu, Home, CheckCircle, AlertCircle, Search, Filter, Download,
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
-    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check
+    UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
+    Sparkles, ShieldCheck, Eye
 };
 
 export function refreshIcons() {

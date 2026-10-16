@@ -12,6 +12,46 @@ class StudentWebController extends Controller
 {
     public function index(Request $request)
     {
+        $isRoster = $request->has('classroom_id') 
+            || $request->filled('search') 
+            || $request->filled('filter') 
+            || $request->boolean('view_all');
+
+        $classrooms = Classroom::active()->select(['id', 'name', 'school_id', 'type', 'start_time'])->orderBy('name')->get();
+        $schools = School::active()->select(['id', 'name'])->orderBy('name')->get();
+
+        if (! $isRoster) {
+            $classroomsWithStats = Classroom::active()
+                ->with(['school:id,name', 'building:id,name'])
+                ->withCount([
+                    'students' => fn ($q) => $q->where('is_active', true),
+                    'students as enrolled_count' => fn ($q) => $q->where('is_active', true)->whereHas('faceTemplate'),
+                ])
+                ->orderBy('name')
+                ->get();
+
+            $unassignedCount = Student::where('is_active', true)->whereNull('classroom_id')->count();
+            $unassignedEnrolled = Student::where('is_active', true)->whereNull('classroom_id')->whereHas('faceTemplate')->count();
+            $totalMembers = Student::where('is_active', true)->count();
+            $totalEnrolled = Student::where('is_active', true)->whereHas('faceTemplate')->count();
+
+            return view('members.index', [
+                'isRoster'            => false,
+                'classroomsWithStats' => $classroomsWithStats,
+                'unassignedCount'     => $unassignedCount,
+                'unassignedEnrolled'  => $unassignedEnrolled,
+                'totalMembers'        => $totalMembers,
+                'totalEnrolled'       => $totalEnrolled,
+                'classrooms'          => $classrooms,
+                'schools'             => $schools,
+            ]);
+        }
+
+        $activeClassroom = null;
+        if ($request->classroom_id && $request->classroom_id !== 'unassigned') {
+            $activeClassroom = Classroom::with(['school:id,name', 'building:id,name'])->find($request->classroom_id);
+        }
+
         $students = Student::with(['classroom:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
             ->when($request->search, fn ($q) =>
                 $q->where(fn ($q) =>
@@ -22,16 +62,20 @@ class StudentWebController extends Controller
             ->when($request->filter === 'non-enrolled', fn ($q) => $q->whereDoesntHave('faceTemplate'))
             ->when($request->filter === 'inactive',     fn ($q) => $q->where('is_active', false))
             ->when($request->filter !== 'inactive',     fn ($q) => $q->where('is_active', true))
-            ->when($request->classroom_id, fn ($q) => $q->where('classroom_id', $request->classroom_id))
+            ->when($request->classroom_id === 'unassigned', fn ($q) => $q->whereNull('classroom_id'))
+            ->when($request->classroom_id && $request->classroom_id !== 'unassigned', fn ($q) => $q->where('classroom_id', $request->classroom_id))
             ->select(['id', 'code', 'name', 'email', 'phone', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
             ->orderBy('name')
             ->paginate(50)
             ->withQueryString();
 
-        $classrooms = Classroom::active()->select(['id', 'name', 'school_id'])->orderBy('name')->get();
-        $schools = School::active()->select(['id', 'name'])->orderBy('name')->get();
-
-        return view('students.index', compact('students', 'classrooms', 'schools'));
+        return view('members.index', [
+            'isRoster'        => true,
+            'students'        => $students,
+            'activeClassroom' => $activeClassroom,
+            'classrooms'      => $classrooms,
+            'schools'         => $schools,
+        ]);
     }
 
     public function store(Request $request)

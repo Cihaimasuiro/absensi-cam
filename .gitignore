@@ -85,8 +85,7 @@ project_gap_analysis.md
 # 7. Rust Cargo Build Outputs
 # ========================================
 target/
-**/target/
-
+/.agents/
 clients/edge-engine-rs/*.db
 local_edge.db
 clients/desktop-shell/gen/

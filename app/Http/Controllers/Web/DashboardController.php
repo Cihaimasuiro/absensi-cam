@@ -37,8 +37,50 @@ class DashboardController extends Controller
         
         $devices = Device::orderBy('name')->get(['id', 'name', 'ip_address']);
 
-        return view('dashboard.index', compact(
-            'totalStudents', 'totalEnrolled', 'presentToday', 'devicesOnline', 'recentActivity', 'streamIp', 'streamName', 'devices'
+        $timezone = config('app.timezone', 'Asia/Jakarta');
+        $recentLogs = $recentActivity->map(fn($log) => $this->formatLogItem($log, $timezone))->values();
+
+        return view('live-camera.index', compact(
+            'totalStudents', 'totalEnrolled', 'presentToday', 'devicesOnline', 'recentLogs', 'streamIp', 'streamName', 'devices'
         ));
+    }
+
+    public function recentLogs(Request $request)
+    {
+        $today = today();
+        $startUtc = $today->copy()->startOfDay()->setTimezone('UTC');
+        $endUtc = $today->copy()->endOfDay()->setTimezone('UTC');
+
+        $presentToday = AttendanceLog::where('direction', 'in')
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
+            ->distinct('student_id')
+            ->count('student_id');
+
+        $logs = AttendanceLog::with(['student:id,name,code', 'device:id,name,device_code'])
+            ->whereBetween('captured_at', [$startUtc, $endUtc])
+            ->orderByDesc('captured_at')
+            ->limit(30)
+            ->get(['id', 'student_id', 'device_id', 'captured_at', 'direction', 'score']);
+
+        $timezone = config('app.timezone', 'Asia/Jakarta');
+
+        return response()->json([
+            'present_today' => $presentToday,
+            'logs' => $logs->map(fn($log) => $this->formatLogItem($log, $timezone))->values(),
+        ]);
+    }
+
+    private function formatLogItem($log, string $timezone): array
+    {
+        return [
+            'id' => $log->id,
+            'name' => $log->student->name ?? 'Tidak Dikenal',
+            'code' => $log->student->code ?? '-',
+            'initial' => mb_strtoupper(mb_substr($log->student->name ?? '?', 0, 1)),
+            'direction' => $log->direction,
+            'time' => $log->captured_at ? $log->captured_at->timezone($timezone)->format('H:i:s') : '--:--:--',
+            'score' => $log->score ? round($log->score * 100) . '%' : null,
+            'device' => $log->device->name ?? null,
+        ];
     }
 }

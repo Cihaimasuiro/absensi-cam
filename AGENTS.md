@@ -78,8 +78,142 @@
       - `notion-mcp-server`: 23 tools (Notion API for pages, databases, blocks, and comments).
     - **Installed Skills Registry**:
       - **Active Session Runtime**: 36 registered skills (20 prompt-loaded + 16 trimmed for context budget including `ponytail`, `security-audit`, `performance-optimization`).
-      - **Local Disk Customizations**: 268 skills installed across `d:\Github\absensi-cam\.agents\skills` (`modern-web-animations`) and `~/.gemini/config/plugins` (`agent-skills`, `low-level-dev-skills`, `superpowers`, `ponytail`).
+      - **Local Disk Customizations**: 80 workspace skills installed in [`.agents/skills/`](file:///d:/Github/absensi-cam/.agents/skills) (cataloged in Rule 12 below) and global plugins in `~/.gemini/config/plugins` (`agent-skills`, `taste-skill`, `moli`, `low-level-dev-skills`, `superpowers`, `ponytail`).
       - **ECC Local Cache**: 311 skills and 71 agents at `C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\`.
+
+11. **Taste Skill & Anti-Slop Visual Architecture Suite (`Leonxlnx/taste-skill` v2.0):**
+    - **Repository & Architecture Source**: [Leonxlnx/taste-skill](https://github.com/leonxlnx/taste-skill).
+    - **Core Mission**: Anti-slop, intentional, high-end frontend art direction distilled from 247 curated gallery sites. Directly reinforces Rule 6 (No AI Slop & Minimal Compact UI Design) by banishing generic AI styling defaults (gratuitous badges, pill clutter, identical card grids, faint borders, meaningless decorative icons).
+    - **Installed Skill Modules (14 Skills)**:
+      - `taste-skill` (`design-taste-frontend`): v2 flagship art direction engine with 20 researched directions, real photograph attribution, and real-browser visual verification loop.
+      - `redesign-skill` (`redesign-existing-projects`): Surgical UI audit and redesign for existing codebases (typography hierarchy, spacing rhythms, contrast, high-density compact tables, eliminating AI card slop without breaking business logic).
+      - `soft-skill` (`high-end-visual-design`): Calm, refined contrast, generous whitespace, subtle spring physics.
+      - `minimalist-skill` (`minimalist-ui`): Restrained monochrome/neutral palettes, editorial Swiss typographic structure, high-density data.
+      - `brutalist-skill` (`industrial-brutalist-ui`): High-contrast, sharp mechanical lines, raw functional layout.
+      - `gpt-tasteskill` (`gpt-taste`): Stricter variant for high layout variance and decisive motion.
+      - `output-skill` (`full-output-enforcement`): Strict zero-placeholder enforcement, complete code rendering without truncated comments.
+      - `image-to-code-skill` (`image-to-code`): Reference image analysis to pixel-accurate frontend code.
+      - `brandkit`, `stitch-skill`, `imagegen-frontend-web`, `imagegen-frontend-mobile`, `taste-skill-v1`, `taste-skill-v2-experimental`.
+    - **Installation & Integration Paths**:
+      - Workspace Customizations: `d:\Github\absensi-cam\.agents\skills\` (with normalized alias junctions).
+      - Global Plugins: `C:\Users\LENOVO\.gemini\config\plugins\taste-skill\`.
+    - **Mandatory Application to Blade Views**:
+      - When developing or refactoring Laravel Blade views (`resources/views/`), strictly invoke `redesign-skill` and `minimalist-skill` principles: compact high-density layout, crisp typography (`Geist` / `Inter`), zero decorative badge pills, semantic HTML5, fast responsive rendering.
+
+12. **Workspace Installed Skills Catalog (`.agents/skills/` - 80 Skills Total):**
+    - **Inventory Overview**: Complete catalog of all 80 workspace skills installed in [`.agents/skills/`](file:///d:/Github/absensi-cam/.agents/skills) (71 canonical skills and 9 normalized alias junctions).
+
+#### Frontend & Design Taste
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [taste-skill](file:///d:/Github/absensi-cam/.agents/skills/taste-skill/SKILL.md) | Canonical | v2 anti-slop art direction engine from 247 curated galleries with real-browser inspection loop. |
+| [design-taste-frontend](file:///d:/Github/absensi-cam/.agents/skills/design-taste-frontend/SKILL.md) | Alias -> [taste-skill](file:///d:/Github/absensi-cam/.agents/skills/taste-skill/SKILL.md) | Alias junction to taste-skill v2 flagship art direction engine. |
+| [redesign-skill](file:///d:/Github/absensi-cam/.agents/skills/redesign-skill/SKILL.md) | Canonical | Surgical UI audit and redesign for existing codebases without breaking functionality. |
+| [redesign-existing-projects](file:///d:/Github/absensi-cam/.agents/skills/redesign-existing-projects/SKILL.md) | Alias -> [redesign-skill](file:///d:/Github/absensi-cam/.agents/skills/redesign-skill/SKILL.md) | Alias junction to redesign-skill for upgrading existing UI layouts. |
+| [soft-skill](file:///d:/Github/absensi-cam/.agents/skills/soft-skill/SKILL.md) | Canonical | Calm, refined contrast, generous whitespace, subtle spring physics, and luxury agency feel. |
+| [high-end-visual-design](file:///d:/Github/absensi-cam/.agents/skills/high-end-visual-design/SKILL.md) | Alias -> [soft-skill](file:///d:/Github/absensi-cam/.agents/skills/soft-skill/SKILL.md) | Alias junction to soft-skill for high-end agency aesthetics. |
+| [minimalist-skill](file:///d:/Github/absensi-cam/.agents/skills/minimalist-skill/SKILL.md) | Canonical | Clean editorial Swiss typographic structure, warm monochrome palette, and flat bento grids. |
+| [minimalist-ui](file:///d:/Github/absensi-cam/.agents/skills/minimalist-ui/SKILL.md) | Alias -> [minimalist-skill](file:///d:/Github/absensi-cam/.agents/skills/minimalist-skill/SKILL.md) | Alias junction to minimalist-skill for compact, editorial layouts. |
+| [brutalist-skill](file:///d:/Github/absensi-cam/.agents/skills/brutalist-skill/SKILL.md) | Canonical | Raw mechanical interfaces, Swiss print typography, rigid grids, and terminal aesthetics. |
+| [industrial-brutalist-ui](file:///d:/Github/absensi-cam/.agents/skills/industrial-brutalist-ui/SKILL.md) | Alias -> [brutalist-skill](file:///d:/Github/absensi-cam/.agents/skills/brutalist-skill/SKILL.md) | Alias junction to brutalist-skill for industrial terminal styling. |
+| [gpt-tasteskill](file:///d:/Github/absensi-cam/.agents/skills/gpt-tasteskill/SKILL.md) | Canonical | Advanced UX/UI with Python-driven layout randomization, AIDA structure, and GSAP motion. |
+| [gpt-taste](file:///d:/Github/absensi-cam/.agents/skills/gpt-taste/SKILL.md) | Alias -> [gpt-tasteskill](file:///d:/Github/absensi-cam/.agents/skills/gpt-tasteskill/SKILL.md) | Alias junction to gpt-tasteskill for decisive motion and dynamic layout variance. |
+| [output-skill](file:///d:/Github/absensi-cam/.agents/skills/output-skill/SKILL.md) | Canonical | Overrides default LLM truncation, enforces complete code output, and bans placeholders. |
+| [full-output-enforcement](file:///d:/Github/absensi-cam/.agents/skills/full-output-enforcement/SKILL.md) | Alias -> [output-skill](file:///d:/Github/absensi-cam/.agents/skills/output-skill/SKILL.md) | Alias junction to output-skill for unabridged code generation. |
+| [image-to-code-skill](file:///d:/Github/absensi-cam/.agents/skills/image-to-code-skill/SKILL.md) | Canonical | Reference image generation and visual analysis for pixel-accurate frontend code implementation. |
+| [image-to-code](file:///d:/Github/absensi-cam/.agents/skills/image-to-code/SKILL.md) | Alias -> [image-to-code-skill](file:///d:/Github/absensi-cam/.agents/skills/image-to-code-skill/SKILL.md) | Alias junction to image-to-code-skill for vision-guided development. |
+| [stitch-skill](file:///d:/Github/absensi-cam/.agents/skills/stitch-skill/SKILL.md) | Canonical | Semantic Design System skill for Google Stitch generating agent-friendly DESIGN.md specs. |
+| [stitch-design-taste](file:///d:/Github/absensi-cam/.agents/skills/stitch-design-taste/SKILL.md) | Alias -> [stitch-skill](file:///d:/Github/absensi-cam/.agents/skills/stitch-skill/SKILL.md) | Alias junction to stitch-skill for Google Stitch design token workflows. |
+| [brandkit](file:///d:/Github/absensi-cam/.agents/skills/brandkit/SKILL.md) | Canonical | High-end brand guidelines, logo systems, identity decks, and visual design assets. |
+| [imagegen-frontend-web](file:///d:/Github/absensi-cam/.agents/skills/imagegen-frontend-web/SKILL.md) | Canonical | Section-by-section conversion-aware website visual design references. |
+| [imagegen-frontend-mobile](file:///d:/Github/absensi-cam/.agents/skills/imagegen-frontend-mobile/SKILL.md) | Canonical | Premium app-native mobile UI screen concepts and interaction flows. |
+| [modern-web-animations](file:///d:/Github/absensi-cam/.agents/skills/modern-web-animations/SKILL.md) | Canonical | Web animations, smooth scrolling (Lenis), GSAP, and micro-interactions. |
+| [taste-skill-v1](file:///d:/Github/absensi-cam/.agents/skills/taste-skill-v1/SKILL.md) | Canonical | Original v1 taste-skill preserved for backward compatibility. |
+| [taste-skill-v2-experimental](file:///d:/Github/absensi-cam/.agents/skills/taste-skill-v2-experimental/SKILL.md) | Canonical | Experimental dial-driven v2 taste-skill preserved for backward compatibility. |
+
+#### Testing, QA & Verification
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [ai-regression-testing](file:///d:/Github/absensi-cam/.agents/skills/ai-regression-testing/SKILL.md) | Canonical | Sandbox-mode API regression testing without DB dependencies to catch AI blind spots. |
+| [browser-qa](file:///d:/Github/absensi-cam/.agents/skills/browser-qa/SKILL.md) | Canonical | Automated post-deploy UI verification (console errors, CWV, interaction tests, axe-core a11y). |
+| [click-path-audit](file:///d:/Github/absensi-cam/.agents/skills/click-path-audit/SKILL.md) | Canonical | Traces user-facing buttons and touchpoints through state transitions to catch interaction bugs. |
+| [e2e-testing](file:///d:/Github/absensi-cam/.agents/skills/e2e-testing/SKILL.md) | Canonical | Playwright E2E testing patterns, Page Object Model, CI/CD integration, and flaky test fixes. |
+| [eval-harness](file:///d:/Github/absensi-cam/.agents/skills/eval-harness/SKILL.md) | Canonical | Eval-driven development (EDD) framework defining capability evals and reliability scoring. |
+| [santa-method](file:///d:/Github/absensi-cam/.agents/skills/santa-method/SKILL.md) | Canonical | Dual-agent adversarial verification requiring two independent review passes before shipping. |
+| [tdd-workflow](file:///d:/Github/absensi-cam/.agents/skills/tdd-workflow/SKILL.md) | Canonical | Test-driven development workflow (red-green-refactor) with 80%+ coverage target. |
+| [verification-loop](file:///d:/Github/absensi-cam/.agents/skills/verification-loop/SKILL.md) | Canonical | Six-phase session verification (build, type-check, lint, test, security grep, diff review). |
+| [windows-desktop-e2e](file:///d:/Github/absensi-cam/.agents/skills/windows-desktop-e2e/SKILL.md) | Canonical | E2E testing for Windows desktop apps (WPF, WinForms, Win32, Qt) using pywinauto / UI Automation. |
+
+#### Code Quality, Review & Architecture
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [architecture-decision-records](file:///d:/Github/absensi-cam/.agents/skills/architecture-decision-records/SKILL.md) | Canonical | Generates and manages numbered ADR markdown files in docs/adr/. |
+| [brownfield-retrospective](file:///d:/Github/absensi-cam/.agents/skills/brownfield-retrospective/SKILL.md) | Canonical | Audits legacy codebases retroactively, produces a 4-axis gap register, and guides fixes. |
+| [codebase-onboarding](file:///d:/Github/absensi-cam/.agents/skills/codebase-onboarding/SKILL.md) | Canonical | Analyzes unfamiliar codebases and generates structured architecture onboarding guides. |
+| [codehealth-mcp](file:///d:/Github/absensi-cam/.agents/skills/codehealth-mcp/SKILL.md) | Canonical | Real-time structural code health analysis via CodeScene MCP to gate commits and refactors. |
+| [code-tour](file:///d:/Github/absensi-cam/.agents/skills/code-tour/SKILL.md) | Canonical | Creates CodeTour .tour interactive guided walkthroughs with file and line anchors. |
+| [conventional-commit-review](file:///d:/Github/absensi-cam/.agents/skills/conventional-commit-review/SKILL.md) | Canonical | Reviews staged changes and drafts compliant Conventional Commit messages. |
+| [error-handling](file:///d:/Github/absensi-cam/.agents/skills/error-handling/SKILL.md) | Canonical | Robust error handling patterns across TypeScript, Python, PHP, Rust, and Go. |
+| [git-workflow](file:///d:/Github/absensi-cam/.agents/skills/git-workflow/SKILL.md) | Canonical | Git branching, commit conventions, rebasing, release management, and PR hygiene. |
+| [inherit-legacy-style](file:///d:/Github/absensi-cam/.agents/skills/inherit-legacy-style/SKILL.md) | Canonical | Scans existing code conventions to prevent AI style drift on legacy codebases. |
+| [plankton-code-quality](file:///d:/Github/absensi-cam/.agents/skills/plankton-code-quality/SKILL.md) | Canonical | Write-time code formatting and linting enforcement with automated zero-config hooks. |
+| [production-audit](file:///d:/Github/absensi-cam/.agents/skills/production-audit/SKILL.md) | Canonical | Pre-launch local-evidence production readiness audit verifying security, performance, and ops. |
+| [repo-scan](file:///d:/Github/absensi-cam/.agents/skills/repo-scan/SKILL.md) | Canonical | Bootstrap pointer to install and run the external repo-scan cross-stack asset audit. |
+
+#### Product Strategy & Planning
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [intent-driven-development](file:///d:/Github/absensi-cam/.agents/skills/intent-driven-development/SKILL.md) | Canonical | Clarifies ambiguous requirements into testable capabilities and execution blueprints. |
+| [plan-canvas](file:///d:/Github/absensi-cam/.agents/skills/plan-canvas/SKILL.md) | Canonical | Visualizes implementation plans and HTML artifacts in a local browser canvas. |
+| [product-lens](file:///d:/Github/absensi-cam/.agents/skills/product-lens/SKILL.md) | Canonical | Validates the 'why' before building through 4 product diagnostics (value, feasibility, usability, viability). |
+| [story-lifecycle](file:///d:/Github/absensi-cam/.agents/skills/story-lifecycle/SKILL.md) | Canonical | File-based epic/story/sprint tracking loop without requiring external Jira/Linear tools. |
+
+#### Agent Governance, Learning & Memory
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [agent-introspection-debugging](file:///d:/Github/absensi-cam/.agents/skills/agent-introspection-debugging/SKILL.md) | Canonical | Captures agent execution traces and generates diagnosis and recovery reports on failure. |
+| [agent-self-evaluation](file:///d:/Github/absensi-cam/.agents/skills/agent-self-evaluation/SKILL.md) | Canonical | Evaluates agent output on 5 quality axes (accuracy, completeness, clarity, actionability, conciseness). |
+| [agent-sort](file:///d:/Github/absensi-cam/.agents/skills/agent-sort/SKILL.md) | Canonical | Builds an evidence-backed ECC install plan sorting skills into DAILY vs LIBRARY buckets. |
+| [ck](file:///d:/Github/absensi-cam/.agents/skills/ck/SKILL.md) | Canonical | Persistent per-project memory (Context Keeper) preserving context and next steps across sessions. |
+| [config-gc](file:///d:/Github/absensi-cam/.agents/skills/config-gc/SKILL.md) | Canonical | Garbage collection for Claude/agent configurations, removing stale, orphaned, or unused items. |
+| [configure-ecc](file:///d:/Github/absensi-cam/.agents/skills/configure-ecc/SKILL.md) | Canonical | Conversational setup wizard for Everything Claude Code (ECC) installation and hook profiles. |
+| [context-budget](file:///d:/Github/absensi-cam/.agents/skills/context-budget/SKILL.md) | Canonical | Monitors live context window capacity and audits static component token overhead. |
+| [continuous-learning](file:///d:/Github/absensi-cam/.agents/skills/continuous-learning/SKILL.md) | Canonical | Deprecated v1 learning stop-hook (superseded by continuous-learning-v2). |
+| [continuous-learning-v2](file:///d:/Github/absensi-cam/.agents/skills/continuous-learning-v2/SKILL.md) | Canonical | Instinct-based learning system extracting atomic instincts from sessions with confidence scoring. |
+| [council](file:///d:/Github/absensi-cam/.agents/skills/council/SKILL.md) | Canonical | Four-voice deliberation council for ambiguous decisions, architectural trade-offs, and risk analysis. |
+| [council-multi-model](file:///d:/Github/absensi-cam/.agents/skills/council-multi-model/SKILL.md) | Canonical | Multi-model deliberation adding external critique passes to council reviews. |
+| [delivery-gate](file:///d:/Github/absensi-cam/.agents/skills/delivery-gate/SKILL.md) | Canonical | Stop hook blocking agent task completion until quality, lint, and test gates pass. |
+| [dev-team](file:///d:/Github/absensi-cam/.agents/skills/dev-team/SKILL.md) | Canonical | Simulates collaborative multi-role developer team sessions (architect, dev, QA, reviewer). |
+| [ecc-guide](file:///d:/Github/absensi-cam/.agents/skills/ecc-guide/SKILL.md) | Canonical | Explains ECC features, workflows, and documentation by querying live repo surfaces. |
+| [ecc-recipes](file:///d:/Github/absensi-cam/.agents/skills/ecc-recipes/SKILL.md) | Canonical | Maps high-level user workflows to the right ECC commands, skills, and agents. |
+| [growth-log](file:///d:/Github/absensi-cam/.agents/skills/growth-log/SKILL.md) | Canonical | Extracts reusable engineering insights and patterns into project growth logs. |
+| [hookify-rules](file:///d:/Github/absensi-cam/.agents/skills/hookify-rules/SKILL.md) | Canonical | Creates and manages hookify rule files with YAML frontmatter for behavioral enforcement. |
+| [iterative-retrieval](file:///d:/Github/absensi-cam/.agents/skills/iterative-retrieval/SKILL.md) | Canonical | Refines context retrieval progressively to solve complex problems with minimal tokens. |
+| [living-docs-governance](file:///d:/Github/absensi-cam/.agents/skills/living-docs-governance/SKILL.md) | Canonical | Prevents documentation rot by assigning document owners, staleness thresholds, and sync checks. |
+| [loop-design-check](file:///d:/Github/absensi-cam/.agents/skills/loop-design-check/SKILL.md) | Canonical | Designs and validates goal-oriented agent loops to prevent infinite loops and stalls. |
+| [rules-distill](file:///d:/Github/absensi-cam/.agents/skills/rules-distill/SKILL.md) | Canonical | Scans skills to extract recurring principles and distill them into global or workspace rule files. |
+| [skill-comply](file:///d:/Github/absensi-cam/.agents/skills/skill-comply/SKILL.md) | Canonical | Visualizes and verifies whether agents actually follow assigned skills, rules, and definitions. |
+| [skill-host-compat](file:///d:/Github/absensi-cam/.agents/skills/skill-host-compat/SKILL.md) | Canonical | Lints ECC skills for cross-host compatibility (Antigravity, Claude Code, Cursor, Codex). |
+| [skill-scout](file:///d:/Github/absensi-cam/.agents/skills/skill-scout/SKILL.md) | Canonical | Searches local, marketplace, and GitHub sources before creating redundant new skills. |
+| [skill-stocktake](file:///d:/Github/absensi-cam/.agents/skills/skill-stocktake/SKILL.md) | Canonical | Audits installed skills and commands for quality, freshness, and overlap. |
+| [strategic-compact](file:///d:/Github/absensi-cam/.agents/skills/strategic-compact/SKILL.md) | Canonical | Suggests manual context compaction at logical task milestones instead of arbitrary intervals. |
+| [unified-memory](file:///d:/Github/absensi-cam/.agents/skills/unified-memory/SKILL.md) | Canonical | Cross-agent memory vault sharing persistent context between Claude, Codex, Cursor, and Antigravity. |
+
+#### Web Automation & Development Tools
+
+| Skill | Type | Purpose / Description |
+|---|---|---|
+| [deepseek-harness-setup](file:///d:/Github/absensi-cam/.agents/skills/deepseek-harness-setup/SKILL.md) | Canonical | Configures and runs ECC harnesses on DeepSeek models and alternative endpoints. |
+| [moli-cdp-server](file:///d:/Github/absensi-cam/.agents/skills/moli-cdp-server/SKILL.md) | Canonical | Starts Moli's CDP server connecting Playwright, Puppeteer, or Chrome DevTools clients. |
+| [moli-webfetch](file:///d:/Github/absensi-cam/.agents/skills/moli-webfetch/SKILL.md) | Canonical | Headless web fetcher inspecting, crawling, and capturing JavaScript-rendered pages and screenshots. |
+| [moli-websearch](file:///d:/Github/absensi-cam/.agents/skills/moli-websearch/SKILL.md) | Canonical | High-speed web search engine supporting keyword lookups and reverse image searches. |
+
+
 
 # Laravel Enterprise Development Rules
 

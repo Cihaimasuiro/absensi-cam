@@ -82,9 +82,9 @@
 <main class="min-h-screen flex flex-col transition-all duration-300 ease-in-out relative ml-0 md:ml-[240px] [.sidebar-collapsed_&]:md:ml-[72px]">
     
     {{-- Navbar Header --}}
-    <div class="h-[56px] px-lg bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40">
+    <header class="h-[56px] px-lg bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40">
         <div class="flex items-center gap-xs">
-            <button type="button" @click="toggleSidebar()" aria-label="Toggle Sidebar" class="text-ink-muted hover:text-primary transition-colors flex items-center justify-center w-8 h-8 rounded-md hover:bg-canvas-soft cursor-pointer">
+            <button type="button" @click="toggleSidebar()" aria-label="Toggle Sidebar" class="btn-icon w-8 h-8 text-ink-muted hover:text-primary">
                 <i data-lucide="menu" class="w-4 h-4"></i>
             </button>
         </div>
@@ -96,17 +96,17 @@
                 </div>
                 <div class="hidden md:block text-left mr-xs">
                     <p class="text-[13px] font-semibold text-ink leading-tight">{{ Auth::user()->name ?? 'Admin User' }}</p>
-                    <p class="text-[11px] text-ink-muted leading-tight">{{ Auth::user()->role ?? 'Admin' }}</p>
+                    <p class="text-[11px] text-ink-muted leading-tight capitalize">{{ Auth::user()->roles->first()?->name ?? 'Administrator' }}</p>
                 </div>
                 <form method="POST" action="{{ route('logout') }}" class="m-0">
                     @csrf
-                    <button type="submit" class="text-ink-muted hover:text-danger transition-colors flex items-center justify-center w-7 h-7 rounded-md hover:bg-canvas-soft" aria-label="Logout">
+                    <button type="submit" class="btn-icon hover:text-danger" aria-label="Logout">
                         <i data-lucide="log-out" class="w-4 h-4"></i>
                     </button>
                 </form>
             </div>
         </div>
-    </div>
+    </header>
 
     {{-- Main Body --}}
     <div class="flex-1 p-lg md:p-xl">
@@ -114,15 +114,17 @@
         <div class="flex flex-wrap items-center justify-between gap-sm mb-lg">
             <div>
                 <h1 class="text-[20px] font-bold text-ink tracking-tight mb-0.5">@yield('title')</h1>
-                <ul class="flex items-center gap-1.5 text-[12px] text-ink-muted">
-                    <li>
-                        <a href="{{ route('dashboard') }}" class="flex items-center gap-1 hover:text-primary transition-colors">
-                            <i data-lucide="video" class="w-3.5 h-3.5"></i> Live Kamera
-                        </a>
-                    </li>
-                    <li><span class="text-hairline">/</span></li>
-                    <li class="text-primary font-medium">@yield('title')</li>
-                </ul>
+                @if(!request()->routeIs('dashboard'))
+                    <nav aria-label="Breadcrumb">
+                        <ul class="flex items-center gap-1.5 text-[12px] text-ink-muted">
+                            <li>
+                                <a href="{{ route('dashboard') }}" class="hover:text-primary transition-colors">Beranda</a>
+                            </li>
+                            <li><span class="text-hairline">/</span></li>
+                            <li class="text-ink-secondary font-medium">@yield('title')</li>
+                        </ul>
+                    </nav>
+                @endif
             </div>
             @hasSection('header-actions')
                 <div class="flex items-center gap-xs">
@@ -171,7 +173,7 @@
             <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
                 <i data-lucide="alert-triangle" class="w-4 h-4 text-danger"></i> Konfirmasi
             </h3>
-            <button type="button" @click="$refs.globalConfirmModal.close()" class="border-none bg-transparent cursor-pointer text-ink-faint hover:text-ink">
+            <button type="button" @click="$refs.globalConfirmModal.close()" aria-label="Tutup" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
@@ -179,7 +181,7 @@
             <p class="text-[14px] text-ink" x-text="confirmMessage"></p>
         </div>
         <div class="flex justify-end gap-xs">
-            <button type="button" @click="$refs.globalConfirmModal.close()" class="btn btn-utility">Batal</button>
+            <button type="button" @click="$refs.globalConfirmModal.close()" class="btn btn-secondary">Batal</button>
             <button type="button" @click="executeConfirm()" class="btn btn-primary">Ya, Lanjutkan</button>
         </div>
     </dialog>

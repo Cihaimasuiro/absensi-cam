@@ -17,6 +17,7 @@ Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware('auth')->group(function () {
     // Dashboard
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('live-camera/recent', [DashboardController::class, 'recentLogs'])->name('live-camera.recent');
 
     // Students — full CRUD + enrollment
     // Students

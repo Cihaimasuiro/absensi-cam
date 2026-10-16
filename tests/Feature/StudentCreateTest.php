@@ -120,4 +120,52 @@ class StudentCreateTest extends TestCase
             'role' => 'teacher',
         ]);
     }
+
+    public function test_students_page_shows_classroom_directory_first()
+    {
+        $role = Role::firstOrCreate(['name' => 'super_admin']);
+        $user = User::factory()->create();
+        $user->assignRole('super_admin');
+
+        $school = School::create(['name' => 'SMK Negeri 1', 'is_active' => true]);
+        $classroom = Classroom::create([
+            'school_id' => $school->id,
+            'name' => 'XII RPL 1',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('students.index'));
+        $response->assertStatus(200);
+        $response->assertViewIs('members.index');
+        $response->assertSee('Daftar Ruang / Kelas');
+        $response->assertSee('XII RPL 1');
+    }
+
+    public function test_students_page_drills_down_to_classroom_roster()
+    {
+        $role = Role::firstOrCreate(['name' => 'super_admin']);
+        $user = User::factory()->create();
+        $user->assignRole('super_admin');
+
+        $school = School::create(['name' => 'SMK Negeri 1', 'is_active' => true]);
+        $classroom = Classroom::create([
+            'school_id' => $school->id,
+            'name' => 'XII RPL 1',
+            'is_active' => true,
+        ]);
+
+        $student = Student::create([
+            'code' => 'STUDENT-ROSTER-1',
+            'name' => 'Siswa Kelas Roster',
+            'classroom_id' => $classroom->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('students.index', ['classroom_id' => $classroom->id]));
+        $response->assertStatus(200);
+        $response->assertViewIs('members.index');
+        $response->assertSee('Siswa Kelas Roster');
+        $response->assertSee('Daftar Ruang / Kelas');
+    }
 }
+

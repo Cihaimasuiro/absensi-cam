@@ -16,7 +16,7 @@ class SchoolController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('schools.index', compact('schools'));
+        return view('organizations.index', compact('schools'));
     }
 
     public function store(Request $request)

@@ -50,6 +50,9 @@ Route::prefix('v1')->group(function () {
         Route::post('attendance/batch', AttendanceBatchController::class)
             ->name('api.v1.attendance.batch');
 
+        Route::get('templates/snapshot', [TemplateController::class, 'snapshot'])
+            ->name('api.v1.templates.snapshot');
+
         Route::get('templates', TemplateController::class)
             ->name('api.v1.templates');
 

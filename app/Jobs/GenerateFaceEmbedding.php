@@ -24,7 +24,8 @@ class GenerateFaceEmbedding implements ShouldQueue
         public string $tmpPath,
         public ?string $photoPath = null,
         public bool $deleteAfter = true,
-        public ?string $modelVersion = null
+        public ?string $modelVersion = null,
+        public bool $allowDuplicate = false
     ) {
         $this->onQueue('enrollments');
     }
@@ -42,6 +43,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             $detectorModel = base_path('packages/models/detector.onnx');
             $recognizerModel = base_path('packages/models/recognizer.onnx');
             
+
 
 
             $result = Process::path(base_path())
@@ -69,6 +71,23 @@ class GenerateFaceEmbedding implements ShouldQueue
 
             if (strlen($stdout) !== 2048) {
                 throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes (512d), got " . strlen($stdout));
+            }
+
+            // Guard 1:N deduplikasi cloud sebelum enkripsi & penyimpanan
+            if (!$this->allowDuplicate) {
+                $detector = app(\App\Domain\Enrollment\Services\BiometricDuplicateDetector::class);
+                $dup = $detector->detect($stdout, $this->studentId);
+                if ($dup) {
+                    Log::warning('Face enrollment rejected due to duplicate detection', [
+                        'candidate_student_id' => $this->studentId,
+                        'matched_student_id' => $dup['matched_student_id'],
+                        'similarity' => $dup['similarity'],
+                    ]);
+                    throw new \App\Domain\Enrollment\Exceptions\DuplicateFaceException(
+                        $dup['matched_student_id'],
+                        $dup['similarity']
+                    );
+                }
             }
             
             // Apply AES-256-GCM encryption

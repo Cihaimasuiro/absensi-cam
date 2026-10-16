@@ -16,13 +16,14 @@
 @endsection
 
 @section('content')
-<div x-data="cameraFeedData('{{ $streamIp }}', {{ $presentToday }}, @json($recentLogs))" class="flex flex-col gap-md">
+<script id="recent-logs-data" type="application/json">@json($recentLogs)</script>
+<div x-data="cameraFeedData('{{ $streamIp }}', {{ (int)$presentToday }})" class="flex flex-col gap-md">
 
     {{-- Main Workspace Grid --}}
     <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-md items-start">
 
         {{-- Left: Modern CCTV Viewport Frame --}}
-        <div x-ref="cameraViewport" class="card p-md flex flex-col gap-sm bg-surface animate-fade-up">
+        <div id="cameraViewport" x-ref="cameraViewport" class="card p-md flex flex-col gap-sm bg-surface animate-fade-up">
             
             {{-- HUD Top Bar --}}
             <div class="flex flex-wrap justify-between items-center pb-xs border-b border-hairline gap-xs">
@@ -79,38 +80,25 @@
 
             {{-- 16:9 Aspect Video Container with Viewfinder Overlay --}}
             <div class="relative bg-black rounded-sm overflow-hidden aspect-video flex items-center justify-center border border-hairline/60">
-                
-                {{-- Viewfinder Corner Brackets --}}
-                <div class="absolute top-2 left-2 w-3.5 h-3.5 border-t-2 border-l-2 border-white/30 z-20 pointer-events-none"></div>
-                <div class="absolute top-2 right-2 w-3.5 h-3.5 border-t-2 border-r-2 border-white/30 z-20 pointer-events-none"></div>
-                <div class="absolute bottom-2 left-2 w-3.5 h-3.5 border-b-2 border-l-2 border-white/30 z-20 pointer-events-none"></div>
-                <div class="absolute bottom-2 right-2 w-3.5 h-3.5 border-b-2 border-r-2 border-white/30 z-20 pointer-events-none"></div>
-
                 {{-- Offline / Connecting State Display --}}
                 <div x-show="status !== 'online'" class="absolute inset-0 flex flex-col items-center justify-center text-ink-faint z-0 gap-xs p-md text-center bg-black/95">
                     <i data-lucide="video-off" class="w-8 h-8 opacity-40 mb-1"></i>
                     <span class="text-[12px] font-mono text-ink-muted" x-text="status === 'connecting' ? 'Menghubungkan ke Edge Engine...' : 'Kamera Standby / Belum Terhubung'"></span>
-                    <span class="text-[11px] font-mono text-ink-faint" x-text="'Endpoint: http://' + streamIp + ':5000/video_feed'"></span>
                     <div class="flex items-center gap-xs mt-xs">
                         <button type="button" @click="reconnect()" class="btn btn-secondary btn-sm">
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i> Hubungkan Ulang
                         </button>
-                        <a href="{{ route('devices.index') }}" class="btn btn-secondary btn-sm">
-                            <i data-lucide="cpu" class="w-3 h-3"></i> Cek Terminal Edge
-                        </a>
                     </div>
                 </div>
 
-                {{-- Live Image MJPEG Stream --}}
+                {{-- Live Image MJPEG Stream (Bounding box & status burned natively by Edge Engine) --}}
                 <img id="liveStreamImg"
+                     src="http://{{ $streamIp }}:5000/video_feed"
                      :src="'http://' + streamIp + ':5000/video_feed'"
                      alt="Live Stream"
                      class="relative z-5 w-full h-full object-contain"
                      x-on:load="onStreamLoad()"
                      x-on:error="onStreamError()">
-
-                {{-- Face Detection Bounding Box Canvas --}}
-                <canvas x-ref="overlayCanvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
             </div>
 
             {{-- HUD Bottom Diagnostics Strip --}}

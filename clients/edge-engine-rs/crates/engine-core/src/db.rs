@@ -196,6 +196,91 @@ impl EdgeDb {
         Ok(None)
     }
 
+    /// Reset cursor sync template agar rekonsiliasi dapat menarik ulang seluruh template
+    pub async fn reset_template_sync_cursor(&self) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM metadata WHERE key = 'last_sync'", ())
+            .await?;
+        Ok(())
+    }
+
+    /// Ambil penanda versi templates (jumlah baris dan versi maksimum) untuk deteksi perubahan hot-reload
+    pub async fn get_templates_signature(&self) -> Result<(i64, i64)> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT COUNT(*), COALESCE(MAX(CAST(version AS INTEGER)), 0) FROM templates",
+                (),
+            )
+            .await?;
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            let max_v: i64 = row.get(1)?;
+            Ok((count, max_v))
+        } else {
+            Ok((0, 0))
+        }
+    }
+
+    /// Hitung jumlah dan hash SHA-256 dari seluruh template lokal (student_id:version terurut)
+    pub async fn get_templates_hash(&self) -> Result<(usize, String)> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT student_id, COALESCE(version, '1') FROM templates ORDER BY student_id ASC",
+                (),
+            )
+            .await?;
+        let mut combined = String::new();
+        let mut count = 0usize;
+        while let Some(row) = rows.next().await? {
+            let sid: String = row.get(0)?;
+            let ver: String = row.get(1)?;
+            combined.push_str(&sid);
+            combined.push(':');
+            combined.push_str(&ver);
+            combined.push('\n');
+            count += 1;
+        }
+
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(combined.as_bytes());
+        let hash = format!("{:x}", hasher.finalize());
+        Ok((count, hash))
+    }
+
+    /// Bersihkan template yang tidak terdaftar dalam valid_ids secara transaksional
+    pub async fn purge_unlisted_templates(&self, valid_ids: &[String]) -> Result<usize> {
+        let mut rows = self
+            .conn
+            .query("SELECT student_id FROM templates", ())
+            .await?;
+        let mut local_ids = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let sid: String = row.get(0)?;
+            local_ids.push(sid);
+        }
+
+        let valid_set: std::collections::HashSet<&str> = valid_ids.iter().map(|s| s.as_str()).collect();
+        let to_remove: Vec<String> = local_ids
+            .into_iter()
+            .filter(|id| !valid_set.contains(id.as_str()))
+            .collect();
+
+        if to_remove.is_empty() {
+            return Ok(0);
+        }
+
+        let count = to_remove.len();
+        let tx = self.conn.transaction().await?;
+        for id in &to_remove {
+            tx.execute("DELETE FROM templates WHERE student_id = ?", [id.as_str()]).await?;
+        }
+        tx.commit().await?;
+        Ok(count)
+    }
+
     /// Simpan data templates wajah dari server ke DB lokal
     pub async fn save_templates(
         &self,

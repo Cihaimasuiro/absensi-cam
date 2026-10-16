@@ -33,7 +33,7 @@
     <div class="flex-1 overflow-y-auto py-sm custom-scroll overflow-x-hidden">
         <ul class="flex flex-col gap-[2px] transition-all duration-300 px-xs [.sidebar-collapsed_&]:md:px-1">
             <li>
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('dashboard') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
                     <i data-lucide="video" class="w-4 h-4 shrink-0"></i>
                     <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Live Kamera</span>
                 </a>
@@ -90,7 +90,10 @@
         </div>
         
         <div class="flex items-center gap-sm">
-            <div class="flex items-center gap-xs cursor-pointer pl-sm">
+            <a href="{{ route('landing') }}" class="btn-icon hover:text-primary text-ink-muted" title="Halaman Depan" aria-label="Halaman Depan">
+                <i data-lucide="globe" class="w-4 h-4"></i>
+            </a>
+            <div class="flex items-center gap-xs cursor-pointer pl-xs">
                 <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 text-primary font-bold text-[12px]">
                     {{ substr(Auth::user()->name ?? 'A', 0, 1) }}
                 </div>

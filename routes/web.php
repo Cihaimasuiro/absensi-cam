@@ -7,7 +7,11 @@ use App\Http\Controllers\Web\StudentWebController;
 use App\Http\Controllers\Web\SchoolController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\AttendanceCorrectionController;
+use App\Http\Controllers\Web\LandingController;
 use Illuminate\Support\Facades\Route;
+
+// Public Landing Page
+Route::get('/', [LandingController::class, 'index'])->name('landing');
 
 // Auth Routes
 Route::get('login', [AuthController::class, 'showLoginForm'])->name('login');
@@ -15,8 +19,9 @@ Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1
 Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware('auth')->group(function () {
-    // Dashboard
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    // Dashboard / Live Camera Monitor
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('live-camera', [DashboardController::class, 'index'])->name('live-camera.index');
     Route::get('live-camera/recent', [DashboardController::class, 'recentLogs'])->name('live-camera.recent');
 
     // Students — full CRUD + enrollment

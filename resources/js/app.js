@@ -147,193 +147,200 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
     }
 }));
 
-Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0, initialLogs = []) => ({
-    streamIp: defaultIp,
-    status: 'connecting',
-    isFullscreen: false,
-    currentTime: '',
-    clockTimer: null,
-    pollTimer: null,
-    eventSource: null,
-    recentLogs: Array.isArray(initialLogs) ? initialLogs : [],
-    presentCount: initialPresent,
-    filterDirection: 'all',
-    lastSyncTime: '',
-    isRefreshing: false,
-
-    get filteredLogs() {
-        if (this.filterDirection === 'all') return this.recentLogs;
-        return this.recentLogs.filter(log => log.direction === this.filterDirection);
-    },
-
-    init() {
-        this.updateClock();
-        this.clockTimer = setInterval(() => this.updateClock(), 1000);
-
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                this.pollRecentLogs();
-            }
-        });
-
-        this.pollTimer = setInterval(() => {
-            if (!document.hidden) {
-                this.pollRecentLogs();
-            }
-        }, 6000);
-
-        document.addEventListener('fullscreenchange', () => {
-            this.isFullscreen = !!document.fullscreenElement;
-        });
-
-        this.initSSE();
-        setTimeout(() => window.refreshIcons?.(), 50);
-    },
-
-    destroy() {
-        if (this.clockTimer) clearInterval(this.clockTimer);
-        if (this.pollTimer) clearInterval(this.pollTimer);
-        this.closeSSE();
-    },
-
-    updateClock() {
-        const now = new Date();
-        this.currentTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-    },
-
-    reconnect() {
-        this.status = 'connecting';
-        this.isRefreshing = true;
-        const img = document.getElementById('liveStreamImg');
-        if (img) {
-            img.style.display = 'block';
-            img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
-        }
-        this.initSSE();
-        this.pollRecentLogs();
-        setTimeout(() => {
-            this.isRefreshing = false;
-        }, 800);
-    },
-
-    toggleFullscreen() {
-        const viewport = this.$refs.cameraViewport;
-        if (!viewport) return;
-
-        if (!document.fullscreenElement) {
-            viewport.requestFullscreen?.().catch(() => {});
-        } else {
-            document.exitFullscreen?.().catch(() => {});
-        }
-    },
-
-    captureSnapshot() {
-        const snapshotUrl = 'http://' + this.streamIp + ':5000/snapshot.jpg?t=' + Date.now();
-        window.open(snapshotUrl, '_blank');
-    },
-
-    async pollRecentLogs() {
+Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
+    let initialLogs = [];
+    const logsEl = document.getElementById('recent-logs-data');
+    if (logsEl && logsEl.textContent) {
         try {
-            const res = await fetch('/live-camera/recent');
-            if (!res.ok) return;
-            const data = await res.json();
-            if (data && Array.isArray(data.logs)) {
-                this.recentLogs = data.logs;
-                if (typeof data.present_today === 'number') {
-                    this.presentCount = data.present_today;
-                }
-                const now = new Date();
-                this.lastSyncTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                setTimeout(() => window.refreshIcons?.(), 50);
-            }
-        } catch (e) {
-            // Silently ignore polling network failures
-        }
-    },
-
-    onStreamLoad() {
-        this.status = 'online';
-        const img = document.getElementById('liveStreamImg');
-        if (img) img.style.display = 'block';
-    },
-
-    onStreamError() {
-        this.status = 'offline';
-        const img = document.getElementById('liveStreamImg');
-        if (img) img.style.display = 'none';
-        this.clearOverlay();
-    },
-
-    initSSE() {
-        this.closeSSE();
-        try {
-            const sseUrl = 'http://' + this.streamIp + ':5000/events';
-            this.eventSource = new EventSource(sseUrl);
-            this.eventSource.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    this.renderOverlay(data);
-                } catch (err) {}
-            };
-            this.eventSource.onerror = () => {
-                this.closeSSE();
-            };
+            initialLogs = JSON.parse(logsEl.textContent) || [];
         } catch (e) {}
-    },
-
-    closeSSE() {
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-        }
-        this.clearOverlay();
-    },
-
-    renderOverlay(data) {
-        const canvas = this.$refs.overlayCanvas;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        if (data.frame_width && data.frame_height) {
-            if (canvas.width !== data.frame_width || canvas.height !== data.frame_height) {
-                canvas.width = data.frame_width;
-                canvas.height = data.frame_height;
-            }
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (data.faces && data.faces.length > 0) {
-            for (const face of data.faces) {
-                ctx.save();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = face.color || '#10b981';
-                ctx.strokeRect(face.x, face.y, face.width, face.height);
-
-                const label = face.name_text || '';
-                const score = face.score_text || '';
-                ctx.font = 'bold 12px monospace, sans-serif';
-                const textWidth = Math.max(ctx.measureText(label).width, ctx.measureText(score).width);
-
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-                ctx.fillRect(face.x, face.y + face.height - 32, textWidth + 12, 32);
-
-                ctx.fillStyle = face.color || '#10b981';
-                if (score) ctx.fillText(score, face.x + 6, face.y + face.height - 18);
-                ctx.fillText(label, face.x + 6, face.y + face.height - 5);
-                ctx.restore();
-            }
-        }
-    },
-
-    clearOverlay() {
-        const canvas = this.$refs.overlayCanvas;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
-}));
+
+    return {
+        streamIp: defaultIp,
+        status: 'connecting',
+        isFullscreen: false,
+        currentTime: '',
+        clockTimer: null,
+        pollTimer: null,
+        reconnectTimer: null,
+        eventSource: null,
+        recentLogs: Array.isArray(initialLogs) ? initialLogs : [],
+        presentCount: Number(initialPresent) || 0,
+        filterDirection: 'all',
+        lastSyncTime: '',
+        isRefreshing: false,
+
+        get filteredLogs() {
+            if (this.filterDirection === 'all') return this.recentLogs;
+            return this.recentLogs.filter(log => log.direction === this.filterDirection);
+        },
+
+        init() {
+            this.updateClock();
+            this.clockTimer = setInterval(() => this.updateClock(), 1000);
+
+            // Automatic initial feed connection
+            this.reconnect();
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.pollRecentLogs();
+                    const img = document.getElementById('liveStreamImg');
+                    if (img && this.status === 'offline') {
+                        this.reconnect();
+                    }
+                }
+            });
+
+            this.pollTimer = setInterval(() => {
+                if (!document.hidden) {
+                    this.pollRecentLogs();
+                }
+            }, 5000);
+
+            const handleFullscreenChange = () => {
+                this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                setTimeout(() => window.refreshIcons?.(), 50);
+            };
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+            setTimeout(() => window.refreshIcons?.(), 50);
+        },
+
+        destroy() {
+            if (this.clockTimer) clearInterval(this.clockTimer);
+            if (this.pollTimer) clearInterval(this.pollTimer);
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.closeSSE();
+        },
+
+        updateClock() {
+            const now = new Date();
+            this.currentTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+        },
+
+        reconnect() {
+            if (this.reconnectTimer) {
+                clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+            }
+            this.status = 'connecting';
+            this.isRefreshing = true;
+            const img = document.getElementById('liveStreamImg');
+            if (img) {
+                img.style.display = 'block';
+                img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
+            }
+            this.initSSE();
+            this.pollRecentLogs();
+            setTimeout(() => {
+                this.isRefreshing = false;
+            }, 800);
+        },
+
+        toggleFullscreen() {
+            const viewport = this.$refs?.cameraViewport || document.getElementById('cameraViewport');
+            if (!viewport) return;
+
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (viewport.requestFullscreen) {
+                    viewport.requestFullscreen().catch(() => {});
+                } else if (viewport.webkitRequestFullscreen) {
+                    viewport.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        },
+
+        captureSnapshot() {
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            const snapshotUrl = 'http://' + this.streamIp + ':5000/snapshot.jpg?t=' + Date.now();
+            
+            const link = document.createElement('a');
+            link.href = snapshotUrl;
+            link.target = '_blank';
+            link.download = `snapshot_${this.streamIp}_${timestamp}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        },
+
+        async pollRecentLogs() {
+            try {
+                const res = await fetch('/live-camera/recent');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data && Array.isArray(data.logs)) {
+                    this.recentLogs = data.logs;
+                    if (typeof data.present_today === 'number') {
+                        this.presentCount = data.present_today;
+                    }
+                    const now = new Date();
+                    this.lastSyncTime = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    setTimeout(() => window.refreshIcons?.(), 50);
+                }
+            } catch (e) {
+                // Silently ignore polling network failures
+            }
+        },
+
+        onStreamLoad() {
+            this.status = 'online';
+            const img = document.getElementById('liveStreamImg');
+            if (img) img.style.display = 'block';
+        },
+
+        onStreamError() {
+            this.status = 'offline';
+            // Automatically attempt reconnect after 3 seconds if disconnected
+            if (!this.reconnectTimer) {
+                this.reconnectTimer = setTimeout(() => {
+                    this.reconnectTimer = null;
+                    this.reconnect();
+                }, 3000);
+            }
+        },
+
+        initSSE() {
+            this.closeSSE();
+            try {
+                const sseUrl = 'http://' + this.streamIp + ':5000/events';
+                this.eventSource = new EventSource(sseUrl);
+                this.eventSource.onopen = () => {
+                    this.status = 'online';
+                    const img = document.getElementById('liveStreamImg');
+                    if (img) img.style.display = 'block';
+                };
+                this.eventSource.onmessage = (e) => {
+                    this.status = 'online';
+                };
+                this.eventSource.onerror = () => {
+                    this.closeSSE();
+                };
+            } catch (e) {}
+        },
+
+        closeSSE() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+        }
+    };
+});
 
 window.Alpine = Alpine
 Alpine.start()

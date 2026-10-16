@@ -500,15 +500,15 @@ async fn run_stream(
         .unwrap_or_else(|| "3d9f1f77896fb3d1".to_string());
 
     let db = Arc::new(EdgeDb::init(&db_path).await?);
-    let templates = Arc::new(
-        db.load_templates(embed_key_bytes.as_deref(), &model_version)
-            .await
-            .unwrap_or_default(),
-    );
-    println!("[Database] Memuat {} template wajah aktif.", templates.len());
-    if templates.is_empty() && embed_key_bytes.is_none() {
+    let initial_templates = db
+        .load_templates(embed_key_bytes.as_deref(), &model_version)
+        .await
+        .unwrap_or_default();
+    println!("[Database] Memuat {} template wajah aktif.", initial_templates.len());
+    if initial_templates.is_empty() && embed_key_bytes.is_none() {
         println!("[Database] Catatan: ENROLLMENT_EMBED_KEY tidak terdeteksi. Template wajah terenkripsi tidak dapat dimuat.");
     }
+    let templates = Arc::new(std::sync::RwLock::new(Arc::new(initial_templates)));
 
     // Inisialisasi riwayat cooldown dari SQLite agar tidak ter-reset saat engine restart
     let mut initial_cooldowns: HashMap<String, Instant> = HashMap::new();
@@ -578,7 +578,8 @@ async fn run_stream(
                     rfid_cooldowns.insert(uid.clone(), now);
 
                     // Cocokkan UID kartu dengan student_id atau nama anggota
-                    let matched = templates_rfid.iter().find(|t| t.student_id == uid || t.name.contains(&uid));
+                    let current_templates = templates_rfid.read().map(|l| l.clone()).unwrap_or_default();
+                    let matched = current_templates.iter().find(|t| t.student_id == uid || t.name.contains(&uid));
                     let (sid, name) = if let Some(t) = matched {
                         (t.student_id.clone(), t.name.clone())
                     } else {
@@ -692,8 +693,10 @@ async fn run_stream(
                     match (detector_res, recognizer_res) {
                         (Ok(mut detector), Ok(mut recognizer)) => {
                             let running_ai = running.clone();
-                            let templates_ai = templates.clone();
+                            let templates_ai_holder = templates.clone();
                             let db_ai = db.clone();
+                            let embed_key_bytes_ai = embed_key_bytes.clone();
+                            let model_version_ai = model_version.clone();
                             let gpio_ai = gpio.clone();
                             let arduino_ai = arduino_bridge.clone();
                             let mut liveness_ai = liveness_res;
@@ -703,6 +706,10 @@ async fn run_stream(
                             let confirm_frames_ai = confirm_frames;
                             let min_face_size_ai = min_face_size;
                             let cooldown_secs_ai = cooldown_secs;
+                            let ambiguity_margin_ai = env::var("AMBIGUITY_MARGIN")
+                                .ok()
+                                .and_then(|v| v.parse::<f32>().ok())
+                                .unwrap_or(0.05);
 
                             std::thread::Builder::new()
                                 .name("ai-vision-worker".to_string())
@@ -715,7 +722,46 @@ async fn run_stream(
                                         info!("Vision metrics logging aktif (EDGE_VISION_METRICS=1), agregasi per 60 detik.");
                                     }
 
+                                    let mut last_sig_check = Instant::now();
+                                    let initial_sig = tokio_handle.block_on(async { db_ai.get_templates_signature().await.unwrap_or((0, 0)) });
+                                    let sig_tracker = Arc::new(std::sync::Mutex::new(initial_sig));
+
                                     while running_ai.load(Ordering::Relaxed) {
+                                        // Polling penanda versi templates di SQLite setiap 3 detik untuk hot-reload tanpa restart proses
+                                        if last_sig_check.elapsed() >= Duration::from_secs(3) {
+                                            last_sig_check = Instant::now();
+                                            let db_reload = db_ai.clone();
+                                            let key_reload = embed_key_bytes_ai.clone();
+                                            let model_v_reload = model_version_ai.clone();
+                                            let holder_reload = templates_ai_holder.clone();
+                                            let tracker_reload = sig_tracker.clone();
+
+                                            tokio_handle.spawn(async move {
+                                                if let Ok(new_sig) = db_reload.get_templates_signature().await {
+                                                    let is_changed = {
+                                                        let current_sig = tracker_reload.lock().unwrap();
+                                                        new_sig != *current_sig
+                                                    };
+                                                    if is_changed {
+                                                        match db_reload.load_templates(key_reload.as_deref(), &model_v_reload).await {
+                                                            Ok(fresh) => {
+                                                                let count = fresh.len();
+                                                                if let Ok(mut lock) = holder_reload.write() {
+                                                                    *lock = Arc::new(fresh);
+                                                                    *tracker_reload.lock().unwrap() = new_sig;
+                                                                    info!("🔄 [TEMPLATES HOT-RELOAD] Database wajah di RAM berhasil diperbarui dari SQLite: {} template aktif (signature: count={}, max_version={}).", count, new_sig.0, new_sig.1);
+                                                                }
+                                                            }
+                                                            Err(e) => {
+                                                                warn!("Gagal memuat ulang templates dari SQLite: {:#}", e);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        }
+
+                                        let templates_ai = templates_ai_holder.read().map(|l| l.clone()).unwrap_or_else(|_| Arc::new(Vec::new()));
                                         let (frame_rgb, w, h) = match rx_frame.recv_timeout(Duration::from_millis(100)) {
                                              Ok(AiFrame::Rgb { data, width, height }) => {
                                                  // Zero-copy / zero-decode path: raw RGB dari YUYV langsung digunakan!
@@ -748,7 +794,32 @@ async fn run_stream(
 
                                          let mut current_boxes = Vec::new();
 
-                                         for face in &faces {
+                                         // Supresi spasial: Jika detektor mengeluarkan proposal ganda untuk wajah fisik yang sama,
+                                         // pilih proposal dengan deteksi tertinggi dan buang proposal yang bertumpukan.
+                                         let mut sorted_faces: Vec<&engine_vision::FaceDetection> = faces.iter().collect();
+                                         sorted_faces.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+                                         let mut filtered_faces: Vec<&engine_vision::FaceDetection> = Vec::new();
+                                         for f in sorted_faces {
+                                             let fcx = f.bbox[0] + f.bbox[2] / 2.0;
+                                             let fcy = f.bbox[1] + f.bbox[3] / 2.0;
+                                             let mut is_overlap = false;
+                                             for existing in &filtered_faces {
+                                                 let ecx = existing.bbox[0] + existing.bbox[2] / 2.0;
+                                                 let ecy = existing.bbox[1] + existing.bbox[3] / 2.0;
+                                                 let dist = ((fcx - ecx).powi(2) + (fcy - ecy).powi(2)).sqrt();
+                                                 let min_dim = f.bbox[2].min(f.bbox[3]).min(existing.bbox[2]).min(existing.bbox[3]);
+                                                 if dist < (min_dim * 0.45) {
+                                                     is_overlap = true;
+                                                     break;
+                                                 }
+                                             }
+                                             if !is_overlap {
+                                                 filtered_faces.push(f);
+                                             }
+                                         }
+
+                                         for face in filtered_faces {
                                              let bx = face.bbox[0];
                                              let by = face.bbox[1];
                                              let bw = face.bbox[2];
@@ -845,20 +916,53 @@ async fn run_stream(
                                                  }
                                              };
 
-                                             // 5. Pencocokan Cosine Similarity
-                                             let mut best_student: Option<(&str, &str, f32)> = None;
+                                             // 5. Pencocokan Cosine Similarity (Argmax + Ambiguity Margin Check)
+                                             let mut top_1: Option<(&str, &str, f32)> = None;
+                                             let mut top_2: Option<(&str, &str, f32)> = None;
+
                                              for t in templates_ai.iter() {
                                                  let sim = FaceRecognizer::cosine_similarity(&embedding, &t.embedding);
                                                  if sim >= similarity_threshold {
-                                                     if let Some((_, _, best_sim)) = best_student {
-                                                         if sim > best_sim {
-                                                             best_student = Some((&t.student_id, &t.name, sim));
+                                                     if let Some((top_id, _, top_sim)) = top_1 {
+                                                         if sim > top_sim {
+                                                             if top_id != t.student_id.as_str() {
+                                                                 top_2 = top_1;
+                                                             }
+                                                             top_1 = Some((&t.student_id, &t.name, sim));
+                                                         } else if t.student_id.as_str() != top_id {
+                                                             if let Some((_, _, second_sim)) = top_2 {
+                                                                 if sim > second_sim {
+                                                                     top_2 = Some((&t.student_id, &t.name, sim));
+                                                                 }
+                                                             } else {
+                                                                 top_2 = Some((&t.student_id, &t.name, sim));
+                                                             }
                                                          }
                                                      } else {
-                                                         best_student = Some((&t.student_id, &t.name, sim));
+                                                         top_1 = Some((&t.student_id, &t.name, sim));
                                                      }
                                                  }
                                              }
+
+                                             // Cek ambiguitas jika dua siswa berbeda memiliki skor di atas threshold dengan selisih sangat tipis
+                                             let is_ambiguous = match (top_1, top_2) {
+                                                 (Some((id1, _, sim1)), Some((id2, _, sim2))) if id1 != id2 => {
+                                                     (sim1 - sim2) < ambiguity_margin_ai
+                                                 }
+                                                 _ => false,
+                                             };
+
+                                             let best_student = if is_ambiguous {
+                                                 if let (Some((id1, name1, sim1)), Some((id2, name2, sim2))) = (top_1, top_2) {
+                                                     println!(
+                                                         "⚠️ [IDENTITAS AMBIGU] Wajah cocok dengan 2 identitas: {} ({}) sim={:.2} vs {} ({}) sim={:.2} | Selisih {:.3} < margin {:.3}. Menolak absensi.",
+                                                         name1, id1, sim1, name2, id2, sim2, sim1 - sim2, ambiguity_margin_ai
+                                                     );
+                                                 }
+                                                 None
+                                             } else {
+                                                 top_1
+                                             };
 
                                              if let Some((student_id, name, score)) = best_student {
                                                  let now = Instant::now();
@@ -962,14 +1066,25 @@ async fn run_stream(
                                                      }
                                                  }
                                              } else {
+                                                 let (score_text, name_text) = if is_ambiguous {
+                                                     (
+                                                         format!("ambigu m:{:+.1}", logit_margin),
+                                                         "id:Unknown (Ambigu)".to_string(),
+                                                     )
+                                                 } else {
+                                                     (
+                                                         format!("sc:{:.2} m:{:+.1}", face.score, logit_margin),
+                                                         "id:Unknown".to_string(),
+                                                     )
+                                                 };
                                                  current_boxes.push(FaceBoxData {
                                                      x: bx as i32,
                                                      y: by as i32,
                                                      width: bw as i32,
                                                      height: bh as i32,
                                                      color: "#f97316".to_string(), // Orange: Unknown
-                                                     score_text: format!("sc:{:.2} m:{:+.1}", face.score, logit_margin),
-                                                     name_text: "id:Unknown".to_string(),
+                                                     score_text,
+                                                     name_text,
                                                  });
                                              }
                                          }

@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 final class EnrollFace
 {
-    public function execute(Student $student, UploadedFile $photo): string
+    public function execute(Student $student, UploadedFile $photo, bool $allowDuplicate = false): string
     {
         if (! $student->hasActiveConsent()) {
             throw new \InvalidArgumentException('Biometric consent is required before face enrollment.');
@@ -30,7 +30,7 @@ final class EnrollFace
         $tmpPath = \Illuminate\Support\Facades\Storage::disk('local')->path("tmp/{$tmpFilename}");
 
         // Dispatch job: simpan photoPath permanen ke FaceTemplate
-        GenerateFaceEmbedding::dispatch($student->id, $tmpPath, $permanentFilename, true)
+        GenerateFaceEmbedding::dispatch($student->id, $tmpPath, $permanentFilename, true, null, $allowDuplicate)
             ->onQueue('enrollments');
 
         return $tmpPath;

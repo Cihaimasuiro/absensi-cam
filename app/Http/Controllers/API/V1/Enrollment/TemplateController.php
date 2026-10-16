@@ -26,22 +26,17 @@ class TemplateController extends Controller
         $limit  = min((int) $request->query('limit', 200), 200);
 
         // Fetch active templates + soft-deleted tombstones
-        // Limited per school (gedung) as requested
-        $schoolId = $device->building?->school_id;
-
-        // Determine if the device's building has any classrooms.
-        // If it has classrooms, only templates for students in those classrooms are 'in-scope'.
-        // If it has NO classrooms (gate device), ALL templates for the school are 'in-scope'.
+        // Limited per school as requested
+        $schoolId = $device->school_id ?? $device->building?->school_id;
         $buildingId = $device->building_id;
-        if (!$buildingId) {
-            return response()->json([
-                'model_version' => $device->model_version,
-                'items'         => [],
-                'next_cursor'   => $cursor,
-            ]);
+
+        // If the device has a building assigned, check whether it has classrooms.
+        // If it has classrooms, only templates for students in those classrooms are 'in-scope'.
+        // If it has NO classrooms (gate device) or NO building assigned, ALL templates for the school are 'in-scope'.
+        $buildingHasClassrooms = false;
+        if ($buildingId) {
+            $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
         }
-        
-        $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
 
         $templates = FaceTemplate::withTrashed()
             ->with('student:id,name,school_id,classroom_id')
@@ -91,6 +86,52 @@ class TemplateController extends Controller
             'model_version' => $device->model_version,
             'items'         => $items,
             'next_cursor'   => $nextCursor,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/templates/snapshot
+     *
+     * Snapshot rekonsiliasi state biometrik penuh (Langkah 4).
+     * Mengembalikan seluruh student_id aktif yang sah berada dalam scope perangkat saat ini.
+     */
+    public function snapshot(Request $request): JsonResponse
+    {
+        /** @var Device $device */
+        $device = $request->user();
+
+        $schoolId = $device->school_id ?? $device->building?->school_id;
+        $buildingId = $device->building_id;
+
+        $buildingHasClassrooms = false;
+        if ($buildingId) {
+            $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
+        }
+
+        $templates = FaceTemplate::whereNull('deleted_at')
+            ->with('student:id,name,school_id,classroom_id')
+            ->whereHas('student', function ($query) use ($schoolId) {
+                $query->whereNull('deleted_at');
+                if ($schoolId) {
+                    $query->where('school_id', $schoolId);
+                }
+            })
+            ->get(['id', 'student_id']);
+
+        $classroomBuildings = \App\Domain\School\Models\Classroom::whereNotNull('building_id')->pluck('building_id', 'id');
+
+        $validIds = $templates->filter(function (FaceTemplate $t) use ($buildingHasClassrooms, $buildingId, $classroomBuildings) {
+            if (!$buildingHasClassrooms || !$buildingId) {
+                return true;
+            }
+            $student = $t->student;
+            $studentBuildingId = $student ? $classroomBuildings->get($student->classroom_id) : null;
+            return $studentBuildingId === $buildingId;
+        })->pluck('student_id')->unique()->values();
+
+        return response()->json([
+            'count' => $validIds->count(),
+            'valid_student_ids' => $validIds,
         ]);
     }
 }

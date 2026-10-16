@@ -96,8 +96,9 @@ class Student extends Model
     {
         static::deleting(function (Student $student) {
             // Cascade soft delete to faceTemplate so tombstone is sent to edge
-            if ($student->faceTemplate) {
-                $student->faceTemplate->delete();
+            $template = $student->faceTemplate()->withTrashed()->first();
+            if ($template && ! $template->trashed()) {
+                $template->delete();
             }
         });
 

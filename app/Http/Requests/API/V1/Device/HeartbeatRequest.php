@@ -21,8 +21,10 @@ class HeartbeatRequest extends FormRequest
             'disk_free_mb'  => ['required', 'integer', 'min:0'],
             'fps'           => ['required', 'numeric', 'min:0'],
             'outbox_len'    => ['required', 'integer', 'min:0'],
-            'serial_ok'     => ['required', 'boolean'],
-            'ip_address'    => ['nullable', 'ip'],
+            'serial_ok'       => ['required', 'boolean'],
+            'ip_address'      => ['nullable', 'ip'],
+            'templates_count' => ['nullable', 'integer', 'min:0'],
+            'templates_hash'  => ['nullable', 'string', 'max:64'],
         ];
     }
 }

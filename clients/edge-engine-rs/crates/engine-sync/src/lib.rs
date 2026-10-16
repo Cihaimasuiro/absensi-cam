@@ -355,6 +355,14 @@ impl SyncWorker {
     /// Kirim heartbeat telemetry ke Laravel /api/v1/devices/heartbeat
     pub async fn send_heartbeat(&self) -> Result<()> {
         let unsynced_len = self.db.get_unsynced_count().await.unwrap_or(0);
+        let (tmpl_count, tmpl_hash) = match self.db.get_templates_hash().await {
+            Ok((c, h)) => (Some(c), Some(h)),
+            Err(e) => {
+                warn!("Gagal menghitung hash templates: {:#}", e);
+                (None, None)
+            }
+        };
+
         let payload = HeartbeatPayload {
             fw_version: self.fw_version.clone(),
             model_version: self.model_version.clone(),
@@ -365,6 +373,8 @@ impl SyncWorker {
             outbox_len: unsynced_len,
             serial_ok: check_serial_status(),
             ip_address: get_local_ip_to(&self.api_url),
+            templates_count: tmpl_count,
+            templates_hash: tmpl_hash,
         };
 
         let url = format!("{}/api/v1/devices/heartbeat", self.api_url);
@@ -380,6 +390,79 @@ impl SyncWorker {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             warn!("Heartbeat gagal (HTTP {}): {}", status, body);
+        } else if let Ok(hb_resp) = resp.json::<serde_json::Value>().await {
+            if hb_resp.get("action").and_then(|v| v.as_str()) == Some("reconcile_templates") {
+                info!("⚠️ [REKONSILIASI] Server mendeteksi perbedaan checksum template. Memulai sinkronisasi snapshot jaring pengaman.");
+                if let Err(e) = self.reconcile_templates().await {
+                    error!("Gagal rekonsiliasi templates: {:#}", e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Tarik snapshot template aktif dari server dan bersihkan ghost template secara aman (FR-E11 / Langkah 4)
+    pub async fn reconcile_templates(&self) -> Result<()> {
+        let url = format!("{}/api/v1/templates/snapshot", self.api_url);
+        let resp = self
+            .client
+            .get(&url)
+            .headers(self.auth_headers())
+            .send()
+            .await
+            .context("Gagal menghubungi endpoint snapshot templates")?;
+
+        if !resp.status().is_success() {
+            anyhow::bail!("Snapshot templates gagal dengan HTTP {}", resp.status());
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let valid_ids_arr = json.get("valid_student_ids").and_then(|v| v.as_array());
+
+        let valid_ids: Vec<String> = match valid_ids_arr {
+            Some(arr) => arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect(),
+            None => {
+                warn!("🛑 [SAFETY GUARD] Respon snapshot server tidak valid. Membatalkan rekonsiliasi.");
+                return Ok(());
+            }
+        };
+
+        // SAFETY GUARD 1: Tolak pembersihan jika server mengembalikan daftar kosong
+        if valid_ids.is_empty() {
+            warn!("🛑 [SAFETY GUARD] Server mengembalikan 0 template aktif. Pembersihan dibatalkan demi keamanan terminal.");
+            return Ok(());
+        }
+
+        // SAFETY GUARD 2: Batas persentase pembersihan aman (>30% jika data lokal > 5 siswa)
+        let (local_count, _) = self.db.get_templates_hash().await.unwrap_or((0, String::new()));
+        if local_count > 5 {
+            let valid_set: std::collections::HashSet<&str> = valid_ids.iter().map(|s| s.as_str()).collect();
+            let local_templates = self.db.load_templates(self.embed_key.as_deref(), &self.model_version).await.unwrap_or_default();
+            let delete_count = local_templates.iter().filter(|t| !valid_set.contains(t.student_id.as_str())).count();
+
+            if (delete_count * 100) / local_count > 30 {
+                warn!(
+                    "🛑 [SAFETY GUARD] Rekonsiliasi dibatalkan: Jumlah template yang akan dihapus ({} dari {} = {}%) melebihi ambang batas keamanan 30%. Memerlukan peninjauan admin.",
+                    delete_count, local_count, (delete_count * 100) / local_count
+                );
+                return Ok(());
+            }
+        }
+
+        let purged = self.db.purge_unlisted_templates(&valid_ids).await?;
+        if purged > 0 {
+            info!("✅ [REKONSILIASI SELESAI] Sebanyak {} ghost template berhasil dibersihkan dari database lokal.", purged);
+        } else {
+            info!("✅ [REKONSILIASI SELESAI] Database lokal sudah selaras dengan server.");
+        }
+
+        // Jika jumlah template lokal masih kurang dari valid_ids server, reset kursor dan tarik segera
+        let (local_after, _) = self.db.get_templates_hash().await.unwrap_or((0, String::new()));
+        if local_after < valid_ids.len() {
+            info!("🔄 [REKONSILIASI] Template lokal ({}) kurang dari template aktif server ({}). Mereset kursor sync dan menarik template...", local_after, valid_ids.len());
+            self.db.reset_template_sync_cursor().await?;
+            self.pull_templates().await?;
         }
 
         Ok(())

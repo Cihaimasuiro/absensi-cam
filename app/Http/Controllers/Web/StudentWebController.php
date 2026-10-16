@@ -193,7 +193,26 @@ class StudentWebController extends Controller
 
     public function enrollStore(\App\Http\Requests\Web\EnrollFaceRequest $request, Student $student)
     {
-        (new \App\Domain\Enrollment\Actions\EnrollFace)->execute($student, $request->file('photo'));
+        $allowDuplicate = false;
+        if ($request->boolean('allow_duplicate')) {
+            $user = $request->user();
+            if ($user && $user->hasRole('super_admin')) {
+                $allowDuplicate = true;
+            }
+        }
+
+        try {
+            (new \App\Domain\Enrollment\Actions\EnrollFace)->execute(
+                $student,
+                $request->file('photo'),
+                $allowDuplicate
+            );
+        } catch (\App\Domain\Enrollment\Exceptions\DuplicateFaceException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

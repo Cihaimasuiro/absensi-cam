@@ -112,7 +112,7 @@
     </header>
 
     {{-- Main Body --}}
-    <div class="flex-1 {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'p-0 flex flex-col bg-[#0b0f19] overflow-hidden' : 'p-lg md:p-xl' }}">
+    <div class="flex-1 {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'p-0 flex flex-col bg-canvas-soft overflow-hidden' : 'p-lg md:p-xl' }}">
         @if(!request()->routeIs('dashboard') && !request()->routeIs('live-camera.*'))
             {{-- Breadcrumb Area --}}
             <div class="flex flex-wrap items-center justify-between gap-sm mb-lg">

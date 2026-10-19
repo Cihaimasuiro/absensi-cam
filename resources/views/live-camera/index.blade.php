@@ -1,213 +1,187 @@
 @extends('layouts.app')
-@section('title', 'Live Kamera & Monitor Presensi')
-
-@section('header-actions')
-    <div class="flex items-center gap-xs">
-        <a href="{{ route('reports.index') }}" class="btn btn-secondary">
-            <i data-lucide="file-text" class="w-4 h-4"></i> Laporan
-        </a>
-        <a href="{{ route('students.index') }}" class="btn btn-secondary">
-            <i data-lucide="users" class="w-4 h-4"></i> Kelola Anggota
-        </a>
-        <a href="{{ route('devices.index') }}" class="btn btn-secondary">
-            <i data-lucide="cpu" class="w-4 h-4"></i> Perangkat Edge
-        </a>
-    </div>
-@endsection
+@section('title', 'Smart Absensi — Live Gate Monitor')
 
 @section('content')
 <script id="recent-logs-data" type="application/json">@json($recentLogs)</script>
-<div x-data="cameraFeedData('{{ $streamIp }}', {{ (int)$presentToday }})" class="flex flex-col gap-md">
+<div x-data="cameraFeedData('{{ $streamIp }}', {{ (int)$presentToday }})" class="flex flex-col h-[calc(100vh-56px)] bg-[#0b0f19] text-[#f9fafb] overflow-hidden select-none">
 
-    {{-- Main Workspace Grid --}}
-    <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-md items-start">
-
-        {{-- Left: Modern CCTV Viewport Frame --}}
-        <div id="cameraViewport" x-ref="cameraViewport" class="card p-md flex flex-col gap-sm bg-surface animate-fade-up">
-            
-            {{-- HUD Top Bar --}}
-            <div class="flex flex-wrap justify-between items-center pb-xs border-b border-hairline gap-xs">
-                
-                {{-- Status & Host Selector --}}
-                <div class="flex items-center gap-sm">
-                    <button type="button" @click="reconnect()" class="flex items-center gap-xs bg-transparent border-none p-0 cursor-pointer text-left group" title="Klik untuk memuat ulang koneksi">
-                        <span class="live-dot" :class="{
-                            'live-dot-online': status === 'online',
-                            'live-dot-connecting': status === 'connecting',
-                            'live-dot-offline': status === 'offline'
-                        }"></span>
-                        <span class="text-[11.5px] font-semibold tracking-wide uppercase font-mono text-ink group-hover:text-primary transition-colors"
-                              x-text="status === 'online' ? 'LIVE MONITOR ACTIVE' : (status === 'connecting' ? 'CONNECTING...' : 'FEED STANDBY / OFFLINE')">
-                            LIVE MONITOR ACTIVE
-                        </span>
-                    </button>
-
-                    <div class="flex items-center gap-xs bg-canvas-soft border border-hairline rounded-sm px-xs py-[2px]">
-                        <i data-lucide="radio" class="w-3 h-3 text-ink-faint"></i>
-                        <select x-model="streamIp" @change="reconnect()" class="bg-transparent border-none text-[11px] text-ink font-medium focus:ring-0 p-0 cursor-pointer">
-                            @if($devices->isEmpty())
-                                <option value="{{ $streamIp }}">Local Edge ({{ $streamIp }})</option>
-                            @else
-                                @foreach($devices as $device)
-                                    <option value="{{ $device->ip_address }}">{{ $device->name }} ({{ $device->ip_address ?: 'Belum diset IP' }})</option>
-                                @endforeach
-                                <option value="127.0.0.1">Localhost (127.0.0.1)</option>
-                            @endif
-                        </select>
-                    </div>
-                </div>
-
-                {{-- Right Controls: Clock & Action Buttons --}}
-                <div class="flex items-center gap-xs">
-                    <span class="hidden sm:inline-block font-mono text-[11px] text-ink-muted bg-canvas-soft border border-hairline px-xs py-[3px] rounded-sm" x-text="currentTime">
-                        --:--:-- WIB
-                    </span>
-
-                    <button type="button" @click="captureSnapshot()" class="btn-icon btn-secondary" title="Ambil snapshot gambar (JPEG)">
-                        <i data-lucide="camera" class="w-3.5 h-3.5"></i>
-                    </button>
-
-                    <button type="button" @click="reconnect()" class="btn-icon btn-secondary" :class="{'animate-spin': isRefreshing}" title="Muat ulang stream">
-                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                    </button>
-
-                    <button type="button" @click="toggleFullscreen()" class="btn-icon btn-secondary" title="Mode Layar Penuh">
-                        <i data-lucide="maximize-2" x-show="!isFullscreen" class="w-3.5 h-3.5"></i>
-                        <i data-lucide="minimize-2" x-show="isFullscreen" class="w-3.5 h-3.5"></i>
-                    </button>
-                </div>
+    {{-- Top Header Bar (Matching Gate Monitor Spec) --}}
+    <header class="h-[52px] px-4 bg-[#111827] border-b border-[#374151] flex items-center justify-between gap-3 shrink-0">
+        {{-- Brand & Status --}}
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-bold tracking-tight text-[#f9fafb]">Smart Absensi</span>
+                <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-[#1f2937] text-[#9ca3af] border border-[#374151]">Gate Monitor</span>
             </div>
 
-            {{-- 16:9 Aspect Video Container with Viewfinder Overlay --}}
-            <div class="relative bg-black rounded-sm overflow-hidden aspect-video flex items-center justify-center border border-hairline/60">
-                {{-- Offline / Connecting State Display --}}
-                <div x-show="status !== 'online'" class="absolute inset-0 flex flex-col items-center justify-center text-ink-faint z-0 gap-xs p-md text-center bg-black/95">
-                    <i data-lucide="video-off" class="w-8 h-8 opacity-40 mb-1"></i>
-                    <span class="text-[12px] font-mono text-ink-muted" x-text="status === 'connecting' ? 'Menghubungkan ke Edge Engine...' : 'Kamera Standby / Belum Terhubung'"></span>
-                    <div class="flex items-center gap-xs mt-xs">
-                        <button type="button" @click="reconnect()" class="btn btn-secondary btn-sm">
-                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Hubungkan Ulang
-                        </button>
-                    </div>
+            {{-- Status Indicator --}}
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#1f2937] border border-[#374151]">
+                <span class="w-2 h-2 rounded-full transition-colors" :class="{
+                    'bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse': status === 'online',
+                    'bg-[#f59e0b]': status === 'connecting',
+                    'bg-[#ef4444]': status === 'offline'
+                }"></span>
+                <span class="text-[11px] font-mono font-medium tracking-wide"
+                      :class="status === 'online' ? 'text-[#10b981]' : (status === 'connecting' ? 'text-[#f59e0b]' : 'text-[#ef4444]')"
+                      x-text="status === 'online' ? 'TERHUBUNG' : (status === 'connecting' ? 'MENGHUBUNGKAN...' : 'TERPUTUS')">
+                    TERHUBUNG
+                </span>
+            </div>
+
+            {{-- Device IP Selector --}}
+            <div class="flex items-center gap-1.5 bg-[#1f2937] border border-[#374151] rounded px-2 py-0.5 text-xs">
+                <i data-lucide="radio" class="w-3.5 h-3.5 text-[#9ca3af]"></i>
+                <select x-model="streamIp" @change="reconnect()" class="bg-transparent border-none text-xs text-[#f9fafb] font-medium focus:ring-0 p-0 cursor-pointer">
+                    @if($devices->isEmpty())
+                        <option value="{{ $streamIp }}" class="bg-[#111827] text-white">Local Edge ({{ $streamIp }})</option>
+                    @else
+                        @foreach($devices as $device)
+                            <option value="{{ $device->ip_address }}" class="bg-[#111827] text-white">{{ $device->name }} ({{ $device->ip_address ?: 'Belum diset IP' }})</option>
+                        @endforeach
+                        <option value="127.0.0.1" class="bg-[#111827] text-white">Localhost (127.0.0.1)</option>
+                    @endif
+                </select>
+            </div>
+        </div>
+
+        {{-- Metrics & Clock --}}
+        <div class="hidden lg:flex items-center gap-4 text-xs font-mono text-[#9ca3af]">
+            <span>HOST: <strong class="text-[#38bdf8] font-semibold" x-text="streamIp"></strong></span>
+            <span>PORT: <strong class="text-[#38bdf8] font-semibold">5000</strong></span>
+            <span>PRESENSI HARI INI: <strong class="text-[#10b981] font-semibold" x-text="presentCount"></strong></span>
+            <span>WAKTU: <strong class="text-white font-semibold" x-text="currentTime"></strong></span>
+        </div>
+
+        {{-- Header Actions --}}
+        <div class="flex items-center gap-2">
+            <button type="button" @click="reconnect()" class="px-2.5 py-1 text-xs font-medium rounded bg-[#1f2937] hover:bg-[#374151] text-[#f9fafb] border border-[#374151] transition-colors flex items-center gap-1.5" title="Muat ulang aliran kamera">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': isRefreshing}"></i>
+                <span>Refresh</span>
+            </button>
+            <button type="button" @click="captureSnapshot()" class="px-2.5 py-1 text-xs font-medium rounded bg-[#1f2937] hover:bg-[#374151] text-[#f9fafb] border border-[#374151] transition-colors flex items-center gap-1.5" title="Unduh snapshot frame">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                <span>Snapshot</span>
+            </button>
+        </div>
+    </header>
+
+    {{-- Main Gate Monitor Content --}}
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        {{-- Massive Camera Viewport --}}
+        <section id="cameraViewport" x-ref="cameraViewport" class="flex-1 bg-black flex flex-col items-center justify-center relative overflow-hidden border-r border-[#374151]">
+            
+            {{-- Camera Stage --}}
+            <div class="relative w-full h-full flex items-center justify-center p-2">
+                {{-- Offline / Standby Placeholder --}}
+                <div x-show="status !== 'online'" class="absolute inset-0 flex flex-col items-center justify-center text-[#9ca3af] gap-2 p-4 text-center bg-black/95 z-10">
+                    <i data-lucide="video-off" class="w-10 h-10 opacity-40"></i>
+                    <span class="text-sm font-mono" x-text="status === 'connecting' ? 'Menghubungkan ke Edge Engine /stream...' : 'Kamera Standby / Belum Terhubung'"></span>
+                    <button type="button" @click="reconnect()" class="mt-2 px-3 py-1.5 text-xs font-medium rounded bg-[#1f2937] hover:bg-[#374151] text-[#f9fafb] border border-[#374151] transition-colors flex items-center gap-1.5">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Hubungkan Ulang
+                    </button>
                 </div>
 
-                {{-- Live Image MJPEG Stream (Bounding box & status burned natively by Edge Engine) --}}
+                {{-- Live MJPEG Stream from Edge (/stream) --}}
                 <img id="liveStreamImg"
-                     src="http://{{ $streamIp }}:5000/video_feed"
-                     :src="'http://' + streamIp + ':5000/video_feed'"
+                     src="http://{{ $streamIp }}:5000/stream"
+                     :src="'http://' + streamIp + ':5000/stream'"
                      alt="Live Stream"
-                     class="relative z-5 w-full h-full object-contain"
+                     class="max-w-full max-h-[calc(100vh-120px)] w-auto h-auto object-contain rounded"
                      x-on:load="onStreamLoad()"
                      x-on:error="onStreamError()">
             </div>
 
-            {{-- HUD Bottom Diagnostics Strip --}}
-            <div class="flex flex-wrap justify-between items-center pt-xs text-[11px] font-mono text-ink-faint border-t border-hairline/60">
-                <div class="flex items-center gap-sm">
-                    <span>PORT 5000 (MJPEG)</span>
-                    <span class="hidden sm:inline">•</span>
-                    <span class="hidden sm:inline" x-text="'HOST: ' + streamIp"></span>
-                    <span class="hidden md:inline">•</span>
-                    <span class="hidden md:inline" x-text="status === 'online' ? 'FRAME SINK READY' : 'AWAITING FRAME'"></span>
-                </div>
+            {{-- Floating Controls Toolbar (Matching Gate Monitor Design) --}}
+            <nav class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#111827]/90 backdrop-blur-md border border-[#374151] rounded-lg px-2 py-1 flex items-center gap-2 z-20 shadow-lg">
+                <button type="button"
+                        @click="togglePause()"
+                        class="px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 border border-[#374151]"
+                        :class="isPaused ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8]' : 'bg-[#1f2937] hover:bg-[#374151] text-[#f9fafb]'"
+                        title="Jeda atau lanjutkan video">
+                    <i data-lucide="pause" x-show="!isPaused" class="w-3.5 h-3.5"></i>
+                    <i data-lucide="play" x-show="isPaused" class="w-3.5 h-3.5"></i>
+                    <span x-text="isPaused ? 'Lanjutkan' : 'Pause'">Pause</span>
+                </button>
+
+                <button type="button"
+                        @click="toggleFullscreen()"
+                        class="px-2.5 py-1 text-xs font-medium rounded bg-[#1f2937] hover:bg-[#374151] text-[#f9fafb] border border-[#374151] transition-colors flex items-center gap-1"
+                        title="Mode Layar Penuh">
+                    <i data-lucide="maximize-2" x-show="!isFullscreen" class="w-3.5 h-3.5"></i>
+                    <i data-lucide="minimize-2" x-show="isFullscreen" class="w-3.5 h-3.5"></i>
+                    <span>Fullscreen</span>
+                </button>
+            </nav>
+        </section>
+
+        {{-- Right: Attendance Sidebar (Presensi Terbaru) --}}
+        <aside class="w-full md:w-[280px] lg:w-[300px] bg-[#111827] flex flex-col border-t md:border-t-0 md:border-l border-[#374151] shrink-0 h-full">
+            <div class="p-3 border-b border-[#374151] flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-[#9ca3af]">Presensi Terbaru</span>
+                <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#1f2937] text-[#38bdf8] border border-[#374151]" x-text="filteredLogs.length">
+                    {{ count($recentLogs) }}
+                </span>
             </div>
 
-        </div>
-
-        {{-- Right: Real-Time Attendance Activity Ticker --}}
-        <div class="card p-md flex flex-col h-[560px] bg-surface animate-fade-up">
-            
-            {{-- Header with Filter Tabs --}}
-            <div class="pb-xs border-b border-hairline flex flex-col gap-xs mb-xs">
-                <div class="flex items-center justify-between">
-                    <span class="flex items-center gap-xs text-[12.5px] font-semibold text-ink uppercase tracking-wide">
-                        <i data-lucide="activity" class="w-3.5 h-3.5 text-accent-green"></i>
-                        Aktivitas Presensi
-                    </span>
-                    <span class="text-[11px] text-ink-faint font-mono" x-text="filteredLogs.length + ' Entri'">
-                        {{ count($recentLogs) }} Entri
-                    </span>
+            {{-- Direction Filter (Compact Segment) --}}
+            <div class="px-3 py-1.5 border-b border-[#374151] flex items-center justify-between bg-[#0b0f19]/40">
+                <div class="flex items-center gap-1 bg-[#1f2937] p-0.5 rounded border border-[#374151]">
+                    <button type="button"
+                            @click="filterDirection = 'all'"
+                            class="px-2 py-0.5 text-[10px] rounded transition-colors cursor-pointer border-none"
+                            :class="filterDirection === 'all' ? 'bg-[#374151] text-white font-semibold' : 'text-[#9ca3af] hover:text-white'">
+                        Semua
+                    </button>
+                    <button type="button"
+                            @click="filterDirection = 'in'"
+                            class="px-2 py-0.5 text-[10px] rounded transition-colors cursor-pointer border-none"
+                            :class="filterDirection === 'in' ? 'bg-[#10b981] text-white font-semibold' : 'text-[#9ca3af] hover:text-[#10b981]'">
+                        Masuk
+                    </button>
+                    <button type="button"
+                            @click="filterDirection = 'out'"
+                            class="px-2 py-0.5 text-[10px] rounded transition-colors cursor-pointer border-none"
+                            :class="filterDirection === 'out' ? 'bg-[#38bdf8] text-white font-semibold' : 'text-[#9ca3af] hover:text-[#38bdf8]'">
+                        Keluar
+                    </button>
                 </div>
 
-                {{-- Direction Segment Filter & Sync Indicator --}}
-                <div class="flex items-center justify-between pt-xxs">
-                    <div class="flex items-center gap-[2px] bg-canvas-soft p-[2px] rounded-xs border border-hairline">
-                        <button type="button"
-                                @click="filterDirection = 'all'"
-                                class="px-xs py-[2px] text-[10.5px] rounded-xs transition-colors cursor-pointer border-none"
-                                :class="filterDirection === 'all' ? 'bg-white text-ink font-semibold shadow-xs' : 'bg-transparent text-ink-muted hover:text-ink'">
-                            Semua
-                        </button>
-                        <button type="button"
-                                @click="filterDirection = 'in'"
-                                class="px-xs py-[2px] text-[10.5px] rounded-xs transition-colors cursor-pointer border-none"
-                                :class="filterDirection === 'in' ? 'bg-white text-accent-green font-semibold shadow-xs' : 'bg-transparent text-ink-muted hover:text-ink'">
-                            Masuk
-                        </button>
-                        <button type="button"
-                                @click="filterDirection = 'out'"
-                                class="px-xs py-[2px] text-[10.5px] rounded-xs transition-colors cursor-pointer border-none"
-                                :class="filterDirection === 'out' ? 'bg-white text-primary font-semibold shadow-xs' : 'bg-transparent text-ink-muted hover:text-ink'">
-                            Keluar
-                        </button>
-                    </div>
-
-                    <span class="text-[10px] text-ink-faint font-mono truncate" x-text="lastSyncTime ? 'Sinkron: ' + lastSyncTime : 'Live Polling'">
-                        Live Polling
-                    </span>
-                </div>
+                <span class="text-[10px] text-[#6b7280] font-mono truncate" x-text="lastSyncTime ? 'Sync: ' + lastSyncTime : 'Live'">
+                    Live
+                </span>
             </div>
 
-            {{-- Real-Time Dynamic List --}}
-            <div class="flex-1 overflow-y-auto custom-scroll pr-xs py-xxs">
+            {{-- Scrollable Log List --}}
+            <div class="flex-1 overflow-y-auto custom-scroll p-2.5 flex flex-col gap-2">
                 <template x-if="filteredLogs.length > 0">
-                    <div class="flex flex-col gap-[2px]">
+                    <div class="flex flex-col gap-2">
                         <template x-for="log in filteredLogs" :key="log.id">
-                            <div class="flex items-center justify-between py-xs px-xs rounded-xs hover:bg-canvas-soft transition-colors border-b border-hairline/60 last:border-none">
-                                <div class="flex items-center gap-xs min-w-0 pr-xs">
-                                    <div class="w-7 h-7 rounded-full bg-canvas-soft border border-hairline flex items-center justify-center font-semibold text-[11px] text-ink shrink-0"
-                                         x-text="log.initial">
-                                    </div>
-                                    <div class="min-w-0">
-                                        <div class="text-[12.5px] font-medium text-ink truncate leading-tight" x-text="log.name"></div>
-                                        <div class="flex items-center gap-xs text-[10.5px] text-ink-muted font-mono leading-tight">
-                                            <span x-text="log.code"></span>
-                                            <span x-show="log.device" class="text-ink-faint truncate" x-text="'• ' + log.device"></span>
-                                        </div>
-                                    </div>
+                            <div class="bg-[#0b0f19] border border-[#374151] hover:border-[#4b5563] rounded-md p-2.5 flex flex-col gap-1 transition-colors">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-xs font-semibold text-white truncate" x-text="log.name"></span>
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0"
+                                          :class="log.direction === 'in' ? 'bg-[#059669] text-white' : 'bg-[#2563eb] text-white'"
+                                          x-text="log.direction === 'in' ? 'MASUK' : 'KELUAR'"></span>
                                 </div>
-                                <div class="text-right shrink-0">
-                                    <div class="text-[11px] font-semibold uppercase flex items-center justify-end gap-[3px]"
-                                         :class="log.direction === 'in' ? 'text-accent-green' : 'text-primary'">
-                                        <span x-text="log.direction === 'in' ? 'MASUK' : 'KELUAR'"></span>
-                                        <i data-lucide="log-in" x-show="log.direction === 'in'" class="w-3 h-3"></i>
-                                        <i data-lucide="log-out" x-show="log.direction === 'out'" class="w-3 h-3"></i>
-                                    </div>
-                                    <div class="text-[10.5px] text-ink-faint font-mono" x-text="log.time"></div>
-                                    <div x-show="log.score" class="text-[9.5px] text-ink-faint font-mono" x-text="'Match ' + log.score"></div>
+                                <div class="flex items-center justify-between text-[11px] text-[#9ca3af] font-mono">
+                                    <span x-text="'ID: ' + log.code"></span>
+                                    <span x-text="log.time"></span>
                                 </div>
+                                <div x-show="log.score" class="text-[10px] text-[#6b7280] font-mono" x-text="'Match: ' + log.score"></div>
                             </div>
                         </template>
                     </div>
                 </template>
 
-                {{-- Empty State --}}
-                <div x-show="filteredLogs.length === 0" class="flex flex-col items-center justify-center h-full text-ink-faint gap-xs p-md text-center">
-                    <i data-lucide="history" class="w-6 h-6 opacity-40 mb-1"></i>
-                    <span class="text-caption">Belum ada aktivitas presensi pada filter ini.</span>
+                {{-- Empty State (Exact match to screenshot) --}}
+                <div x-show="filteredLogs.length === 0" class="flex flex-col items-center justify-center h-full text-[#6b7280] text-xs text-center p-4 leading-relaxed">
+                    Belum ada presensi siswa terdeteksi.<br>
+                    Silakan posisikan wajah di depan kamera.
                 </div>
             </div>
-
-            {{-- Footer Link to Full Report --}}
-            <div class="pt-xs border-t border-hairline text-center mt-auto">
-                <a href="{{ route('reports.index') }}" class="btn-link justify-center text-[11.5px] py-xxs">
-                    <span>Lihat Seluruh Log di Laporan</span> <i data-lucide="arrow-right" class="w-3 h-3"></i>
-                </a>
-            </div>
-
-        </div>
-
-    </div>
+        </aside>
+    </main>
 
 </div>
 @endsection

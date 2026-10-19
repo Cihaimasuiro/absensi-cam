@@ -112,12 +112,12 @@
     </header>
 
     {{-- Main Body --}}
-    <div class="flex-1 p-lg md:p-xl">
-        {{-- Breadcrumb Area --}}
-        <div class="flex flex-wrap items-center justify-between gap-sm mb-lg">
-            <div>
-                <h1 class="text-[20px] font-bold text-ink tracking-tight mb-0.5">@yield('title')</h1>
-                @if(!request()->routeIs('dashboard'))
+    <div class="flex-1 {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'p-0 flex flex-col bg-[#0b0f19] overflow-hidden' : 'p-lg md:p-xl' }}">
+        @if(!request()->routeIs('dashboard') && !request()->routeIs('live-camera.*'))
+            {{-- Breadcrumb Area --}}
+            <div class="flex flex-wrap items-center justify-between gap-sm mb-lg">
+                <div>
+                    <h1 class="text-[20px] font-bold text-ink tracking-tight mb-0.5">@yield('title')</h1>
                     <nav aria-label="Breadcrumb">
                         <ul class="flex items-center gap-1.5 text-[12px] text-ink-muted">
                             <li>
@@ -127,41 +127,41 @@
                             <li class="text-ink-secondary font-medium">@yield('title')</li>
                         </ul>
                     </nav>
+                </div>
+                @hasSection('header-actions')
+                    <div class="flex items-center gap-xs">
+                        @yield('header-actions')
+                    </div>
                 @endif
             </div>
-            @hasSection('header-actions')
-                <div class="flex items-center gap-xs">
-                    @yield('header-actions')
+
+            {{-- Flash Messages & Validation Errors --}}
+            @if(session('success') || session('error') || ($errors->any()))
+                <div class="mb-lg">
+                    @if(session('success'))
+                        <div class="alert alert-success flex items-center gap-xs" role="alert">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> {{ session('success') }}
+                        </div>
+                    @endif
+                    @if(session('error'))
+                        <div class="alert alert-error flex items-center gap-xs" role="alert">
+                            <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
+                        </div>
+                    @endif
+                    @if($errors->any())
+                        <div class="alert alert-error flex flex-col gap-xs" role="alert">
+                            <div class="flex items-center gap-xs font-semibold">
+                                <i data-lucide="alert-circle" class="w-4 h-4"></i> Terdapat kesalahan pada formulir:
+                            </div>
+                            <ul class="list-disc list-inside text-[13px] m-0 pl-xs">
+                                @foreach($errors->all() as $err)
+                                    <li>{{ $err }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
                 </div>
             @endif
-        </div>
-
-        {{-- Flash Messages & Validation Errors --}}
-        @if(session('success') || session('error') || ($errors->any()))
-            <div class="mb-lg">
-                @if(session('success'))
-                    <div class="alert alert-success flex items-center gap-xs" role="alert">
-                        <i data-lucide="check-circle" class="w-4 h-4"></i> {{ session('success') }}
-                    </div>
-                @endif
-                @if(session('error'))
-                    <div class="alert alert-error flex items-center gap-xs" role="alert">
-                        <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
-                    </div>
-                @endif
-                @if($errors->any())
-                    <div class="alert alert-error flex flex-col gap-xs" role="alert">
-                        <div class="flex items-center gap-xs font-semibold">
-                            <i data-lucide="alert-circle" class="w-4 h-4"></i> Terdapat kesalahan pada formulir:
-                        </div>
-                        <ul class="list-disc list-inside text-[13px] m-0 pl-xs">
-                            @foreach($errors->all() as $err)
-                                <li>{{ $err }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-            </div>
         @endif
 
         {{-- Page Content --}}

@@ -170,6 +170,7 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
         filterDirection: 'all',
         lastSyncTime: '',
         isRefreshing: false,
+        isPaused: false,
 
         get filteredLogs() {
             if (this.filterDirection === 'all') return this.recentLogs;
@@ -187,7 +188,7 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
                 if (!document.hidden) {
                     this.pollRecentLogs();
                     const img = document.getElementById('liveStreamImg');
-                    if (img && this.status === 'offline') {
+                    if (img && this.status === 'offline' && !this.isPaused) {
                         this.reconnect();
                     }
                 }
@@ -226,18 +227,39 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
                 clearTimeout(this.reconnectTimer);
                 this.reconnectTimer = null;
             }
+            this.isPaused = false;
             this.status = 'connecting';
             this.isRefreshing = true;
             const img = document.getElementById('liveStreamImg');
             if (img) {
                 img.style.display = 'block';
-                img.src = 'http://' + this.streamIp + ':5000/video_feed?t=' + Date.now();
+                img.src = 'http://' + this.streamIp + ':5000/stream?t=' + Date.now();
             }
             this.initSSE();
             this.pollRecentLogs();
             setTimeout(() => {
                 this.isRefreshing = false;
             }, 800);
+        },
+
+        togglePause() {
+            this.isPaused = !this.isPaused;
+            const img = document.getElementById('liveStreamImg');
+            if (!img) return;
+            if (this.isPaused) {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || 640;
+                    canvas.height = img.naturalHeight || 480;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    img.src = canvas.toDataURL('image/jpeg');
+                } catch (e) {
+                    img.src = 'http://' + this.streamIp + ':5000/snapshot.jpg?t=' + Date.now();
+                }
+            } else {
+                this.reconnect();
+            }
         },
 
         toggleFullscreen() {
@@ -304,6 +326,7 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
         },
 
         onStreamError() {
+            if (this.isPaused) return;
             this.status = 'offline';
             // Automatically attempt reconnect after 3 seconds if disconnected
             if (!this.reconnectTimer) {

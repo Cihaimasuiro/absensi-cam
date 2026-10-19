@@ -9,7 +9,7 @@
 
 use std::time::{Duration, Instant};
 use tracing::info;
-use crate::FaceDetection;
+use crate::vision::FaceDetection;
 
 /// Default baseline constant for dark frame luma (provisional threshold for empirical data collection).
 pub const DEFAULT_DARK_LUMA_THRESHOLD: f32 = 40.0;

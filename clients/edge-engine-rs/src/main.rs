@@ -1,14 +1,15 @@
 use anyhow::Result;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use engine_core::{models::OutboxRecord, EdgeDb};
-use engine_server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
-use engine_hardware::{
+use smart_absensi_engine::{core, hardware, server, sync, vision};
+use core::{models::OutboxRecord, EdgeDb};
+use server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
+use hardware::{
     detect_rfid_device, ArduinoBridge, FramebufferDisplay, LinuxGpio, RfidTapEvent,
     SerialRfidReader, TftRleStreamer,
 };
-use engine_sync::SyncWorker;
-use engine_vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
+use sync::SyncWorker;
+use vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -326,7 +327,7 @@ async fn run_stream(
                 .ok()
                 .and_then(|v| v.parse::<f32>().ok())
         })
-        .unwrap_or(engine_vision::DEFAULT_PASS_MARGIN);
+        .unwrap_or(vision::DEFAULT_PASS_MARGIN);
 
     let confirm_frames = confirm_frames_opt
         .or_else(|| {
@@ -655,7 +656,7 @@ async fn run_stream(
 
         if let (Some(det_p), Some(rec_p)) = (detector_path, recognizer_path) {
             info!("Memuat model AI: Detector: {:?}, Recognizer: {:?}", det_p, rec_p);
-            match engine_vision::init_onnx_runtime(ort_path_opt.as_deref().map(Path::new)) {
+            match vision::init_onnx_runtime(ort_path_opt.as_deref().map(Path::new)) {
                 Err(e) => {
                     eprintln!("--------------------------------------------------");
                     eprintln!("[AI Vision] ONNX Runtime dylib tidak dapat dimuat: {:#}", e);
@@ -796,10 +797,10 @@ async fn run_stream(
 
                                          // Supresi spasial: Jika detektor mengeluarkan proposal ganda untuk wajah fisik yang sama,
                                          // pilih proposal dengan deteksi tertinggi dan buang proposal yang bertumpukan.
-                                         let mut sorted_faces: Vec<&engine_vision::FaceDetection> = faces.iter().collect();
+                                         let mut sorted_faces: Vec<&vision::FaceDetection> = faces.iter().collect();
                                          sorted_faces.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
-                                         let mut filtered_faces: Vec<&engine_vision::FaceDetection> = Vec::new();
+                                         let mut filtered_faces: Vec<&vision::FaceDetection> = Vec::new();
                                          for f in sorted_faces {
                                              let fcx = f.bbox[0] + f.bbox[2] / 2.0;
                                              let fcy = f.bbox[1] + f.bbox[3] / 2.0;
@@ -896,7 +897,7 @@ async fn run_stream(
                                              }
 
                                              // 3. Align wajah 112x112 NCHW
-                                             let aligned_tensor = match engine_vision::align_face_to_tensor_nchw(
+                                             let aligned_tensor = match vision::align_face_to_tensor_nchw(
                                                  &frame_rgb,
                                                  w as usize,
                                                  h as usize,
@@ -1148,7 +1149,7 @@ async fn run_stream(
         let has_physical_display = resolved_framebuffer.is_some() || resolved_arduino_stream;
         let mut last_tft_frame = Instant::now();
 
-        engine_vision::camera::linux::spawn_capture_thread_decoupled(
+        vision::camera::linux::spawn_capture_thread_decoupled(
             device,
             width,
             height,
@@ -1158,7 +1159,7 @@ async fn run_stream(
                 // 1. Publikasikan frame JPEG hasil encode ke HTTP streamer (FrameHub)
                 hub_clone.publish(Bytes::copy_from_slice(jpeg_bytes));
             },
-            Some(move |frame_bytes: &[u8], format: engine_vision::camera::PixelFormat, w: u32, h: u32| {
+            Some(move |frame_bytes: &[u8], format: vision::camera::PixelFormat, w: u32, h: u32| {
                 // Hitung true hardware capture FPS dari kamera
                 cam_frame_count += 1;
                 let elapsed = last_fps_time.elapsed();
@@ -1171,12 +1172,12 @@ async fn run_stream(
 
                 // 2. Berikan ke AI worker HANYA jika channel kosong (non-blocking)
                 let ai_frame = match format {
-                    engine_vision::camera::PixelFormat::Yuyv => AiFrame::Rgb {
+                    vision::camera::PixelFormat::Yuyv => AiFrame::Rgb {
                         data: Bytes::copy_from_slice(frame_bytes),
                         width: w,
                         height: h,
                     },
-                    engine_vision::camera::PixelFormat::Mjpeg => AiFrame::Jpeg {
+                    vision::camera::PixelFormat::Mjpeg => AiFrame::Jpeg {
                         data: Bytes::copy_from_slice(frame_bytes),
                         width: w,
                         height: h,
@@ -1189,7 +1190,7 @@ async fn run_stream(
 
                 // 1. Gambar status banner di pojok kiri atas (Uptime, Camera FPS, AI FPS)
                 if !state.status.is_empty() {
-                    engine_vision::draw_text(
+                    vision::draw_text(
                         rgb,
                         w as usize,
                         h as usize,
@@ -1203,11 +1204,11 @@ async fn run_stream(
 
                 for face in &state.faces {
                     let bbox = [face.x, face.y, face.width, face.height];
-                    let color = engine_vision::parse_hex_color(&face.color);
-                    engine_vision::draw_rect(rgb, w as usize, h as usize, &bbox, color, 2);
+                    let color = vision::parse_hex_color(&face.color);
+                    vision::draw_rect(rgb, w as usize, h as usize, &bbox, color, 2);
 
                     let score_y = (face.y + face.height - 24).max(0);
-                    engine_vision::draw_text(
+                    vision::draw_text(
                         rgb,
                         w as usize,
                         h as usize,
@@ -1219,7 +1220,7 @@ async fn run_stream(
                     );
 
                     let name_y = (face.y + face.height - 10).max(0);
-                    engine_vision::draw_text(
+                    vision::draw_text(
                         rgb,
                         w as usize,
                         h as usize,
@@ -1336,7 +1337,7 @@ async fn run_stream(
                                 let state = overlay_cam.latest();
 
                                 if !state.status.is_empty() {
-                                    engine_vision::draw_text(
+                                    vision::draw_text(
                                         &mut draw_buf,
                                         width as usize,
                                         height as usize,
@@ -1350,11 +1351,11 @@ async fn run_stream(
 
                                 for face in &state.faces {
                                     let bbox = [face.x, face.y, face.width, face.height];
-                                    let color = engine_vision::parse_hex_color(&face.color);
-                                    engine_vision::draw_rect(&mut draw_buf, width as usize, height as usize, &bbox, color, 2);
+                                    let color = vision::parse_hex_color(&face.color);
+                                    vision::draw_rect(&mut draw_buf, width as usize, height as usize, &bbox, color, 2);
 
                                     let score_y = (face.y + face.height - 24).max(0);
-                                    engine_vision::draw_text(
+                                    vision::draw_text(
                                         &mut draw_buf,
                                         width as usize,
                                         height as usize,
@@ -1366,7 +1367,7 @@ async fn run_stream(
                                     );
 
                                     let name_y = (face.y + face.height - 10).max(0);
-                                    engine_vision::draw_text(
+                                    vision::draw_text(
                                         &mut draw_buf,
                                         width as usize,
                                         height as usize,
@@ -1378,7 +1379,7 @@ async fn run_stream(
                                     );
                                 }
 
-                                if engine_vision::encode_rgb_to_jpeg_into(&draw_buf, width, height, 75, &mut jpeg_buf).is_ok() {
+                                if vision::encode_rgb_to_jpeg_into(&draw_buf, width, height, 75, &mut jpeg_buf).is_ok() {
                                     hub_cam.publish(Bytes::copy_from_slice(&jpeg_buf));
                                 }
 
@@ -1427,9 +1428,9 @@ async fn run_stream(
             info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
             let test_img_candidates = [
                 PathBuf::from("test_face.png"),
-                PathBuf::from("crates/engine-vision/test_face.png"),
-                PathBuf::from("../crates/engine-vision/test_face.png"),
-                PathBuf::from("clients/edge-engine-rs/crates/engine-vision/test_face.png"),
+                PathBuf::from("assets/test_face.png"),
+                PathBuf::from("clients/edge-engine-rs/assets/test_face.png"),
+                PathBuf::from("clients/edge-engine-rs/test_face.png"),
                 PathBuf::from("packages/models/test_face.png"),
             ];
 
@@ -1460,7 +1461,7 @@ async fn run_stream(
                     let mut last_fps_time = Instant::now();
 
                     while running_mock.load(Ordering::Relaxed) {
-                        if engine_vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
+                        if vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
                             let b = Bytes::copy_from_slice(&jpeg_buf);
                             hub_mock.publish(b);
                             tx_frame_clone.try_send(AiFrame::Rgb {
@@ -1488,7 +1489,7 @@ async fn run_stream(
 
     // Jalankan Axum HTTP stream server
     tokio::select! {
-        res = engine_server::start_stream_server(port, hub, overlay_hub) => {
+        res = server::start_stream_server(port, hub, overlay_hub) => {
             if let Err(e) = res {
                 error!("Stream server error: {:#}", e);
             }
@@ -1536,9 +1537,9 @@ async fn run_sync(
     };
 
     // Beritahu systemd bahwa daemon telah aktif (mencegah timeout saat menunggu persetujuan pairing)
-    engine_sync::notify_systemd("READY=1\n");
+    sync::notify_systemd("READY=1\n");
 
-    let (api_token, embed_key_b64) = engine_sync::ensure_authenticated_or_pair(
+    let (api_token, embed_key_b64) = sync::ensure_authenticated_or_pair(
         &api_url,
         &api_token_raw,
         embed_key_raw,
@@ -1558,7 +1559,7 @@ async fn run_sync(
     let worker = SyncWorker::new(db, api_url, api_token, embed_key_bytes, model_version)?;
 
     // Beritahu systemd bahwa daemon telah siap (Type=notify)
-    engine_sync::notify_systemd("READY=1\n");
+    sync::notify_systemd("READY=1\n");
 
     let worker_handle = tokio::spawn(async move {
         worker.run_loop().await;

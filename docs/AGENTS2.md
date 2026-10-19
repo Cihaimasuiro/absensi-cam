@@ -2,7 +2,7 @@
 
 > This document is the mandatory engineering guideline for AI coding agents and human developers working on **Edge Engine** components of this project:
 >
-> 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular workspace (`engine-core`, `engine-vision`, `engine-server`, `engine-sync`, `engine-hardware`, `engine-cli`).
+> 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular package (`src/core`, `src/vision`, `src/server`, `src/sync`, `src/hardware`, `src/main.rs`).
 > 2. **Reference / Tooling Prototype (`clients/edge-engine` & `packages/face_core`)**: Python components used for enrollment backend workers and offline benchmarking.
 >
 > The primary goals are:
@@ -17,13 +17,14 @@
 
 # Part 0: Native Rust Production Edge Guidelines (`clients/edge-engine-rs`)
 
-## 0.1 Architecture & Modular Workspace
-`clients/edge-engine-rs` is organized as a Cargo workspace with strict separation of concerns:
-- `crates/engine-core`: Data models (`OutboxRecord`, `Template`), SQLite WAL database (`EdgeDb`), and AES-256-GCM template decryption.
-- `crates/engine-vision`: Pure libc V4L2 camera capture, zero-copy YUYV-to-RGB conversion, ONNX Runtime wrappers (`FaceDetector` YuNet, `FaceRecognizer` ArcFace/SFace, `LivenessDetector` MiniFASNet), and vector overlay graphics.
-- `crates/engine-server`: Async `axum` HTTP streamer (`/stream`), snapshot endpoint (`/snapshot.jpg`), and SSE vector canvas event publisher (`/events`).
-- `crates/engine-sync`: Standalone outbox sync worker communicating idempotently with Laravel REST API (`/api/v1/attendance/batch`).
-- `crates/engine-cli`: Unified binary entrypoint (`smart-absensi-sync` with subcommands `stream` and `sync`).
+## 0.1 Architecture & Modular Structure
+`clients/edge-engine-rs` is organized as a unified Cargo package with strict modular separation under `src/`:
+- `src/core`: Data models (`OutboxRecord`, `Template`), SQLite WAL database (`EdgeDb`), and AES-256-GCM template decryption.
+- `src/vision`: Pure libc V4L2 camera capture, zero-copy YUYV-to-RGB conversion, ONNX Runtime wrappers (`FaceDetector` YuNet, `FaceRecognizer` ArcFace/SFace, `LivenessDetector` MiniFASNet), and vector overlay graphics.
+- `src/server`: Async `axum` HTTP streamer (`/stream`), snapshot endpoint (`/snapshot.jpg`), and SSE vector canvas event publisher (`/events`).
+- `src/sync`: Standalone outbox sync worker communicating idempotently with Laravel REST API (`/api/v1/attendance/batch`).
+- `src/hardware`: RFID serial readers, Arduino bridge, GPIO control, and framebuffer display.
+- `src/main.rs`: Unified binary entrypoint (`engine-cli` / `smart-absensi-sync` with subcommands `stream` and `sync`).
 
 ## 0.2 Hardware & Thermal Pacing Rules (Allwinner H6 / Cortex-A53)
 1. **Single-Threaded ONNX Runtime**: Always set `.with_intra_threads(1)` for all ONNX sessions. On a 4-core Cortex-A53, multi-threaded ONNX creates severe thread contention with camera capture and web streaming, causing thermal throttling.

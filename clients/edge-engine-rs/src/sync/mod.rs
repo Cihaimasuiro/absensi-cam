@@ -3,7 +3,7 @@
 #![allow(clippy::manual_is_multiple_of)]
 
 use anyhow::{Context, Result};
-use engine_core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload, OutboxRecord};
+use crate::core::{AttendanceBatchPayload, AttendancePayloadRecord, EdgeDb, HeartbeatPayload, OutboxRecord};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::path::Path;

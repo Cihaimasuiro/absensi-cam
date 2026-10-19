@@ -1,4 +1,4 @@
-use engine_vision::{
+use smart_absensi_engine::vision::{
     align_face_to_tensor_nchw, init_onnx_runtime, FaceDetector, FaceRecognizer, LivenessDetector,
 };
 use std::path::PathBuf;
@@ -6,8 +6,11 @@ use std::path::PathBuf;
 fn find_model(names: &[&str]) -> Option<PathBuf> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dirs = [
+        manifest.join("../../packages/models"),
         manifest.join("../../../packages/models"),
+        manifest.join("target/aarch64-unknown-linux-gnu/release"),
         manifest.join("../../target/aarch64-unknown-linux-gnu/release"),
+        manifest.join("../../archive/edge-engine-py/models"),
         manifest.join("../../../archive/edge-engine-py/models"),
     ];
 

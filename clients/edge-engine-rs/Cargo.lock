@@ -684,104 +684,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
-name = "engine-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "clap",
- "dotenvy",
- "engine-core",
- "engine-hardware",
- "engine-server",
- "engine-sync",
- "engine-vision",
- "image",
- "serialport",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "engine-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "libsql",
- "libsql-sys",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "engine-hardware"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "libc",
- "serde",
- "serde_json",
- "serialport",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "engine-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "bytes",
- "futures-util",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
-name = "engine-sync"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "engine-core",
- "libc",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "engine-vision"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "image",
- "libc",
- "nalgebra",
- "ndarray 0.15.6",
- "ort",
- "rustfft",
- "tracing",
-]
-
-[[package]]
 name = "equator"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2706,6 +2608,40 @@ name = "smallvec"
 version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+
+[[package]]
+name = "smart-absensi-engine"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "futures-util",
+ "image",
+ "libc",
+ "libsql",
+ "libsql-sys",
+ "nalgebra",
+ "ndarray 0.15.6",
+ "ort",
+ "reqwest",
+ "rustfft",
+ "serde",
+ "serde_json",
+ "serialport",
+ "sha2",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
 
 [[package]]
 name = "socket2"

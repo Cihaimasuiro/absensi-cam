@@ -1,28 +1,66 @@
-[workspace]
-members = [
-    "crates/engine-core",
-    "crates/engine-sync",
-    "crates/engine-hardware",
-    "crates/engine-vision",
-    "crates/engine-server",
-    "crates/engine-cli",
-]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "smart-absensi-engine"
 version = "0.1.0"
 edition = "2021"
 authors = ["Smart Absensi Team"]
 license = "MIT"
 
-[workspace.dependencies]
+[lib]
+name = "smart_absensi_engine"
+path = "src/lib.rs"
+
+[[bin]]
+name = "engine-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "smart-absensi-sync"
+path = "src/bin/smart_absensi_sync.rs"
+
+[[bin]]
+name = "serial_bench"
+path = "src/bin/serial_bench.rs"
+
+[dependencies]
+# Async & Networking
 tokio = { version = "1.38", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+axum = "0.7"
+bytes = "1.0"
+
+# Serialization & Utils
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
 anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
+sha2 = "0.10"
+dotenvy = "0.15"
+clap = { version = "4.5", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Database & Crypto
+libsql = { version = "0.6", default-features = false, features = ["core"] }
+libsql-sys = { version = "0.8", default-features = false, features = ["rusqlite"] }
+aes-gcm = "0.10"
+
+# Vision & AI
+image = "0.25"
+nalgebra = "0.33"
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "api-24", "ndarray", "std"] }
+ndarray = "0.15"
+rustfft = "6.2"
+
+# Hardware
+libc = "0.2"
+serialport = { version = "4.5", default-features = false }
 
 [profile.release]
 opt-level = 3

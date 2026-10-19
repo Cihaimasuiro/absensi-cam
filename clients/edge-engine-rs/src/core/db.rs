@@ -7,7 +7,7 @@ use libsql::{Builder, Connection, Database};
 use std::path::Path;
 use tracing::info;
 
-use crate::models::{OutboxRecord, TemplateRecord};
+use crate::core::models::{OutboxRecord, TemplateRecord};
 
 pub struct EdgeDb {
     pub db: Database,

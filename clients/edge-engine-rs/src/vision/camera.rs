@@ -20,7 +20,7 @@ pub mod linux {
     use std::sync::Arc;
     use std::time::Duration;
     use tracing::{error, info, warn};
-    use crate::{encode_rgb_to_jpeg_into, yuyv_to_rgb_stride};
+    use crate::vision::{encode_rgb_to_jpeg_into, yuyv_to_rgb_stride};
     pub use super::PixelFormat;
 
     // ── V4L2 Constants ──────────────────────────────────────────────────────────

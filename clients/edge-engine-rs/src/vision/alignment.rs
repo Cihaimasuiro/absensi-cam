@@ -1,4 +1,4 @@
-use crate::recognizer::REFERENCE_POINTS;
+use crate::vision::recognizer::REFERENCE_POINTS;
 
 /// Compute 2D similarity transformation matrix (2x3) using Umeyama algorithm.
 /// Maps source landmarks to reference points.

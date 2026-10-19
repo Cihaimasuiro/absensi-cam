@@ -1272,24 +1272,27 @@ async fn run_stream(
 
         let py_script = format!(
             "import cv2, sys\n\
-             cap = cv2.VideoCapture({}, cv2.CAP_DSHOW)\n\
-             cap.set(cv2.CAP_PROP_FRAME_WIDTH, {})\n\
-             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, {})\n\
-             if not cap.isOpened(): sys.exit(1)\n\
-             while True:\n\
-                 ret, frame = cap.read()\n\
-                 if not ret: break\n\
-                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n\
-                 sys.stdout.buffer.write(rgb.tobytes())\n\
-                 sys.stdout.buffer.flush()\n\
-             cap.release()",
+cap = cv2.VideoCapture({0}, cv2.CAP_DSHOW)\n\
+if not cap.isOpened(): cap = cv2.VideoCapture({0})\n\
+if not cap.isOpened(): sys.exit(1)\n\
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, {1})\n\
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, {2})\n\
+while True:\n\
+\x20   ret, frame = cap.read()\n\
+\x20   if not ret: break\n\
+\x20   if frame.shape[1] != {1} or frame.shape[0] != {2}:\n\
+\x20       frame = cv2.resize(frame, ({1}, {2}))\n\
+\x20   rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n\
+\x20   sys.stdout.buffer.write(rgb.tobytes())\n\
+\x20   sys.stdout.buffer.flush()\n\
+cap.release()",
             cam_idx, width, height
         );
 
         let spawned_cam = std::process::Command::new("python")
             .args(["-c", &py_script])
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .spawn();
 
         let mut webcam_active = false;
@@ -1418,6 +1421,13 @@ async fn run_stream(
                         })
                         .expect("Failed to spawn windows webcam feeder thread");
                 } else {
+                    if let Some(mut stderr) = child.stderr.take() {
+                        let mut err_msg = String::new();
+                        let _ = stderr.read_to_string(&mut err_msg);
+                        if !err_msg.trim().is_empty() {
+                            warn!("Webcam script stderr: {}", err_msg.trim());
+                        }
+                    }
                     warn!("Webcam fisik tidak merespons frame pertama, beralih ke simulated camera feeder.");
                     let _ = child.kill();
                 }
@@ -1434,7 +1444,8 @@ async fn run_stream(
                 PathBuf::from("packages/models/test_face.png"),
             ];
 
-            let mut base_rgb = vec![128u8; (width * height * 3) as usize];
+            let mut base_rgb = vec![30u8; (width * height * 3) as usize];
+            let mut img_loaded = false;
             for cand in &test_img_candidates {
                 if cand.exists() {
                     if let Ok(dyn_img) = image::open(cand) {
@@ -1447,25 +1458,66 @@ async fn run_stream(
                             image::imageops::FilterType::Triangle,
                         );
                         base_rgb = resized.into_raw();
+                        img_loaded = true;
                         break;
                     }
                 }
             }
 
+            if !img_loaded {
+                vision::draw_text(
+                    &mut base_rgb,
+                    width as usize,
+                    height as usize,
+                    20,
+                    20,
+                    "[SIMULATED CAMERA - NO PHYSICAL WEBCAM DETECTED]",
+                    (245, 158, 11),
+                    Some((0, 0, 0)),
+                );
+                vision::draw_text(
+                    &mut base_rgb,
+                    width as usize,
+                    height as usize,
+                    20,
+                    50,
+                    "Pasang webcam USB atau tambahkan test_face.png",
+                    (148, 163, 184),
+                    Some((0, 0, 0)),
+                );
+            }
+
+            let overlay_mock_feeder = overlay_hub_draw.clone();
             std::thread::Builder::new()
                 .name("mock-camera-feeder".to_string())
                 .spawn(move || {
                     info!("Simulated camera feeder thread aktif (30 FPS).");
+                    let mut draw_buf = vec![0u8; (width * height * 3) as usize];
                     let mut jpeg_buf = Vec::with_capacity((width * height / 4) as usize);
                     let mut frame_count: u32 = 0;
                     let mut last_fps_time = Instant::now();
 
                     while running_mock.load(Ordering::Relaxed) {
-                        if vision::encode_rgb_to_jpeg_into(&base_rgb, width, height, 80, &mut jpeg_buf).is_ok() {
+                        draw_buf.copy_from_slice(&base_rgb);
+                        let state = overlay_mock_feeder.latest();
+                        if !state.status.is_empty() {
+                            vision::draw_text(
+                                &mut draw_buf,
+                                width as usize,
+                                height as usize,
+                                20,
+                                height as i32 - 30,
+                                &state.status,
+                                (56, 189, 248),
+                                Some((0, 0, 0)),
+                            );
+                        }
+
+                        if vision::encode_rgb_to_jpeg_into(&draw_buf, width, height, 80, &mut jpeg_buf).is_ok() {
                             let b = Bytes::copy_from_slice(&jpeg_buf);
                             hub_mock.publish(b);
                             tx_frame_clone.try_send(AiFrame::Rgb {
-                                data: Bytes::copy_from_slice(&base_rgb),
+                                data: Bytes::copy_from_slice(&draw_buf),
                                 width,
                                 height,
                             }).ok();

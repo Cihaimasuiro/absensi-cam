@@ -220,17 +220,27 @@ async fn events_handler(State(state): State<AppState>) -> impl IntoResponse {
     )
 }
 
+pub mod control;
+pub use control::{register_control_routes, ControlState, ServerConfig};
+
 pub async fn start_stream_server(
     port: u16,
     hub: FrameHub,
     overlay_hub: OverlayHub,
+    config: ServerConfig,
 ) -> anyhow::Result<()> {
     let state = AppState {
         frame_hub: hub,
         overlay_hub,
     };
 
-    let app = Router::new()
+    let control_state = ControlState {
+        app_state: state.clone(),
+        config,
+        sessions: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashSet::new())),
+    };
+
+    let stream_routes = Router::new()
         .route("/", get(stream_handler))
         .route("/stream", get(stream_handler))
         .route("/snapshot.jpg", get(snapshot_handler))
@@ -239,8 +249,12 @@ pub async fn start_stream_server(
         .route("/events", get(events_handler))
         .with_state(state);
 
+    let control_routes = register_control_routes(Router::new()).with_state(control_state);
+
+    let app = stream_routes.merge(control_routes);
+
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("MJPEG Stream server aktif di http://{}", addr);
+    info!("MJPEG Stream & Control server aktif di http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

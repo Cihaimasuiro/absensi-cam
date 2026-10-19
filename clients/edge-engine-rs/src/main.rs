@@ -527,6 +527,7 @@ async fn run_stream(
         });
 
     let model_version = model_version_opt
+        .clone()
         .or_else(|| env::var("MODEL_VERSION").ok())
         .unwrap_or_else(|| "3d9f1f77896fb3d1".to_string());
 
@@ -1569,9 +1570,18 @@ cap.release()",
         }
     }
 
-    // Jalankan Axum HTTP stream server
+    // Jalankan Axum HTTP stream & control server
+    let server_config = server::ServerConfig {
+        db_path: db_path.clone(),
+        camera_device: device.clone(),
+        width,
+        height,
+        model_version: model_version.clone(),
+        start_time: Instant::now(),
+    };
+
     tokio::select! {
-        res = server::start_stream_server(port, hub, overlay_hub) => {
+        res = server::start_stream_server(port, hub, overlay_hub, server_config) => {
             if let Err(e) = res {
                 error!("Stream server error: {:#}", e);
             }

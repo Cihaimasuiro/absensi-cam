@@ -54,6 +54,47 @@
    ```
 2. Dynamic ONNX Runtime binding: The binary expects `libonnxruntime.so` on the device (configured via `ORT_DYLIB_PATH` or `/opt/smart-absensi/edge-engine/libonnxruntime.so.1.18.0`).
 
+## 0.6 Read-Only RootFS & Flash Wear Prevention Hardening
+1. **Volatile Logs & Temporary Buffers in RAM (`tmpfs`)**:
+   - `/tmp`, `/var/tmp`, and `/var/log` must be mounted as `tmpfs` in `/etc/fstab`:
+     ```fstab
+     tmpfs /tmp     tmpfs defaults,noatime,nosuid,nodev,size=256M 0 0
+     tmpfs /var/tmp tmpfs defaults,noatime,nosuid,nodev,size=64M  0 0
+     tmpfs /var/log tmpfs defaults,noatime,nosuid,nodev,size=64M  0 0
+     ```
+   - **Systemd Journald**: Configured to `Storage=volatile` (`/etc/systemd/journald.conf.d/00-volatile.conf`) with `RuntimeMaxUse=32M`.
+   - **Zero Disk Writes for Video & MJPEG**: V4L2 camera frames, JPEG encoding, face crops, and streaming broadcast buffers reside 100% in RAM via Rust channels (`tokio::sync::broadcast`). No intermediate image or snapshot files are ever written to the physical storage card.
+
+2. **Read-Only RootFS with OverlayFS (`overlayroot`)**:
+   - The base OS root partition (`/`) is mounted read-only (`ro`).
+   - `overlayroot` (`apt-get install overlayroot`) mounts an `overlayfs` layer on top of root with a `tmpfs` upperdir (`overlayroot="tmpfs:swap=0,recurse=0"`).
+   - Stray file modifications or sudden power cuts can never damage or dirty the root filesystem.
+   - Maintenance operations (e.g. system upgrades or new engine binaries) use `edge-rw` (`overlayroot-chroot`).
+
+3. **Isolated Persistent Data Partition (`/data`)**:
+   - Dedicated writable partition formatted as `ext4` (with `commit=60,noatime,nodiratime,errors=remount-ro`) or `f2fs` (Flash-Friendly File System).
+   - Mount options eliminate 90%+ flash write cycles:
+     - `noatime,nodiratime`: Disables filesystem access time stamp updates on read operations.
+     - `commit=60`: Extends ext4 journal sync interval from 5s to 60s, drastically reducing flash write amplification.
+   - **Dynamic State Directory Layout**:
+     - Database: `/data/absensi.db` (SQLite WAL mode + `PRAGMA temp_store=MEMORY;`).
+     - Models: `/data/models/` (YuNet, ArcFace, MiniFASNet ONNX files).
+     - Credentials: `/data/config/.env`.
+
+4. **SQLite Flash Endurance Tuning**:
+   - Always enforce in `EdgeDb::init`:
+     ```sql
+     PRAGMA journal_mode = WAL;
+     PRAGMA synchronous = NORMAL;
+     PRAGMA busy_timeout = 5000;
+     PRAGMA temp_store = MEMORY;
+     ```
+   - `synchronous = NORMAL` ensures atomic outbox transaction durability across power loss without issuing redundant flash syncs on every single insert.
+   - `temp_store = MEMORY` prevents SQLite from writing intermediate query sorting or temporary indexes to the storage medium.
+
+5. **Sandboxed Systemd Services**:
+   - Production systemd units enforce `ProtectSystem=strict`, `ProtectHome=true`, and restrict write capabilities exclusively to `ReadWritePaths=/data /tmp`.
+
 ---
 
 # Part 1: Python Engineering Guidelines (Reference / Tooling)

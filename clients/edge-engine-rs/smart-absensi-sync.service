@@ -9,16 +9,17 @@ NotifyAccess=main
 User=edge
 Group=edge
 WorkingDirectory=/opt/smart-absensi/edge-engine
-ExecStart=/usr/local/bin/smart-absensi-sync --db /opt/smart-absensi/edge-engine/local_edge.db
+ExecStart=/usr/local/bin/smart-absensi-sync --db /data/absensi.db
 Restart=always
 RestartSec=5
 WatchdogSec=60
-EnvironmentFile=/opt/smart-absensi/edge-engine/.env
+EnvironmentFile=/data/config/.env
 
-# Security Hardening
+# Security Hardening & Sandboxing for Read-Only RootFS
 NoNewPrivileges=true
-ProtectSystem=full
-ReadWritePaths=/opt/smart-absensi/edge-engine
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/data /tmp
 
 [Install]
 WantedBy=multi-user.target

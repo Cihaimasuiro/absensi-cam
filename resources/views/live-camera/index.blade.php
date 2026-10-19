@@ -102,12 +102,6 @@
             {{-- Surveillance Bezel Display --}}
             <div class="relative w-full h-full max-w-full rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
                 
-                <div class="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-slate-900/85 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-slate-400 pointer-events-none select-none">
-                    <span x-text="'HOST: ' + streamIp"></span>
-                    <span class="text-slate-600">•</span>
-                    <span class="text-slate-300">MJPEG</span>
-                </div>
-
                 {{-- Offline / Connecting Standby Display --}}
                 <div x-show="status !== 'online'"
                      class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-4 p-6 bg-slate-950/95 z-20 text-center select-none">

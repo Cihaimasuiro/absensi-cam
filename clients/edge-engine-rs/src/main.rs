@@ -149,12 +149,31 @@ enum Commands {
         #[arg(long)]
         gpio_buzzer: Option<u32>,
     },
+
+    /// Audit flash storage health, tmpfs RAM mounts, read-only status, and database durability
+    Doctor,
+
+    /// Provision Read-Only RootFS (OverlayFS), tmpfs RAM mounts, and persistent /data partition
+    HardenStorage {
+        #[arg(long, default_value = "/data")]
+        data_mount: String,
+
+        #[arg(long)]
+        partition: Option<String>,
+
+        #[arg(long, default_value = "ext4")]
+        fs_type: String,
+
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Muat file .env jika ada (cek CWD, lalu fallback ke /opt/smart-absensi/edge-engine/.env)
+    // 1. Muat file .env jika ada (cek CWD, lalu fallback ke /data/config/.env, lalu /opt/smart-absensi/edge-engine/.env)
     dotenvy::dotenv().ok();
+    dotenvy::from_path("/data/config/.env").ok();
     dotenvy::from_path("/opt/smart-absensi/edge-engine/.env").ok();
 
     // 2. Inisialisasi logging
@@ -224,6 +243,17 @@ async fn main() -> Result<()> {
             model_version,
         }) => {
             run_sync(db, api_url, api_token, embed_key, model_version).await?;
+        }
+        Some(Commands::Doctor) => {
+            core::run_doctor()?;
+        }
+        Some(Commands::HardenStorage {
+            data_mount,
+            partition,
+            fs_type,
+            dry_run,
+        }) => {
+            core::harden_storage(&data_mount, partition.as_deref(), &fs_type, dry_run)?;
         }
         None => {
             // Default: run sync using top-level flags (for backward-compatible systemd service)

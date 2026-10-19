@@ -8,10 +8,16 @@ User=edge
 Group=edge
 SupplementaryGroups=video
 WorkingDirectory=/opt/smart-absensi/edge-engine
-EnvironmentFile=/opt/smart-absensi/edge-engine/.env
-ExecStart=/usr/local/bin/smart-absensi-sync stream --device /dev/video0 --port 5000 --db /opt/smart-absensi/edge-engine/local_edge.db
+EnvironmentFile=/data/config/.env
+ExecStart=/usr/local/bin/smart-absensi-sync stream --device /dev/video0 --port 5000 --db /data/absensi.db --models-dir /data/models
 Restart=always
 RestartSec=5
+
+# Read-Only RootFS Sandboxing: only /data and /tmp are writable
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/data /tmp
 
 [Install]
 WantedBy=multi-user.target

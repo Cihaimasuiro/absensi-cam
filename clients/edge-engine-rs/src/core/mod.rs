@@ -2,6 +2,8 @@
 
 pub mod db;
 pub mod models;
+pub mod storage;
 
 pub use db::EdgeDb;
 pub use models::*;
+pub use storage::{check_storage_health, harden_storage, run_doctor, StorageDoctorReport};

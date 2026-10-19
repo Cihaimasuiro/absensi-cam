@@ -53,12 +53,10 @@
                 <span>HOST:</span>
                 <strong class="text-primary font-semibold" x-text="streamIp + ':5000'"></strong>
             </span>
-            <div class="h-3 w-px bg-slate-200 shrink-0"></div>
             <span class="flex items-center gap-1">
                 <span>HADIR HARI INI:</span>
                 <strong class="text-emerald-600 font-semibold" x-text="presentCount + ' Siswa'"></strong>
             </span>
-            <div class="h-3 w-px bg-slate-200 shrink-0"></div>
             <span class="flex items-center gap-1">
                 <span>WAKTU:</span>
                 <strong class="text-ink font-semibold" x-text="currentTime"></strong>
@@ -116,19 +114,21 @@
                     <div class="w-14 h-14 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shadow-sm shrink-0">
                         <i data-lucide="video-off" class="w-6 h-6 opacity-60"></i>
                     </div>
-                    <div class="flex flex-col items-center text-center gap-1.5 w-full max-w-md px-4">
-                        <h3 class="text-sm sm:text-base font-semibold text-slate-100 text-center whitespace-normal leading-snug"
+
+                    <div class="w-full max-w-[420px] px-4 mx-auto flex flex-col items-center text-center gap-2">
+                        <h3 class="text-sm sm:text-base font-semibold text-slate-100 whitespace-nowrap text-center"
                             x-text="status === 'connecting' ? 'Menghubungkan ke Kamera Edge...' : 'Kamera Gerbang Belum Terhubung'">
                         </h3>
-                        <p class="text-xs font-mono text-slate-400 text-center break-all leading-relaxed"
+                        <p class="text-xs font-mono text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-center"
                            x-text="'Mencoba terhubung ke http://' + streamIp + ':5000/stream'">
                         </p>
                     </div>
+
                     <button type="button"
                             @click="reconnect()"
-                            class="px-4 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center gap-2 cursor-pointer shadow-sm">
+                            class="mt-2 px-4 py-2 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center gap-2 cursor-pointer shadow-sm whitespace-nowrap">
                         <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': isRefreshing}"></i>
-                        <span class="whitespace-nowrap">Hubungkan Ulang</span>
+                        <span>Hubungkan Ulang</span>
                     </button>
                 </div>
 
@@ -141,8 +141,9 @@
                      x-on:load="onStreamLoad()"
                      x-on:error="onStreamError()">
 
-                {{-- Floating Control Dock --}}
-                <nav class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md border border-hairline shadow-lg rounded-full px-3 py-1.5 flex items-center gap-2 z-20 transition-all hover:bg-white">
+                {{-- Floating Control Dock (Visible only when live stream is active) --}}
+                <nav x-show="status === 'online'"
+                     class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md border border-hairline shadow-lg rounded-full px-3 py-1.5 flex items-center gap-2 z-20 transition-all hover:bg-white">
                     <button type="button"
                             @click="togglePause()"
                             class="px-2.5 py-1 text-xs font-medium rounded-full transition-colors flex items-center gap-1.5 cursor-pointer border border-hairline"

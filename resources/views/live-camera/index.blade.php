@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Smart Absensi — Live Gate Monitor')
+@section('title', 'Smart Absensi')
 
 @section('content')
 <script id="recent-logs-data" type="application/json">@json($recentLogs)</script>
@@ -10,12 +10,6 @@
         
         {{-- Left Cluster: Brand, Status, and Constrained Device Selector --}}
         <div class="flex items-center gap-2.5 shrink-0 min-w-0">
-            <div class="flex items-center gap-2 shrink-0">
-                <span class="text-[13px] font-bold tracking-tight text-ink whitespace-nowrap">Gate Monitor</span>
-                <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-ink-muted border border-hairline whitespace-nowrap">CCTV</span>
-            </div>
-
-            <div class="h-4 w-px bg-slate-200 shrink-0"></div>
 
             {{-- Status Indicator Pill --}}
             <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors"
@@ -110,14 +104,6 @@
             {{-- Surveillance Bezel Display --}}
             <div class="relative w-full h-full max-w-full rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm flex items-center justify-center">
                 
-                {{-- Corner HUD Telemetry Overlays --}}
-                <div class="absolute top-3 left-3 z-10 flex items-center gap-2 px-2.5 py-1 rounded bg-slate-900/85 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-slate-300 pointer-events-none select-none">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="font-bold tracking-wider uppercase text-emerald-400">LIVE</span>
-                    <span class="text-slate-500">•</span>
-                    <span x-text="'GERBANG 01'"></span>
-                </div>
-
                 <div class="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded bg-slate-900/85 backdrop-blur-md border border-slate-800 text-[11px] font-mono text-slate-400 pointer-events-none select-none">
                     <span x-text="'HOST: ' + streamIp"></span>
                     <span class="text-slate-600">•</span>
@@ -126,23 +112,23 @@
 
                 {{-- Offline / Connecting Standby Display --}}
                 <div x-show="status !== 'online'"
-                     class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 p-6 text-center bg-slate-950/95 z-20">
-                    <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shadow-sm">
+                     class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-4 p-6 bg-slate-950/95 z-20 text-center select-none">
+                    <div class="w-14 h-14 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shadow-sm shrink-0">
                         <i data-lucide="video-off" class="w-6 h-6 opacity-60"></i>
                     </div>
-                    <div class="flex flex-col gap-1 max-w-sm">
-                        <span class="text-sm font-semibold text-slate-200"
-                              x-text="status === 'connecting' ? 'Menghubungkan ke Kamera Edge...' : 'Kamera Gerbang Belum Terhubung'">
-                        </span>
-                        <span class="text-xs font-mono text-slate-500"
-                              x-text="'Mencoba terhubung ke http://' + streamIp + ':5000/stream'">
-                        </span>
+                    <div class="flex flex-col items-center text-center gap-1.5 w-full max-w-md px-4">
+                        <h3 class="text-sm sm:text-base font-semibold text-slate-100 text-center whitespace-normal leading-snug"
+                            x-text="status === 'connecting' ? 'Menghubungkan ke Kamera Edge...' : 'Kamera Gerbang Belum Terhubung'">
+                        </h3>
+                        <p class="text-xs font-mono text-slate-400 text-center break-all leading-relaxed"
+                           x-text="'Mencoba terhubung ke http://' + streamIp + ':5000/stream'">
+                        </p>
                     </div>
                     <button type="button"
                             @click="reconnect()"
-                            class="mt-2 px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs">
+                            class="px-4 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center gap-2 cursor-pointer shadow-sm">
                         <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': isRefreshing}"></i>
-                        <span>Hubungkan Ulang</span>
+                        <span class="whitespace-nowrap">Hubungkan Ulang</span>
                     </button>
                 </div>
 

@@ -592,7 +592,7 @@ async fn run_stream(
                     let utc_captured_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
                     let att_uuid = uuid::Uuid::new_v4().to_string();
 
-                    info!("💳 [PRESENSI RFID DITERIMA] {} (ID: {})", name, sid);
+                    info!("[PRESENSI RFID DITERIMA] {} (ID: {})", name, sid);
 
                     // Beri feedback audio/visual ke hardware
                     gpio_rfid.trigger_success();
@@ -750,7 +750,7 @@ async fn run_stream(
                                                                 if let Ok(mut lock) = holder_reload.write() {
                                                                     *lock = Arc::new(fresh);
                                                                     *tracker_reload.lock().unwrap() = new_sig;
-                                                                    info!("🔄 [TEMPLATES HOT-RELOAD] Database wajah di RAM berhasil diperbarui dari SQLite: {} template aktif (signature: count={}, max_version={}).", count, new_sig.0, new_sig.1);
+                                                                    info!("[TEMPLATES HOT-RELOAD] Database wajah di RAM berhasil diperbarui dari SQLite: {} template aktif (signature: count={}, max_version={}).", count, new_sig.0, new_sig.1);
                                                                 }
                                                             }
                                                             Err(e) => {
@@ -854,7 +854,7 @@ async fn run_stream(
                                                          is_real = res.is_real;
                                                          if !res.is_real {
                                                              println!(
-                                                                 "⚠️ [SPOOF DITOLAK] Wajah ditolak liveness: margin={:+.2} (prob={:.2}, ambang={:.2})",
+                                                                 "[SPOOF DITOLAK] Wajah ditolak liveness: margin={:+.2} (prob={:.2}, ambang={:.2})",
                                                                  res.logit_diff, res.prob_real, liveness.pass_margin
                                                              );
                                                          }
@@ -877,7 +877,7 @@ async fn run_stream(
                                                      let dist = ((cx - track.last_center.0).powi(2) + (cy - track.last_center.1).powi(2)).sqrt();
                                                      if dist < 150.0 && track.consecutive_frames > 0 {
                                                          println!(
-                                                             "🚫 [VETO SPOOF] Spoof terdeteksi di ({:.0}, {:.0})! Reset konfirmasi siswa {} (sebelumnya {}/{} frame)",
+                                                             "[VETO SPOOF] Spoof terdeteksi di ({:.0}, {:.0})! Reset konfirmasi siswa {} (sebelumnya {}/{} frame)",
                                                              cx, cy, sid, track.consecutive_frames, confirm_frames_ai
                                                          );
                                                          track.consecutive_frames = 0;
@@ -956,7 +956,7 @@ async fn run_stream(
                                              let best_student = if is_ambiguous {
                                                  if let (Some((id1, name1, sim1)), Some((id2, name2, sim2))) = (top_1, top_2) {
                                                      println!(
-                                                         "⚠️ [IDENTITAS AMBIGU] Wajah cocok dengan 2 identitas: {} ({}) sim={:.2} vs {} ({}) sim={:.2} | Selisih {:.3} < margin {:.3}. Menolak absensi.",
+                                                         "[IDENTITAS AMBIGU] Wajah cocok dengan 2 identitas: {} ({}) sim={:.2} vs {} ({}) sim={:.2} | Selisih {:.3} < margin {:.3}. Menolak absensi.",
                                                          name1, id1, sim1, name2, id2, sim2, sim1 - sim2, ambiguity_margin_ai
                                                      );
                                                  }
@@ -1024,7 +1024,7 @@ async fn run_stream(
                                                          let att_uuid = uuid::Uuid::new_v4().to_string();
 
                                                          println!(
-                                                             "🎯 [ABSENSI TERCATAT] {} (ID: {}) | Kemiripan: {:.1}% | Liveness Margin: {:+.2} (prob: {:.2}) | Terkonfirmasi {} frame",
+                                                             "[ABSENSI TERCATAT] {} (ID: {}) | Kemiripan: {:.1}% | Liveness Margin: {:+.2} (prob: {:.2}) | Terkonfirmasi {} frame",
                                                              name, student_id, score * 100.0, logit_margin, liveness_prob, confirm_frames_ai
                                                          );
 

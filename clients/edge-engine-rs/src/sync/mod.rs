@@ -392,7 +392,7 @@ impl SyncWorker {
             warn!("Heartbeat gagal (HTTP {}): {}", status, body);
         } else if let Ok(hb_resp) = resp.json::<serde_json::Value>().await {
             if hb_resp.get("action").and_then(|v| v.as_str()) == Some("reconcile_templates") {
-                info!("⚠️ [REKONSILIASI] Server mendeteksi perbedaan checksum template. Memulai sinkronisasi snapshot jaring pengaman.");
+                info!("[REKONSILIASI] Server mendeteksi perbedaan checksum template. Memulai sinkronisasi snapshot jaring pengaman.");
                 if let Err(e) = self.reconcile_templates().await {
                     error!("Gagal rekonsiliasi templates: {:#}", e);
                 }
@@ -423,14 +423,14 @@ impl SyncWorker {
         let valid_ids: Vec<String> = match valid_ids_arr {
             Some(arr) => arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect(),
             None => {
-                warn!("🛑 [SAFETY GUARD] Respon snapshot server tidak valid. Membatalkan rekonsiliasi.");
+                warn!("[SAFETY GUARD] Respon snapshot server tidak valid. Membatalkan rekonsiliasi.");
                 return Ok(());
             }
         };
 
         // SAFETY GUARD 1: Tolak pembersihan jika server mengembalikan daftar kosong
         if valid_ids.is_empty() {
-            warn!("🛑 [SAFETY GUARD] Server mengembalikan 0 template aktif. Pembersihan dibatalkan demi keamanan terminal.");
+            warn!("[SAFETY GUARD] Server mengembalikan 0 template aktif. Pembersihan dibatalkan demi keamanan terminal.");
             return Ok(());
         }
 
@@ -443,7 +443,7 @@ impl SyncWorker {
 
             if (delete_count * 100) / local_count > 30 {
                 warn!(
-                    "🛑 [SAFETY GUARD] Rekonsiliasi dibatalkan: Jumlah template yang akan dihapus ({} dari {} = {}%) melebihi ambang batas keamanan 30%. Memerlukan peninjauan admin.",
+                    "[SAFETY GUARD] Rekonsiliasi dibatalkan: Jumlah template yang akan dihapus ({} dari {} = {}%) melebihi ambang batas keamanan 30%. Memerlukan peninjauan admin.",
                     delete_count, local_count, (delete_count * 100) / local_count
                 );
                 return Ok(());
@@ -452,15 +452,15 @@ impl SyncWorker {
 
         let purged = self.db.purge_unlisted_templates(&valid_ids).await?;
         if purged > 0 {
-            info!("✅ [REKONSILIASI SELESAI] Sebanyak {} ghost template berhasil dibersihkan dari database lokal.", purged);
+            info!("[REKONSILIASI SELESAI] Sebanyak {} ghost template berhasil dibersihkan dari database lokal.", purged);
         } else {
-            info!("✅ [REKONSILIASI SELESAI] Database lokal sudah selaras dengan server.");
+            info!("[REKONSILIASI SELESAI] Database lokal sudah selaras dengan server.");
         }
 
         // Jika jumlah template lokal masih kurang dari valid_ids server, reset kursor dan tarik segera
         let (local_after, _) = self.db.get_templates_hash().await.unwrap_or((0, String::new()));
         if local_after < valid_ids.len() {
-            info!("🔄 [REKONSILIASI] Template lokal ({}) kurang dari template aktif server ({}). Mereset kursor sync dan menarik template...", local_after, valid_ids.len());
+            info!("[REKONSILIASI] Template lokal ({}) kurang dari template aktif server ({}). Mereset kursor sync dan menarik template...", local_after, valid_ids.len());
             self.db.reset_template_sync_cursor().await?;
             self.pull_templates().await?;
         }
@@ -803,7 +803,7 @@ pub async fn run_device_initiated_pairing(
                 };
 
                 write_env_atomically(env_path, &creds)?;
-                info!("🎉 Perangkat BERHASIL dipasangkan! Melanjutkan ke mode operasional normal...");
+                info!("Perangkat BERHASIL dipasangkan! Melanjutkan ke mode operasional normal...");
                 return Ok(creds);
             }
         }
@@ -855,7 +855,7 @@ pub async fn ensure_authenticated_or_pair(
 
     if let Ok(resp) = test_hb {
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            warn!("⚠️ Token saat ini tidak valid atau telah dicabut (HTTP 401). Memasuki mode Device-Initiated Auto-Pairing ulang...");
+            warn!("Token saat ini tidak valid atau telah dicabut (HTTP 401). Memasuki mode Device-Initiated Auto-Pairing ulang...");
             let creds = run_device_initiated_pairing(&client, api_url, env_path, Some(model_version)).await?;
             current_token = creds.token;
             current_embed_key = Some(creds.embed_key);

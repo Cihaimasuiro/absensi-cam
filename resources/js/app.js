@@ -8,7 +8,7 @@ import {
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
     UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
-    Sparkles, ShieldCheck, Eye, createIcons
+    Sparkles, ShieldCheck, Eye, Pause, Play, createIcons
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
@@ -375,7 +375,7 @@ const lucideIcons = {
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
     UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
-    Sparkles, ShieldCheck, Eye
+    Sparkles, ShieldCheck, Eye, Pause, Play
 };
 
 export function refreshIcons() {

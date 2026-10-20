@@ -6,6 +6,8 @@ use App\Domain\Student\Models\Student;
 use App\Domain\School\Models\Classroom;
 use App\Domain\School\Models\School;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Web\Student\StoreStudentRequest;
+use App\Http\Requests\Web\Student\UpdateStudentRequest;
 use Illuminate\Http\Request;
 
 class StudentWebController extends Controller
@@ -78,18 +80,9 @@ class StudentWebController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreStudentRequest $request)
     {
-        $validated = $request->validate([
-            'school_id' => ['nullable', 'exists:schools,id'],
-            'classroom_id'        => ['nullable', 'exists:classrooms,id'],
-            'code'            => ['required', 'string', 'max:50', 'unique:students,code'],
-            'name'            => ['required', 'string', 'max:150'],
-            'email'           => ['nullable', 'email', 'max:191', 'unique:students,email'],
-            'phone'           => ['nullable', 'string', 'max:30'],
-            'role'            => ['nullable', 'string', 'max:50'],
-            'has_consent'     => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $student = Student::create(array_merge(
             \Illuminate\Support\Arr::except($validated, ['has_consent']),
@@ -107,19 +100,9 @@ class StudentWebController extends Controller
         return redirect()->route('students.index')->with('success', 'Anggota berhasil ditambahkan.');
     }
 
-    public function update(Request $request, Student $student)
+    public function update(UpdateStudentRequest $request, Student $student)
     {
-        $validated = $request->validate([
-            'school_id' => ['nullable', 'exists:schools,id'],
-            'classroom_id'        => ['nullable', 'exists:classrooms,id'],
-            'code'            => ['required', 'string', 'max:50', "unique:students,code,{$student->id}"],
-            'name'            => ['required', 'string', 'max:150'],
-            'email'           => ['nullable', 'email', 'max:191', "unique:students,email,{$student->id}"],
-            'phone'           => ['nullable', 'string', 'max:30'],
-            'role'            => ['nullable', 'string', 'max:50'],
-            'is_active'       => ['boolean'],
-            'has_consent'     => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $student->update(\Illuminate\Support\Arr::except($validated, ['has_consent']));
 

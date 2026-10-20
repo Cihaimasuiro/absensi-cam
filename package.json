@@ -5,9 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "concurrently -c \"cyan,magenta,yellow,blue\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
-        "dev:lan": "concurrently -c \"cyan,magenta,yellow,blue\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve --host=0.0.0.0\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
-        "dev:web": "concurrently -c \"cyan,magenta,blue,green\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\"",
-        "dev:edge": "node scripts/run-edge.mjs"
+        "dev:lan": "concurrently -c \"cyan,magenta,yellow,blue\" -n \"LARAVEL,VITE,QUEUE,SCHEDULER\" \"php artisan serve --host=0.0.0.0\" \"vite\" \"php artisan queue:listen --queue=enrollments,default --timeout=120\" \"php artisan schedule:work\""
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -16,12 +14,8 @@
         "tailwindcss": "^4.0.0",
         "vite": "^8.0.0"
     },
-    "optionalDependencies": {
-        "@laravel/multiplex": "^0.4.1"
-    },
     "dependencies": {
         "@alpinejs/csp": "^3.17.4",
-        "alpinejs": "^3.17.4",
         "gsap": "^3.15.0",
         "lenis": "^1.3.26",
         "lucide": "^1.52.0"

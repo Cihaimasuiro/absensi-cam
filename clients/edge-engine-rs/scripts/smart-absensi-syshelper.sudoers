@@ -1,0 +1,3 @@
+# /etc/sudoers.d/010_smart_absensi_syshelper
+# Grants edge user permission to run the syshelper script without password
+edge ALL=(ALL) NOPASSWD: /usr/local/bin/smart-absensi-syshelper

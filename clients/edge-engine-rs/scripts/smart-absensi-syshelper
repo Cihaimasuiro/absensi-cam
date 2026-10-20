@@ -1,0 +1,186 @@
+#!/bin/bash
+# ==============================================================================
+# Smart Absensi System Helper (Router-Style Network & System Management)
+# Location: /usr/local/bin/smart-absensi-syshelper
+# ==============================================================================
+set -euo pipefail
+
+CONFIRMED_FLAG="/data/network_confirmed"
+WATCHDOG_PID_FILE="/tmp/smart_absensi_network_watchdog.pid"
+
+usage() {
+    echo "Usage: $0 {apply-network|revert-network|start-rollback-timer|confirm-network|set-timezone|set-ntp|sync-rtc} [args...]"
+    exit 1
+}
+
+get_json_val() {
+    local file="$1"
+    local key="$2"
+    python3 -c "import json, sys; d=json.load(open('$file')); print(d.get('$key', ''))" 2>/dev/null || true
+}
+
+apply_network() {
+    local config_file="$1"
+    if [ ! -f "$config_file" ]; then
+        echo "Config file not found: $config_file" >&2
+        return 1
+    fi
+
+    local iface
+    local mode
+    local static_ip
+    local subnet
+    local gateway
+    local dns
+
+    iface=$(get_json_val "$config_file" "interface")
+    mode=$(get_json_val "$config_file" "mode")
+    static_ip=$(get_json_val "$config_file" "static_ip")
+    subnet=$(get_json_val "$config_file" "subnet")
+    gateway=$(get_json_val "$config_file" "gateway")
+    dns=$(get_json_val "$config_file" "dns")
+
+    iface=${iface:-eth0}
+    mode=${mode:-dhcp}
+
+    echo "[SYSHELPER] Applying network config on $iface (mode: $mode)..."
+
+    # 1. NetworkManager (nmcli)
+    if command -v nmcli >/dev/null 2>&1; then
+        local con_name="edge-$iface"
+        nmcli con delete "$con_name" 2>/dev/null || true
+        if [ "$mode" = "static" ] && [ -n "$static_ip" ]; then
+            nmcli con add type ethernet ifname "$iface" con-name "$con_name" ip4 "$static_ip/24" gw4 "$gateway"
+            if [ -n "$dns" ]; then
+                nmcli con mod "$con_name" ipv4.dns "$dns"
+            fi
+        else
+            nmcli con add type ethernet ifname "$iface" con-name "$con_name" ipv4.method auto
+        fi
+        nmcli con up "$con_name" 2>/dev/null || true
+
+    # 2. systemd-networkd
+    elif [ -d "/etc/systemd/network" ]; then
+        local net_file="/etc/systemd/network/10-$iface.network"
+        if [ "$mode" = "static" ] && [ -n "$static_ip" ]; then
+            cat <<EOF > "$net_file"
+[Match]
+Name=$iface
+
+[Network]
+Address=$static_ip/24
+Gateway=$gateway
+DNS=$dns
+EOF
+        else
+            cat <<EOF > "$net_file"
+[Match]
+Name=$iface
+
+[Network]
+DHCP=yes
+EOF
+        fi
+        systemctl restart systemd-networkd 2>/dev/null || networkctl reload 2>/dev/null || true
+    fi
+}
+
+revert_network() {
+    local backup_file="${1:-/data/network_backup.json}"
+    echo "[SYSHELPER] Reverting network settings from $backup_file..."
+    if [ -f "$backup_file" ]; then
+        apply_network "$backup_file"
+    fi
+}
+
+start_rollback_timer() {
+    local timeout="${1:-60}"
+    local backup_file="${2:-/data/network_backup.json}"
+
+    rm -f "$CONFIRMED_FLAG"
+
+    if [ -f "$WATCHDOG_PID_FILE" ]; then
+        local old_pid
+        old_pid=$(cat "$WATCHDOG_PID_FILE" 2>/dev/null || true)
+        if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+            kill -9 "$old_pid" 2>/dev/null || true
+        fi
+        rm -f "$WATCHDOG_PID_FILE"
+    fi
+
+    (
+        sleep "$timeout"
+        if [ ! -f "$CONFIRMED_FLAG" ]; then
+            echo "[SYSHELPER WATCHDOG] 60s rollback timeout expired! Reverting network..."
+            revert_network "$backup_file"
+        else
+            echo "[SYSHELPER WATCHDOG] Network confirmed, rollback discarded."
+        fi
+        rm -f "$WATCHDOG_PID_FILE"
+    ) >/dev/null 2>&1 &
+
+    echo $! > "$WATCHDOG_PID_FILE"
+    echo "[SYSHELPER] Rollback timer started (PID $(cat "$WATCHDOG_PID_FILE"), $timeout seconds)."
+}
+
+confirm_network() {
+    echo "1" > "$CONFIRMED_FLAG"
+    if [ -f "$WATCHDOG_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$WATCHDOG_PID_FILE" 2>/dev/null || true)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        rm -f "$WATCHDOG_PID_FILE"
+    fi
+    echo "[SYSHELPER] Network configuration confirmed."
+}
+
+set_timezone() {
+    local tz="$1"
+    echo "[SYSHELPER] Setting timezone to $tz..."
+    timedatectl set-timezone "$tz"
+}
+
+set_ntp() {
+    local state="$1"
+    echo "[SYSHELPER] Setting NTP to $state..."
+    timedatectl set-ntp "$state"
+}
+
+sync_rtc() {
+    echo "[SYSHELPER] Syncing hardware RTC clock from system time..."
+    hwclock -w
+}
+
+case "${1:-}" in
+    apply-network)
+        shift
+        apply_network "$@"
+        ;;
+    revert-network)
+        shift
+        revert_network "$@"
+        ;;
+    start-rollback-timer)
+        shift
+        start_rollback_timer "$@"
+        ;;
+    confirm-network)
+        confirm_network
+        ;;
+    set-timezone)
+        shift
+        set_timezone "$@"
+        ;;
+    set-ntp)
+        shift
+        set_ntp "$@"
+        ;;
+    sync-rtc)
+        sync_rtc
+        ;;
+    *)
+        usage
+        ;;
+esac

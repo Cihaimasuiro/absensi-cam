@@ -302,6 +302,7 @@ pub async fn start_stream_server(
         app_state: state,
         config,
         auth,
+        network_rollback: Arc::new(tokio::sync::Mutex::new(control::NetworkRollbackState::default())),
     };
 
     let app = Router::new()

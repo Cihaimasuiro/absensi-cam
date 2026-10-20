@@ -523,6 +523,19 @@
         </div>
       </div>
 
+      <!-- Network Rollback Floating Alert Banner -->
+      <template x-if="networkRollback.active">
+        <div style="background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid #f59e0b; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+          <div style="color: #f59e0b;">
+            <strong>NETWORK STAGED:</strong> Confirm in <span class="font-mono font-bold" x-text="networkRollback.remaining"></span>s or settings will automatically revert.
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn-square btn-square-primary" style="padding: 4px 10px; font-size: 10px;" @click="confirmNetwork()">CONFIRM NOW</button>
+            <button class="btn-square btn-square-danger" style="padding: 4px 10px; font-size: 10px;" @click="cancelNetwork()">REVERT NOW</button>
+          </div>
+        </div>
+      </template>
+
       <!-- Independently Scrollable Body -->
       <div class="modal-body">
 
@@ -559,9 +572,12 @@
             <div class="row-main">
               <label class="row-label">Source Device</label>
               <select x-model="settings.camera.source">
-                <option value="/dev/video0">/dev/video0 (Default V4L2)</option>
-                <option value="/dev/video1">/dev/video1</option>
-                <option value="/dev/video2">/dev/video2</option>
+                <template x-for="dev in availableCameras" :key="dev">
+                  <option :value="dev" x-text="dev"></option>
+                </template>
+                <template x-if="availableCameras.length === 0">
+                  <option value="/dev/video0">/dev/video0 (Default V4L2)</option>
+                </template>
               </select>
             </div>
             <div class="row-help">Active Linux V4L2 camera capture node.</div>
@@ -678,6 +694,7 @@
           <div class="row-help" style="margin-top: 8px; color: #f59e0b;">
             Note: Applying new network settings triggers a 60-second rollback watchdog. If not confirmed, settings automatically revert to prevent lockout.
           </div>
+          <button class="btn-square btn-square-primary" style="margin-top: 10px;" @click="applyNetwork()">APPLY NETWORK SETTINGS</button>
         </div>
 
         <!-- 4. TIME -->
@@ -749,16 +766,11 @@
             <button class="btn-square" @click="restartEngine()">RESTART ENGINE</button>
             <button class="btn-square" @click="restartSync()">RESTART SYNC</button>
             <button class="btn-square" @click="backupConfig()">BACKUP CONFIG</button>
+            <button class="btn-square" @click="$refs.restoreFileInput.click()">RESTORE CONFIG</button>
             <button class="btn-square" @click="downloadLogs()">DOWNLOAD LOGS</button>
+            <button class="btn-square" @click="checkUpdate()">CHECK UPDATE</button>
           </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <span class="row-label">Firmware Updates</span>
-              <button class="btn-square" @click="checkUpdate()">CHECK UPDATE</button>
-            </div>
-            <div class="row-help">Checks for signed OTA binary packages from central server.</div>
-          </div>
+          <input type="file" x-ref="restoreFileInput" accept=".json" style="display: none;" @change="handleConfigFileUpload($event)" />
         </div>
 
         <!-- 7. SECURITY -->
@@ -872,6 +884,9 @@
         feedUrl: '/snapshot.jpg?t=' + Date.now(),
         theme: localStorage.getItem('theme_preference') || 'dark',
 
+        availableCameras: [],
+        networkRollback: { active: false, remaining: 0, timer: null },
+
         info: {
           device_code: '',
           firmware_version: '0.1.0',
@@ -900,6 +915,8 @@
 
         openSettings() {
           this.fetchSettings();
+          this.fetchCameraDevices();
+          this.checkRollbackStatus();
           this.showSettings = true;
         },
 
@@ -1158,6 +1175,132 @@
           } catch (e) {
             this.showToast('Update check failed: ' + e, 'error');
           }
+        },
+
+        async fetchCameraDevices() {
+          try {
+            const res = await fetch('/api/control/camera/devices');
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data.devices)) {
+                this.availableCameras = data.devices;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to load camera devices', e);
+          }
+        },
+
+        async checkRollbackStatus() {
+          try {
+            const res = await fetch('/api/control/network/rollback-status');
+            if (res.ok) {
+              const data = await res.json();
+              this.networkRollback.active = data.active;
+              this.networkRollback.remaining = data.remaining_seconds;
+              if (data.active && !this.networkRollback.timer) {
+                this.startRollbackCountdown();
+              }
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+        },
+
+        startRollbackCountdown() {
+          if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
+          this.networkRollback.timer = setInterval(() => {
+            if (this.networkRollback.remaining > 0) {
+              this.networkRollback.remaining--;
+            } else {
+              this.networkRollback.active = false;
+              clearInterval(this.networkRollback.timer);
+              this.networkRollback.timer = null;
+              this.showToast('Network settings rolled back (timeout expired)', 'error');
+              this.fetchSettings();
+            }
+          }, 1000);
+        },
+
+        async applyNetwork() {
+          if (!confirm('Apply network configuration? You will have 60 seconds to confirm the connection.')) return;
+          try {
+            const res = await fetch('/api/control/network/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.settings.network)
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.networkRollback.active = true;
+              this.networkRollback.remaining = data.rollback_seconds || 60;
+              this.startRollbackCountdown();
+              this.showToast(data.message);
+            } else {
+              this.showToast(data.error || 'Failed to apply network configuration', 'error');
+            }
+          } catch (e) {
+            this.showToast('Network apply error: ' + e, 'error');
+          }
+        },
+
+        async confirmNetwork() {
+          try {
+            const res = await fetch('/api/control/network/confirm', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.networkRollback.active = false;
+              if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
+              this.networkRollback.timer = null;
+              this.showToast('Network settings confirmed permanently.');
+              this.fetchSettings();
+            } else {
+              this.showToast(data.message || 'Confirmation failed', 'error');
+            }
+          } catch (e) {
+            this.showToast('Confirmation error: ' + e, 'error');
+          }
+        },
+
+        async cancelNetwork() {
+          try {
+            const res = await fetch('/api/control/network/cancel', { method: 'POST' });
+            const data = await res.json();
+            this.networkRollback.active = false;
+            if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
+            this.networkRollback.timer = null;
+            this.showToast(data.message || 'Network changes reverted.');
+            this.fetchSettings();
+          } catch (e) {
+            this.showToast('Revert error: ' + e, 'error');
+          }
+        },
+
+        async handleConfigFileUpload(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const parsed = JSON.parse(e.target.result);
+              const res = await fetch('/api/control/system/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed)
+              });
+              const data = await res.json();
+              if (res.ok && data.success) {
+                this.showToast('Configuration restored successfully.');
+                this.fetchSettings();
+              } else {
+                this.showToast(data.message || 'Restore failed', 'error');
+              }
+            } catch (err) {
+              this.showToast('Invalid backup JSON file: ' + err, 'error');
+            }
+            event.target.value = '';
+          };
+          reader.readAsText(file);
         },
 
         async confirmReboot() {

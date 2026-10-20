@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -17,6 +18,14 @@ use crate::server::AppState;
 
 const UI_HTML: &str = include_str!("ui.html");
 const ALPINE_JS: &str = include_str!("vendor/alpine.min.js");
+
+#[derive(Debug, Clone, Default)]
+pub struct NetworkRollbackState {
+    pub active: bool,
+    pub expires_at: Option<Instant>,
+    pub backup_settings: Option<NetworkSettings>,
+    pub staged_settings: Option<NetworkSettings>,
+}
 
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -56,6 +65,7 @@ pub struct ControlState {
     pub app_state: AppState,
     pub config: ServerConfig,
     pub auth: Arc<AuthManager>,
+    pub network_rollback: Arc<tokio::sync::Mutex<NetworkRollbackState>>,
 }
 
 // ── Settings Data Models ─────────────────────────────────────────────────────
@@ -79,7 +89,7 @@ pub struct NetworkSettings {
     pub interface: String,
     pub mode: String,
     pub wifi_ssid: String,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub wifi_password: Option<String>,
     pub static_ip: String,
     pub subnet: String,
@@ -290,7 +300,8 @@ pub async fn get_settings_handler(
         return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
     }
 
-    let settings = load_settings(&state.config.settings_path);
+    let mut settings = load_settings(&state.config.settings_path);
+    settings.network.wifi_password = None;
     Json(settings).into_response()
 }
 
@@ -306,9 +317,8 @@ pub async fn save_settings_handler(
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
     }
 
-    // Input Validation
-    if new_settings.camera.fps_cap < 5 || new_settings.camera.fps_cap > 60 {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "FPS cap must be between 5 and 60" }))).into_response();
+    if let Err(e) = validate_settings(&new_settings) {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response();
     }
 
     if let Err(e) = save_settings_to_file(&state.config.settings_path, &new_settings) {
@@ -316,8 +326,224 @@ pub async fn save_settings_handler(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Failed to persist settings" }))).into_response();
     }
 
+    apply_time_settings(&new_settings.time);
+
     info!("Edge settings updated and persisted successfully.");
     Json(serde_json::json!({ "success": true, "message": "Settings saved" })).into_response()
+}
+
+pub async fn get_camera_devices_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+
+    let mut devices = Vec::new();
+    for i in 0..10 {
+        let path = format!("/dev/video{}", i);
+        if Path::new(&path).exists() {
+            devices.push(path);
+        }
+    }
+
+    if devices.is_empty() {
+        devices.push("/dev/video0".to_string());
+        devices.push("/dev/video1".to_string());
+    }
+
+    Json(serde_json::json!({ "devices": devices })).into_response()
+}
+
+pub async fn apply_network_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Json(payload): Json<NetworkSettings>,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+    if !state.auth.verify_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
+    }
+
+    let mode = payload.mode.trim().to_lowercase();
+    if mode != "dhcp" && mode != "static" {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Mode must be 'dhcp' or 'static'" }))).into_response();
+    }
+
+    if mode == "static" {
+        if payload.static_ip.trim().parse::<Ipv4Addr>().is_err() {
+            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Invalid static IP address format" }))).into_response();
+        }
+        if payload.subnet.trim().parse::<Ipv4Addr>().is_err() {
+            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Invalid subnet mask format" }))).into_response();
+        }
+    }
+
+    let current = load_settings(&state.config.settings_path);
+    let backup_dir = state.config.settings_path.parent().unwrap_or(Path::new("."));
+    let backup_path = backup_dir.join("network_backup.json");
+    let staged_path = backup_dir.join("network_staged.json");
+    let confirmed_path = backup_dir.join("network_confirmed");
+
+    let _ = std::fs::remove_file(&confirmed_path);
+    let _ = std::fs::write(&backup_path, serde_json::to_string_pretty(&current.network).unwrap_or_default());
+    let _ = std::fs::write(&staged_path, serde_json::to_string_pretty(&payload).unwrap_or_default());
+
+    {
+        let mut lock = state.network_rollback.lock().await;
+        lock.active = true;
+        lock.expires_at = Some(Instant::now() + std::time::Duration::from_secs(60));
+        lock.backup_settings = Some(current.network.clone());
+        lock.staged_settings = Some(payload.clone());
+    }
+
+    let helper_path = "/usr/local/bin/smart-absensi-syshelper";
+    if Path::new(helper_path).exists() {
+        let _ = std::process::Command::new(helper_path)
+            .args(["apply-network", staged_path.to_str().unwrap_or("")])
+            .spawn();
+    }
+
+    let state_watchdog = state.clone();
+    let settings_path = state.config.settings_path.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        let mut lock = state_watchdog.network_rollback.lock().await;
+        if lock.active {
+            warn!("Network rollback timeout expired (60s) without confirmation. Reverting network settings...");
+            lock.active = false;
+            if let Some(ref backup) = lock.backup_settings {
+                let mut cur = load_settings(&settings_path);
+                cur.network = backup.clone();
+                let _ = save_settings_to_file(&settings_path, &cur);
+
+                if Path::new(helper_path).exists() {
+                    let _ = std::process::Command::new(helper_path)
+                        .args(["revert-network", backup_path.to_str().unwrap_or("")])
+                        .spawn();
+                }
+            }
+        }
+    });
+
+    Json(serde_json::json!({
+        "success": true,
+        "rollback_seconds": 60,
+        "message": "Network configuration applied. Confirm within 60 seconds or changes will revert."
+    })).into_response()
+}
+
+pub async fn confirm_network_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+    if !state.auth.verify_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
+    }
+
+    let mut lock = state.network_rollback.lock().await;
+    if !lock.active {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({
+            "success": false,
+            "message": "No active network change to confirm."
+        }))).into_response();
+    }
+
+    lock.active = false;
+    if let Some(staged) = lock.staged_settings.take() {
+        let mut cur = load_settings(&state.config.settings_path);
+        cur.network = staged;
+        let _ = save_settings_to_file(&state.config.settings_path, &cur);
+    }
+    lock.backup_settings = None;
+
+    let backup_dir = state.config.settings_path.parent().unwrap_or(Path::new("."));
+    let confirmed_path = backup_dir.join("network_confirmed");
+    let _ = std::fs::write(&confirmed_path, "1");
+
+    let helper_path = "/usr/local/bin/smart-absensi-syshelper";
+    if Path::new(helper_path).exists() {
+        let _ = std::process::Command::new(helper_path)
+            .args(["confirm-network"])
+            .spawn();
+    }
+
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Network settings confirmed permanently."
+    })).into_response()
+}
+
+pub async fn cancel_network_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+    if !state.auth.verify_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
+    }
+
+    let mut lock = state.network_rollback.lock().await;
+    if lock.active {
+        lock.active = false;
+        if let Some(ref backup) = lock.backup_settings {
+            let mut cur = load_settings(&state.config.settings_path);
+            cur.network = backup.clone();
+            let _ = save_settings_to_file(&state.config.settings_path, &cur);
+
+            let helper_path = "/usr/local/bin/smart-absensi-syshelper";
+            let backup_dir = state.config.settings_path.parent().unwrap_or(Path::new("."));
+            let backup_path = backup_dir.join("network_backup.json");
+            if Path::new(helper_path).exists() {
+                let _ = std::process::Command::new(helper_path)
+                    .args(["revert-network", backup_path.to_str().unwrap_or("")])
+                    .spawn();
+            }
+        }
+    }
+
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Network configuration reverted."
+    })).into_response()
+}
+
+pub async fn network_rollback_status_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+
+    let lock = state.network_rollback.lock().await;
+    let remaining = if lock.active {
+        if let Some(exp) = lock.expires_at {
+            let now = Instant::now();
+            if exp > now {
+                exp.duration_since(now).as_secs()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    Json(serde_json::json!({
+        "active": lock.active,
+        "remaining_seconds": remaining
+    })).into_response()
 }
 
 pub async fn change_password_handler(
@@ -522,6 +748,53 @@ pub async fn backup_config_handler(
         .into_response()
 }
 
+pub async fn restore_config_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Json(restored): Json<FullSettings>,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+    if !state.auth.verify_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
+    }
+
+    if let Err(e) = validate_settings(&restored) {
+        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "success": false, "message": e }))).into_response();
+    }
+
+    if let Err(e) = save_settings_to_file(&state.config.settings_path, &restored) {
+        warn!("Failed to restore settings: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "success": false, "message": "Failed to persist restored settings" }))).into_response();
+    }
+
+    apply_time_settings(&restored.time);
+
+    info!("Configuration restored successfully from backup.");
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Configuration restored successfully."
+    })).into_response()
+}
+
+pub async fn check_update_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+
+    let current = env!("CARGO_PKG_VERSION");
+    Json(serde_json::json!({
+        "success": true,
+        "up_to_date": true,
+        "current_version": current,
+        "message": format!("Engine is running current firmware v{}.", current)
+    })).into_response()
+}
+
 pub async fn action_handler(
     State(state): State<ControlState>,
     headers: HeaderMap,
@@ -606,7 +879,7 @@ pub async fn action_handler(
 
 // ── Persistence Helpers ──────────────────────────────────────────────────────
 
-fn load_settings(path: &Path) -> FullSettings {
+pub fn load_settings(path: &Path) -> FullSettings {
     if path.exists() {
         if let Ok(c) = std::fs::read_to_string(path) {
             if let Ok(s) = serde_json::from_str::<FullSettings>(&c) {
@@ -617,13 +890,92 @@ fn load_settings(path: &Path) -> FullSettings {
     FullSettings::default()
 }
 
-fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Result<()> {
+pub fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(settings)?;
+    let mut to_save = settings.clone();
+    // Preserve existing wifi_password if the new settings did not provide one
+    if to_save.network.wifi_password.as_deref().unwrap_or("").is_empty() {
+        let existing = load_settings(path);
+        if let Some(pwd) = existing.network.wifi_password {
+            if !pwd.is_empty() {
+                to_save.network.wifi_password = Some(pwd);
+            }
+        }
+    }
+    let json = serde_json::to_string_pretty(&to_save)?;
     std::fs::write(path, json)?;
     Ok(())
+}
+
+fn validate_settings(settings: &FullSettings) -> Result<(), String> {
+    let dev_name = settings.general.device_name.trim();
+    if dev_name.is_empty() || dev_name.len() > 64 {
+        return Err("Device name must be between 1 and 64 characters".to_string());
+    }
+
+    if settings.camera.fps_cap < 5 || settings.camera.fps_cap > 60 {
+        return Err("FPS cap must be between 5 and 60".to_string());
+    }
+    let src = settings.camera.source.trim();
+    if src.is_empty() || src.len() > 64 {
+        return Err("Camera source path is invalid".to_string());
+    }
+    let res = settings.camera.resolution.trim();
+    let parts: Vec<&str> = res.split('x').collect();
+    if parts.len() != 2 || parts[0].parse::<u32>().is_err() || parts[1].parse::<u32>().is_err() {
+        return Err("Camera resolution must be in format 'WIDTHxHEIGHT' (e.g. 640x480)".to_string());
+    }
+
+    let mode = settings.network.mode.trim().to_lowercase();
+    if mode != "dhcp" && mode != "static" {
+        return Err("Network mode must be 'dhcp' or 'static'".to_string());
+    }
+    if mode == "static" {
+        if settings.network.static_ip.trim().parse::<Ipv4Addr>().is_err() {
+            return Err("Invalid static IP address format".to_string());
+        }
+        if settings.network.subnet.trim().parse::<Ipv4Addr>().is_err() {
+            return Err("Invalid subnet mask format".to_string());
+        }
+        if !settings.network.gateway.trim().is_empty() 
+            && settings.network.gateway.trim().parse::<Ipv4Addr>().is_err() {
+            return Err("Invalid gateway IP address format".to_string());
+        }
+        if !settings.network.dns.trim().is_empty() 
+            && settings.network.dns.trim().parse::<Ipv4Addr>().is_err() {
+            return Err("Invalid DNS IP address format".to_string());
+        }
+    }
+
+    let tz = settings.time.timezone.trim();
+    if tz.is_empty() || tz.len() > 64 || !tz.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '_' || c == '-' || c == '+') {
+        return Err("Invalid timezone format (e.g. Asia/Jakarta)".to_string());
+    }
+
+    let url = settings.server.url.trim();
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("Server URL must begin with http:// or https://".to_string());
+    }
+
+    Ok(())
+}
+
+fn apply_time_settings(time: &TimeSettings) {
+    let tz = time.timezone.trim();
+    if !tz.is_empty() && tz.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '_' || c == '-' || c == '+') {
+        info!("Applying system timezone: {}", tz);
+        let _ = std::process::Command::new("timedatectl")
+            .args(["set-timezone", tz])
+            .status();
+    }
+
+    let ntp_arg = if time.ntp_enabled { "true" } else { "false" };
+    info!("Setting NTP synchronization: {}", ntp_arg);
+    let _ = std::process::Command::new("timedatectl")
+        .args(["set-ntp", ntp_arg])
+        .status();
 }
 
 // ── Telemetry Helpers ────────────────────────────────────────────────────────
@@ -743,10 +1095,100 @@ pub fn register_control_routes(router: Router<ControlState>) -> Router<ControlSt
         .route("/api/control/logout", post(logout_handler))
         .route("/api/control/info", get(info_handler))
         .route("/api/control/settings", get(get_settings_handler).post(save_settings_handler))
+        .route("/api/control/camera/devices", get(get_camera_devices_handler))
+        .route("/api/control/network/apply", post(apply_network_handler))
+        .route("/api/control/network/confirm", post(confirm_network_handler))
+        .route("/api/control/network/cancel", post(cancel_network_handler))
+        .route("/api/control/network/rollback-status", get(network_rollback_status_handler))
         .route("/api/control/security/password", post(change_password_handler))
         .route("/api/control/server/test", post(test_server_handler))
         .route("/api/control/server/repair", post(repair_handler))
         .route("/api/control/system/logs", get(download_logs_handler))
         .route("/api/control/system/backup", get(backup_config_handler))
+        .route("/api/control/system/restore", post(restore_config_handler))
+        .route("/api/control/system/check-update", post(check_update_handler))
         .route("/api/control/action", post(action_handler))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_settings_success() {
+        let s = FullSettings::default();
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_settings_fps_and_resolution() {
+        let mut s = FullSettings::default();
+        s.camera.fps_cap = 2; // Below 5
+        assert!(validate_settings(&s).is_err());
+
+        s.camera.fps_cap = 15;
+        s.camera.resolution = "invalid_res".to_string();
+        assert!(validate_settings(&s).is_err());
+
+        s.camera.resolution = "1280x720".to_string();
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_static_ip_mode() {
+        let mut s = FullSettings::default();
+        s.network.mode = "static".to_string();
+        s.network.static_ip = "not_an_ip".to_string();
+        assert!(validate_settings(&s).is_err());
+
+        s.network.static_ip = "192.168.1.100".to_string();
+        s.network.subnet = "255.255.255.0".to_string();
+        s.network.gateway = "192.168.1.1".to_string();
+        s.network.dns = "1.1.1.1".to_string();
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_timezone_and_server() {
+        let mut s = FullSettings::default();
+        s.time.timezone = "Asia/Jakarta; rm -rf /".to_string(); // Injected chars
+        assert!(validate_settings(&s).is_err());
+
+        s.time.timezone = "Asia/Jakarta".to_string();
+        s.server.url = "ftp://invalid-scheme".to_string();
+        assert!(validate_settings(&s).is_err());
+
+        s.server.url = "http://192.168.1.50:8000".to_string();
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_preserve_wifi_password_on_save() {
+        let temp_dir = std::env::temp_dir().join(format!("edge_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let settings_path = temp_dir.join("edge_settings.json");
+
+        // 1. Initial save with wifi password
+        let mut initial = FullSettings::default();
+        initial.network.wifi_password = Some("SuperSecretWifiPass123!".to_string());
+        assert!(save_settings_to_file(&settings_path, &initial).is_ok());
+
+        // 2. Read back: wifi_password exists in file
+        let loaded1 = load_settings(&settings_path);
+        assert_eq!(loaded1.network.wifi_password.as_deref(), Some("SuperSecretWifiPass123!"));
+
+        // 3. New update without wifi_password (None)
+        let mut updated = loaded1.clone();
+        updated.network.wifi_password = None;
+        updated.general.device_name = "Renamed Gate".to_string();
+        assert!(save_settings_to_file(&settings_path, &updated).is_ok());
+
+        // 4. Verify wifi password was NOT erased
+        let loaded2 = load_settings(&settings_path);
+        assert_eq!(loaded2.general.device_name, "Renamed Gate");
+        assert_eq!(loaded2.network.wifi_password.as_deref(), Some("SuperSecretWifiPass123!"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
+

@@ -13,397 +13,369 @@
 </head>
 <body class="bg-canvas text-ink font-sans antialiased selection:bg-primary/20 selection:text-primary">
 
-    {{-- Header / Navigation --}}
-    <header class="sticky top-0 z-40 bg-canvas/90 backdrop-blur-md border-b border-hairline">
-        <div class="max-w-6xl mx-auto px-md md:px-lg h-14 flex items-center justify-between">
-            <a href="{{ route('landing') }}" class="flex items-center gap-xs focus:outline-none">
-                <img src="{{ asset('images/logo.png') }}" class="w-7 h-7 rounded-md object-contain shrink-0" alt="Logo">
-                <span class="text-[15px] font-bold tracking-tight text-ink">Smart Absensi</span>
+{{-- ─────────────────────────────── Header ──────────────────────────────── --}}
+<header class="sticky top-0 z-40 bg-canvas/85 backdrop-blur-md border-b border-hairline">
+    <div class="max-w-6xl mx-auto px-md md:px-lg h-14 flex items-center justify-between gap-md">
+        <a href="{{ route('landing') }}" class="flex items-center gap-xs shrink-0">
+            <img src="{{ asset('images/logo.png') }}" class="w-7 h-7 rounded-md object-contain" alt="Logo Smart Absensi">
+            <span class="text-[15px] font-bold tracking-tight text-ink">Smart Absensi</span>
+        </a>
+
+        <nav class="hidden md:flex items-center gap-lg text-[12.5px] text-ink-secondary" aria-label="Navigasi halaman">
+            <a href="#arsitektur" class="hover:text-primary transition-colors">Arsitektur</a>
+            <a href="#fitur" class="hover:text-primary transition-colors">Fitur</a>
+            <a href="#spesifikasi" class="hover:text-primary transition-colors">Spesifikasi</a>
+            <a href="#alur" class="hover:text-primary transition-colors">Alur Kerja</a>
+        </nav>
+
+        @auth
+            <a href="{{ route('dashboard') }}" class="btn btn-primary btn-sm">
+                <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+                <span>Buka Monitor</span>
             </a>
+        @else
+            <a href="{{ route('login') }}" class="btn btn-secondary btn-sm">
+                <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+                <span>Masuk</span>
+            </a>
+        @endauth
+    </div>
+</header>
 
-            <nav class="hidden md:flex items-center gap-lg text-[13px] text-ink-secondary">
-                <a href="#arsitektur" class="hover:text-primary transition-colors">Arsitektur</a>
-                <a href="#edge-engine" class="hover:text-primary transition-colors">Edge Engine</a>
-                <a href="#fitur" class="hover:text-primary transition-colors">Fitur</a>
-                <a href="#spesifikasi" class="hover:text-primary transition-colors">Spesifikasi</a>
-            </nav>
+{{-- ─────────────────────────────── Hero ────────────────────────────────── --}}
+<section class="border-b border-hairline">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-14 md:py-20">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
 
-            <div class="flex items-center gap-xs">
-                @auth
-                    <a href="{{ route('dashboard') }}" class="btn btn-primary btn-sm flex items-center gap-1.5">
-                        <i data-lucide="video" class="w-3.5 h-3.5"></i>
-                        <span>Live Monitor</span>
+            {{-- Left: copy (asymmetric 7/12) --}}
+            <div class="lg:col-span-7">
+                <p class="text-[11px] font-mono uppercase tracking-[0.14em] text-primary font-semibold mb-3">
+                    Edge Vision AI · Offline-First
+                </p>
+
+                <h1 class="text-[34px] sm:text-[42px] md:text-[52px] font-extrabold tracking-[-0.03em] leading-[1.05] text-ink m-0">
+                    Presensi wajah<br>
+                    <span class="text-ink-faint">dalam milidetik.</span>
+                </h1>
+
+                <p class="text-[15px] sm:text-[16px] text-ink-secondary max-w-[52ch] mt-5 mb-7 leading-relaxed">
+                    Pengenalan wajah diproses langsung di gate — bukan di cloud. Identitas tervalidasi
+                    secara lokal, data tersimpan di ring buffer terenkripsi, dan tersinkronisasi ke server
+                    pusat begitu jaringan tersedia.
+                </p>
+
+                <div class="flex flex-wrap items-center gap-sm">
+                    @auth
+                        <a href="{{ route('dashboard') }}" class="btn btn-primary btn-lg">
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                            <span>Buka Live Monitor</span>
+                        </a>
+                    @else
+                        <a href="{{ route('login') }}" class="btn btn-primary btn-lg">
+                            <i data-lucide="log-in" class="w-4 h-4"></i>
+                            <span>Masuk ke Konsol</span>
+                        </a>
+                    @endauth
+                    <a href="#arsitektur" class="btn btn-secondary btn-lg">
+                        <i data-lucide="cpu" class="w-4 h-4"></i>
+                        <span>Lihat Arsitektur</span>
                     </a>
-                @else
-                    <a href="{{ route('login') }}" class="btn btn-secondary btn-sm flex items-center gap-1.5">
-                        <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
-                        <span>Masuk</span>
-                    </a>
-                @endauth
-            </div>
-        </div>
-    </header>
+                </div>
 
-    {{-- Hero Section --}}
-    <section class="border-b border-hairline py-16 md:py-24 bg-gradient-to-b from-canvas to-canvas-soft/60">
-        <div class="max-w-4xl mx-auto px-md md:px-lg text-center">
-            
-            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-ink leading-[1.15] mb-6">
-                Presensi Wajah Berkecepatan Tinggi.<br class="hidden sm:inline">
-                <span class="text-ink-muted font-bold">Tangguh di Edge, Terpusat di Cloud.</span>
-            </h1>
-
-            <p class="text-base sm:text-lg text-ink-secondary max-w-2xl mx-auto mb-8 leading-relaxed">
-                Platform absensi cerdas berbasis Vision AI yang memproses pengenalan wajah langsung di gate secara offline-first. Memvalidasi identitas dalam milidetik dan menyinkronkan data secara aman ke server pusat.
-            </p>
-
-            <div class="flex flex-wrap items-center justify-center gap-sm mb-12">
-                @auth
-                    <a href="{{ route('dashboard') }}" class="btn btn-primary px-5 py-2.5 text-sm flex items-center gap-2">
-                        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                        <span>Buka Live Monitor & Dashboard</span>
-                    </a>
-                @else
-                    <a href="{{ route('login') }}" class="btn btn-primary px-5 py-2.5 text-sm flex items-center gap-2">
-                        <i data-lucide="log-in" class="w-4 h-4"></i>
-                        <span>Masuk ke Konsol Manajemen</span>
-                    </a>
-                @endauth
-                <a href="#arsitektur" class="btn btn-secondary px-5 py-2.5 text-sm flex items-center gap-2">
-                    <i data-lucide="cpu" class="w-4 h-4"></i>
-                    <span>Eksplorasi Arsitektur</span>
-                </a>
+                {{-- Live counters from LandingController --}}
+                <dl class="grid grid-cols-3 gap-px mt-10 bg-hairline border border-hairline rounded-lg overflow-hidden">
+                    <div class="bg-canvas px-4 py-3">
+                        <dt class="text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">Anggota Aktif</dt>
+                        <dd class="text-[20px] font-bold text-ink tabular-nums m-0 leading-tight mt-0.5">
+                            {{ number_format($stats['total_members'] ?? 0, 0, ',', '.') }}
+                        </dd>
+                    </div>
+                    <div class="bg-canvas px-4 py-3">
+                        <dt class="text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">Terminal</dt>
+                        <dd class="text-[20px] font-bold text-ink tabular-nums m-0 leading-tight mt-0.5">
+                            {{ number_format($stats['total_devices'] ?? 0, 0, ',', '.') }}
+                        </dd>
+                    </div>
+                    <div class="bg-canvas px-4 py-3">
+                        <dt class="text-[10.5px] font-semibold uppercase tracking-wide text-ink-muted">Online</dt>
+                        <dd class="text-[20px] font-bold text-success tabular-nums m-0 leading-tight mt-0.5">
+                            {{ number_format($stats['online_devices'] ?? 0, 0, ',', '.') }}
+                        </dd>
+                    </div>
+                </dl>
             </div>
 
-            {{-- High Density Telemetry Bar --}}
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto text-left">
-                <div class="card p-3 bg-surface border border-hairline">
-                    <div class="text-[11px] font-mono text-ink-faint uppercase">Inferensi Edge</div>
-                    <div class="text-lg font-bold font-mono text-ink mt-0.5">&lt; 800 ms</div>
-                    <div class="text-[11px] text-ink-muted">ONNX MobileFaceNet</div>
-                </div>
-                <div class="card p-3 bg-surface border border-hairline">
-                    <div class="text-[11px] font-mono text-ink-faint uppercase">Ketahanan Jaringan</div>
-                    <div class="text-lg font-bold font-mono text-ink mt-0.5">100% Offline</div>
-                    <div class="text-[11px] text-ink-muted">Antrean SQLite Lokal</div>
-                </div>
-                <div class="card p-3 bg-surface border border-hairline">
-                    <div class="text-[11px] font-mono text-ink-faint uppercase">Protokol Sinkronisasi</div>
-                    <div class="text-lg font-bold font-mono text-ink mt-0.5">Idempoten</div>
-                    <div class="text-[11px] text-ink-muted">UUID v4 & RFC-3339</div>
-                </div>
-                <div class="card p-3 bg-surface border border-hairline">
-                    <div class="text-[11px] font-mono text-ink-faint uppercase">Rekapitulasi DTR</div>
-                    <div class="text-lg font-bold font-mono text-ink mt-0.5">Otomatis</div>
-                    <div class="text-[11px] text-ink-muted">Agregasi Masuk & Pulang</div>
-                </div>
-            </div>
-
-        </div>
-    </section>
-
-    {{-- Interactive Telemetry & Architecture Showcase --}}
-    <section id="arsitektur" class="py-16 md:py-20 border-b border-hairline bg-canvas" x-data="{ tab: 'engine' }">
-        <div class="max-w-6xl mx-auto px-md md:px-lg">
-            
-            <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-                <div>
-                    <span class="text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">ARSITEKTUR DUA LAPIS</span>
-                    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink mt-1">
-                        Edge Terminal Rust & Laravel Cloud Ledger
-                    </h2>
-                </div>
-                {{-- Tabs --}}
-                <div class="inline-flex rounded-md border border-hairline bg-canvas-soft p-1 text-[12px] font-medium">
-                    <button type="button" @click="tab = 'engine'" :class="tab === 'engine' ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'" class="px-3 py-1.5 rounded transition-all">
-                        Log Runtime Edge (Rust)
-                    </button>
-                    <button type="button" @click="tab = 'api'" :class="tab === 'api' ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'" class="px-3 py-1.5 rounded transition-all">
-                        Kontrak API Batch Sync
-                    </button>
-                    <button type="button" @click="tab = 'pipeline'" :class="tab === 'pipeline' ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'" class="px-3 py-1.5 rounded transition-all">
-                        Alur Inferensi Biometrik
-                    </button>
-                </div>
-            </div>
-
-            {{-- Terminal Window --}}
-            <div class="rounded-lg bg-[#0e1117] text-white border border-[#23272f] overflow-hidden shadow-lg">
-                <div class="flex items-center justify-between px-4 py-2.5 border-b border-[#23272f] bg-[#161b22]">
-                    <div class="flex items-center gap-2">
-                        <span class="w-3 h-3 rounded-full bg-[#ff5f56]"></span>
-                        <span class="w-3 h-3 rounded-full bg-[#ffbd2e]"></span>
-                        <span class="w-3 h-3 rounded-full bg-[#27c93f]"></span>
-                        <span class="text-xs font-mono text-gray-400 ml-2" x-text="tab === 'engine' ? 'smart-absensi-sync (native edge runtime)' : (tab === 'api' ? 'POST /api/v1/attendance/batch' : 'pipeline::onnx_runtime')"></span>
+            {{-- Right: terminal transcript (5/12) --}}
+            <div class="lg:col-span-5">
+                <div class="rounded-lg border border-[#23272f] bg-[#0d1117] overflow-hidden shadow-[0_16px_40px_-12px_rgba(16,24,40,0.35)]">
+                    <div class="flex items-center gap-1.5 px-3 py-2 border-b border-[#23272f] bg-[#161b22]">
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#ff5f57]"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#febc2e]"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-[#28c840]"></span>
+                        <span class="ml-2 text-[10.5px] font-mono text-[#8b949e]">edge-engine — gate-01</span>
                     </div>
-                    <div class="text-[11px] font-mono text-gray-500 uppercase tracking-wider">
-                        v2.4.0-rs
-                    </div>
+                    <pre class="m-0 p-4 text-[11px] leading-[1.75] font-mono text-[#c9d1d9] overflow-x-auto whitespace-pre"><code><span class="text-[#8b949e]">$</span> smart-absensi --gate gate-01
+
+<span class="text-[#3fb950]">[INFO ]</span> <span class="text-[#58a6ff]">engine::init</span>    ONNX MobileFaceNet (FP16)
+<span class="text-[#3fb950]">[INFO ]</span> <span class="text-[#58a6ff]">camera::open</span>    /dev/video0 · 1280×720 MJPEG
+<span class="text-[#3fb950]">[INFO ]</span> <span class="text-[#58a6ff]">db::sqlite</span>      ring buffer ready · 0 pending
+<span class="text-[#3fb950]">[INFO ]</span> <span class="text-[#58a6ff]">sync::worker</span>    draining every 30s
+
+<span class="text-[#3fb950]">[MATCH]</span> <span class="text-[#e6edf3]">Ahmad Rizky</span> · NISN 00829102
+        score <span class="text-[#d2a8ff]">0.978</span> · liveness <span class="text-[#d2a8ff]">0.941</span> · <span class="text-[#3fb950]">IN</span> · 07:05:12
+<span class="text-[#3fb950]">[WRITE]</span> buffered <span class="text-[#79c0ff]">8f21e5b1-7a2e-4b71-b0e2</span>
+<span class="text-[#3fb950]">[SYNC ]</span> POST /api/v1/attendance/batch → <span class="text-[#3fb950]">201</span>
+        <span class="text-[#8b949e]">1 created · 0 duplicate · 0 rejected</span></code></pre>
                 </div>
-
-                {{-- Tab 1: Edge Runtime Log --}}
-                <div x-show="tab === 'engine'" class="p-5 font-mono text-[12.5px] leading-relaxed text-gray-300 overflow-x-auto space-y-1">
-                    <p class="text-gray-500">// Terminal gate aktif — memantau stream kamera 30 FPS</p>
-                    <p><span class="text-emerald-400">[INFO]</span> <span class="text-blue-400">engine::init:</span> Loading ONNX MobileFaceNet weights (FP16 optimized)</p>
-                    <p><span class="text-emerald-400">[INFO]</span> <span class="text-blue-400">camera::stream:</span> /dev/video0 initialized at 1280x720, MJPEG sink active</p>
-                    <p><span class="text-emerald-400">[INFO]</span> <span class="text-blue-400">db::sqlite:</span> Local ring buffer ready (0 pending sync records)</p>
-                    <p class="text-yellow-400/90"><span class="text-yellow-400">[DETECT]</span> Face detected in 18.4ms | bbox: [240, 112, 380, 420]</p>
-                    <p><span class="text-emerald-400">[MATCH]</span> Embedding matched: <span class="text-white font-bold">Ahmad Rizky (NISN: 00829102)</span> | Score: <span class="text-emerald-300 font-bold">0.978</span> | Dir: <span class="text-cyan-300">IN</span></p>
-                    <p><span class="text-emerald-400">[PERSIST]</span> Written to local buffer (UUID: <span class="text-purple-300">8f21e5b1-7a2e-4b71-b0e2-632e8f810aa4</span>)</p>
-                    <p><span class="text-blue-400">[SYNC]</span> Dispatching batch to cloud: 1 records</p>
-                    <p><span class="text-emerald-400">[HTTP]</span> POST https://absensi.sekolah.id/api/v1/attendance/batch -> <span class="text-emerald-300 font-bold">200 OK</span> (took 82ms)</p>
-                    <p class="text-gray-500">[COOLDOWN] Duplicate suppression active for Ahmad Rizky (300s remaining)</p>
-                </div>
-
-                {{-- Tab 2: API Contract --}}
-                <div x-show="tab === 'api'" class="p-5 font-mono text-[12.5px] leading-relaxed text-gray-300 overflow-x-auto">
-                    <pre class="text-emerald-300">{
-  <span class="text-blue-300">"device_code"</span>: <span class="text-amber-200">"GATE-01-TERMINAL"</span>,
-  <span class="text-blue-300">"records"</span>: [
-    {
-      <span class="text-blue-300">"id"</span>: <span class="text-amber-200">"8f21e5b1-7a2e-4b71-b0e2-632e8f810aa4"</span>,
-      <span class="text-blue-300">"student_id"</span>: <span class="text-purple-300">142</span>,
-      <span class="text-blue-300">"captured_at"</span>: <span class="text-amber-200">"2026-10-16T07:05:12Z"</span>,
-      <span class="text-blue-300">"direction"</span>: <span class="text-amber-200">"in"</span>,
-      <span class="text-blue-300">"score"</span>: <span class="text-purple-300">0.978</span>
-    }
-  ]
-}</pre>
-                    <div class="mt-4 pt-3 border-t border-[#23272f] text-gray-400 text-[11px]">
-                        Isolasi transaksi per-record dengan semantik <code class="text-yellow-300">insertOrIgnore</code> untuk menjamin idempotensi total.
-                    </div>
-                </div>
-
-                {{-- Tab 3: Pipeline Flow --}}
-                <div x-show="tab === 'pipeline'" class="p-5 font-mono text-[12.5px] leading-relaxed text-gray-300 space-y-2">
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700">Tahap 1</span>
-                        <span>Akuisisi Frame Video (Kamera USB / RTSP Stream)</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700">Tahap 2</span>
-                        <span>Deteksi Wajah Ultralight & Ekstraksi Landmark 5-Titik</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700">Tahap 3</span>
-                        <span>Normalisasi Affine & Transformasi 112x112 Pixel</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700">Tahap 4</span>
-                        <span>Komputasi Vektor Embedding 512-Dimensi via ONNX Runtime</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700">Tahap 5</span>
-                        <span>Cosine Distance Matching vs Database Template Anggota</span>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </section>
-
-    {{-- Core Capabilities Bento Grid --}}
-    <section id="fitur" class="py-16 md:py-24 border-b border-hairline bg-canvas-soft/40">
-        <div class="max-w-6xl mx-auto px-md md:px-lg">
-            
-            <div class="text-center max-w-2xl mx-auto mb-12">
-                <span class="text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">KEUNGGULAN UTAMA</span>
-                <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink mt-1">
-                    Dirancang untuk Keandalan Operasional Nyata
-                </h2>
-                <p class="text-sm text-ink-secondary mt-2">
-                    Bukan sekadar aplikasi web biasa. Smart Absensi menggabungkan performa biner native dengan tata kelola cloud enterprise.
+                <p class="text-[11px] text-ink-faint mt-2 mb-0 font-mono">
+                    Latensi inferensi end-to-end: &lt; 800 ms pada CPU quad-core.
                 </p>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                {{-- Feature 1 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center mb-3">
-                            <i data-lucide="zap" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Inferensi Edge Sub-Detik</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Pencocokan biometrik berlangsung instan di mesin gate tanpa antrean jaringan. Anggota cukup melintas di depan kamera untuk tercatat.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        MobileFaceNet • ONNX Runtime
-                    </div>
-                </div>
-
-                {{-- Feature 2 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-accent-green/10 text-accent-green flex items-center justify-center mb-3">
-                            <i data-lucide="shield-check" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Penyangga Offline & Anti-Macet</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Ketika jaringan internet sekolah atau kantor padam, gerbang tetap terbuka dan presensi tetap terekam dalam database lokal terenkripsi.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        SQLite Ring Buffer • Auto-Drain
-                    </div>
-                </div>
-
-                {{-- Feature 3 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-accent-purple/20 text-secondary flex items-center justify-center mb-3">
-                            <i data-lucide="network" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Pairing Perangkat Kriptografis</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Setiap terminal gate diverifikasi menggunakan token pairing bertanda tangan. Administrator dapat menyetujui atau mencabut akses perangkat dalam 1 klik.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        Sanctum Token • Handshake Otentik
-                    </div>
-                </div>
-
-                {{-- Feature 4 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center mb-3">
-                            <i data-lucide="calendar" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Kalkulasi DTR Harian Otomatis</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Sistem secara cerdas menghitung jam kedatangan (MIN) dan kepulangan (MAX) per siswa per hari meskipun anggota melintas berkali-kali.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        Daily Time Record (DTR) Standard
-                    </div>
-                </div>
-
-                {{-- Feature 5 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-accent-teal/10 text-accent-teal flex items-center justify-center mb-3">
-                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Ekspor Laporan Multi-Format</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Unduh rekapitulasi kehadiran dalam format PDF siap cetak, file Excel/XLSX berbasis template resmi instansi, maupun CSV untuk pemrosesan lanjut.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        PDF • XLSX • CSV
-                    </div>
-                </div>
-
-                {{-- Feature 6 --}}
-                <div class="card p-5 bg-surface border border-hairline flex flex-col justify-between">
-                    <div>
-                        <div class="w-8 h-8 rounded-md bg-accent-orange/10 text-accent-orange flex items-center justify-center mb-3">
-                            <i data-lucide="history" class="w-4 h-4"></i>
-                        </div>
-                        <h3 class="text-base font-semibold text-ink mb-1.5">Audit Trail & Koreksi Berizin</h3>
-                        <p class="text-[12.5px] text-ink-muted leading-relaxed">
-                            Seluruh koreksi data absensi manual dicatat dengan alasan terdokumentasi dan identitas operator untuk menjamin integritas data audit.
-                        </p>
-                    </div>
-                    <div class="mt-4 pt-3 border-t border-hairline/60 text-[11px] font-mono text-ink-faint">
-                        Activity Log • Audit Compliance
-                    </div>
-                </div>
-
-            </div>
-
         </div>
-    </section>
+    </div>
+</section>
 
-    {{-- Technical Specifications Section --}}
-    <section id="spesifikasi" class="py-16 md:py-20 border-b border-hairline bg-canvas">
-        <div class="max-w-4xl mx-auto px-md md:px-lg">
-            
-            <div class="mb-8">
-                <span class="text-[11px] font-mono uppercase tracking-wider text-primary font-semibold">SPESIFIKASI SISTEM</span>
-                <h2 class="text-2xl font-bold tracking-tight text-ink mt-1">
-                    Spesifikasi Teknis & Standar Rekayasa
-                </h2>
-            </div>
-
-            <div class="border border-hairline rounded-md overflow-hidden bg-surface">
-                <table class="w-full text-left text-[12.5px]">
-                    <tbody class="divide-y divide-hairline">
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink w-1/3 bg-canvas-soft/30">Edge Runtime</td>
-                            <td class="p-3 text-ink-secondary font-mono">Rust Native (clients/edge-engine-rs) / Python Fallback</td>
-                        </tr>
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink bg-canvas-soft/30">Cloud Management Platform</td>
-                            <td class="p-3 text-ink-secondary font-mono">Laravel 12 (Modular Monolith + Pragmatic Layered Architecture)</td>
-                        </tr>
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink bg-canvas-soft/30">Arsitektur Biometrik</td>
-                            <td class="p-3 text-ink-secondary font-mono">MobileFaceNet 512D Embeddings via ONNX Runtime Engine</td>
-                        </tr>
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink bg-canvas-soft/30">Protokol Kamera Stream</td>
-                            <td class="p-3 text-ink-secondary font-mono">MJPEG HTTP Live Stream (Port 5000 / Web Video Feed)</td>
-                        </tr>
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink bg-canvas-soft/30">Sinkronisasi & Integritas</td>
-                            <td class="p-3 text-ink-secondary font-mono">Idempotent Batch Protocol (RFC-3339 UTC, UUID v4, Cooldown 300s)</td>
-                        </tr>
-                        <tr class="hover:bg-canvas-soft/50 transition-colors">
-                            <td class="p-3 font-medium text-ink bg-canvas-soft/30">Penyimpanan Edge & Cloud</td>
-                            <td class="p-3 text-ink-secondary font-mono">SQLite (Edge Queue) & MySQL / PostgreSQL (Cloud Master)</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-        </div>
-    </section>
-
-    {{-- Call to Action Strip --}}
-    <section class="py-16 bg-gradient-to-t from-canvas-soft to-canvas border-b border-hairline">
-        <div class="max-w-3xl mx-auto px-md md:px-lg text-center">
-            <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-ink mb-3">
-                Siap Mengimplementasikan Smart Absensi?
+{{-- ─────────────────────────────── Arsitektur ──────────────────────────── --}}
+<section id="arsitektur" class="border-b border-hairline bg-canvas-soft">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-14 md:py-20">
+        <div class="max-w-[60ch] mb-10">
+            <p class="text-[11px] font-mono uppercase tracking-[0.14em] text-primary font-semibold mb-2">Arsitektur Dua Lapis</p>
+            <h2 class="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] text-ink m-0">
+                Edge terminal yang mandiri, ledger cloud yang otoritatif.
             </h2>
-            <p class="text-sm text-ink-secondary mb-6 max-w-xl mx-auto">
-                Masuk ke konsol manajemen untuk mengonfigurasi perangkat gate, mendaftarkan anggota, atau memantau kehadiran langsung melalui live video stream.
-            </p>
-            <div class="flex items-center justify-center gap-xs">
-                @auth
-                    <a href="{{ route('dashboard') }}" class="btn btn-primary px-5 py-2">
-                        Buka Live Kamera & Monitor
-                    </a>
-                @else
-                    <a href="{{ route('login') }}" class="btn btn-primary px-5 py-2">
-                        Masuk ke Konsol Manajemen
-                    </a>
-                @endauth
-            </div>
         </div>
-    </section>
 
-    {{-- Minimalist Footer --}}
-    <footer class="py-8 bg-canvas text-caption text-ink-muted">
-        <div class="max-w-6xl mx-auto px-md md:px-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-2">
-                <img src="{{ asset('images/logo.png') }}" class="w-5 h-5 object-contain" alt="Logo">
-                <span class="font-bold text-ink">Smart Absensi</span>
-                <span>— Edge AI Vision Attendance System</span>
-            </div>
-            <div class="flex items-center gap-md">
-                <a href="#arsitektur" class="hover:text-ink transition-colors">Arsitektur</a>
-                <a href="#fitur" class="hover:text-ink transition-colors">Fitur</a>
-                <a href="{{ route('login') }}" class="hover:text-ink transition-colors">Login</a>
-                <span class="text-hairline">|</span>
-                <span class="font-mono text-[11px] text-ink-faint">v2.4.0</span>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+
+            <article class="card bg-canvas">
+                <div class="flex items-center gap-xs mb-sm">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-md bg-primary-soft text-primary">
+                        <i data-lucide="cpu" class="w-4 h-4"></i>
+                    </span>
+                    <h3 class="text-[14px] font-semibold text-ink m-0">Edge Engine — Rust</h3>
+                </div>
+                <p class="text-[12.5px] text-ink-muted leading-relaxed m-0">
+                    Berjalan di perangkat gate. Menangkap frame, mendeteksi wajah, menghitung embedding
+                    512-dimensi, mencocokkan dengan template lokal, dan menulis hasilnya ke SQLite.
+                    Tidak ada panggilan jaringan pada jalur kritis.
+                </p>
+                <dl class="mt-4 pt-3 border-t border-hairline grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
+                    <div><dt class="text-ink-faint">Runtime</dt><dd class="m-0 text-ink font-medium">Rust + ONNX Runtime</dd></div>
+                    <div><dt class="text-ink-faint">Model</dt><dd class="m-0 text-ink font-medium">MobileFaceNet FP16</dd></div>
+                    <div><dt class="text-ink-faint">Penyimpanan</dt><dd class="m-0 text-ink font-medium">SQLite ring buffer</dd></div>
+                    <div><dt class="text-ink-faint">Mode gagal</dt><dd class="m-0 text-ink font-medium">Tetap merekam offline</dd></div>
+                </dl>
+            </article>
+
+            <article class="card bg-canvas">
+                <div class="flex items-center gap-xs mb-sm">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-md bg-primary-soft text-primary">
+                        <i data-lucide="globe" class="w-4 h-4"></i>
+                    </span>
+                    <h3 class="text-[14px] font-semibold text-ink m-0">Cloud Ledger — Laravel</h3>
+                </div>
+                <p class="text-[12.5px] text-ink-muted leading-relaxed m-0">
+                    Menerima batch presensi secara idempoten, menyimpan template wajah terenkripsi
+                    AES-256-GCM, menghitung DTR harian, dan menyajikan laporan PDF/XLSX/CSV.
+                </p>
+                <dl class="mt-4 pt-3 border-t border-hairline grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
+                    <div><dt class="text-ink-faint">Framework</dt><dd class="m-0 text-ink font-medium">Laravel + Sanctum</dd></div>
+                    <div><dt class="text-ink-faint">Idempotensi</dt><dd class="m-0 text-ink font-medium">UUID v4 sebagai PK</dd></div>
+                    <div><dt class="text-ink-faint">Biometrik</dt><dd class="m-0 text-ink font-medium">AES-256-GCM + AAD</dd></div>
+                    <div><dt class="text-ink-faint">Audit</dt><dd class="m-0 text-ink font-medium">Activity log</dd></div>
+                </dl>
+            </article>
         </div>
-    </footer>
+
+        {{-- Sync contract --}}
+        <div class="card bg-canvas mt-md">
+            <div class="flex flex-wrap items-baseline justify-between gap-xs mb-sm">
+                <h3 class="text-[13px] font-semibold text-ink m-0">Kontrak Sinkronisasi</h3>
+                <span class="text-[11px] font-mono text-ink-faint">POST /api/v1/attendance/batch</span>
+            </div>
+            <pre class="m-0 p-3 rounded-md bg-canvas-soft border border-hairline text-[11px] leading-relaxed font-mono text-ink-secondary overflow-x-auto whitespace-pre"><code>{
+  "device_code": "GATE-01",
+  "records": [
+    { "id": "8f21e5b1-…", "student_id": 142, "captured_at": "2026-10-16T07:05:12Z",
+      "direction": "in", "score": 0.978, "liveness_score": 0.941, "time_source": "edge" }
+  ]
+}
+
+<span class="text-ink-faint">→ 200</span> { "results": [ { "id": "8f21e5b1-…", "status": "created" } ] }
+<span class="text-ink-faint">status ∈</span> created | duplicate | rejected</code></pre>
+        </div>
+    </div>
+</section>
+
+{{-- ─────────────────────────────── Fitur ───────────────────────────────── --}}
+<section id="fitur" class="border-b border-hairline">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-14 md:py-20">
+        <div class="max-w-[60ch] mb-10">
+            <p class="text-[11px] font-mono uppercase tracking-[0.14em] text-primary font-semibold mb-2">Kemampuan</p>
+            <h2 class="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] text-ink m-0">
+                Yang benar-benar berjalan hari ini.
+            </h2>
+        </div>
+
+        @php
+            $features = [
+                ['icon' => 'scan-face',  'title' => 'Pengenalan Wajah On-Device',
+                 'body'  => 'Embedding 512-d dihitung di perangkat gate. Template tidak pernah meninggalkan terminal dalam bentuk mentah.',
+                 'meta'  => 'MobileFaceNet · 2048 byte'],
+                ['icon' => 'wifi-off',   'title' => 'Operasional Tanpa Jaringan',
+                 'body'  => 'Saat jaringan atau server padam, gerbang tetap terbuka dan presensi tetap terekam di database lokal terenkripsi.',
+                 'meta'  => 'SQLite ring buffer · auto-drain'],
+                ['icon' => 'shield-check','title' => 'Pairing Perangkat Kriptografis',
+                 'body'  => 'Setiap terminal diverifikasi lewat token pairing bertanda tangan. Administrator menyetujui atau mencabut akses dalam satu klik.',
+                 'meta'  => 'Sanctum token · handshake otentik'],
+                ['icon' => 'calendar',   'title' => 'Kalkulasi DTR Otomatis',
+                 'body'  => 'Sistem menghitung jam kedatangan (MIN) dan kepulangan (MAX) per anggota per hari meski melintas berkali-kali.',
+                 'meta'  => 'Daily Time Record standard'],
+                ['icon' => 'file-spreadsheet', 'title' => 'Ekspor Multi-Format',
+                 'body'  => 'Unduh rekapitulasi kehadiran sebagai PDF siap cetak, XLSX berbasis template instansi, atau CSV untuk pemrosesan lanjut.',
+                 'meta'  => 'PDF · XLSX · CSV'],
+                ['icon' => 'history',    'title' => 'Audit Trail & Koreksi Berizin',
+                 'body'  => 'Setiap koreksi manual dicatat dengan alasan terdokumentasi dan identitas operator untuk integritas audit.',
+                 'meta'  => 'Activity log · alasan wajib'],
+            ];
+        @endphp
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md">
+            @foreach($features as $f)
+                <article class="card flex flex-col justify-between">
+                    <div>
+                        <span class="flex items-center justify-center w-7 h-7 rounded-md bg-primary-soft text-primary mb-3">
+                            <i data-lucide="{{ $f['icon'] }}" class="w-4 h-4"></i>
+                        </span>
+                        <h3 class="text-[13.5px] font-semibold text-ink m-0 mb-1.5">{{ $f['title'] }}</h3>
+                        <p class="text-[12px] text-ink-muted leading-relaxed m-0">{{ $f['body'] }}</p>
+                    </div>
+                    <p class="mt-4 pt-3 border-t border-hairline text-[10.5px] font-mono text-ink-faint m-0">
+                        {{ $f['meta'] }}
+                    </p>
+                </article>
+            @endforeach
+        </div>
+    </div>
+</section>
+
+{{-- ─────────────────────────────── Spesifikasi ─────────────────────────── --}}
+<section id="spesifikasi" class="border-b border-hairline bg-canvas-soft">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-14 md:py-20">
+        <div class="max-w-[60ch] mb-10">
+            <p class="text-[11px] font-mono uppercase tracking-[0.14em] text-primary font-semibold mb-2">Spesifikasi Teknis</p>
+            <h2 class="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] text-ink m-0">
+                Angka yang bisa diverifikasi.
+            </h2>
+        </div>
+
+        <div class="bg-canvas border border-hairline rounded-lg overflow-hidden">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <td class="w-[38%] font-medium text-ink">Latensi inferensi</td>
+                        <td class="font-mono">&lt; 800 ms end-to-end (CPU quad-core)</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Dimensi embedding</td>
+                        <td class="font-mono">512 float32 = 2048 byte</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Ambang kemiripan</td>
+                        <td class="font-mono">cosine ≥ 0.75 (dapat dikonfigurasi)</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Enkripsi template</td>
+                        <td class="font-mono">AES-256-GCM · nonce 12 byte · AAD student+model</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Ukuran batch API</td>
+                        <td class="font-mono">maks. 200 record per panggilan</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Idempotensi</td>
+                        <td class="font-mono">UUID v4 sebagai primary key · insertOrIgnore</td>
+                    </tr>
+                    <tr>
+                        <td class="font-medium text-ink">Format waktu</td>
+                        <td class="font-mono">RFC-3339 · disimpan UTC</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+{{-- ─────────────────────────────── Alur ────────────────────────────────── --}}
+<section id="alur" class="border-b border-hairline">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-14 md:py-20">
+        <div class="max-w-[60ch] mb-10">
+            <p class="text-[11px] font-mono uppercase tracking-[0.14em] text-primary font-semibold mb-2">Alur Kerja</p>
+            <h2 class="text-[26px] sm:text-[32px] font-bold tracking-[-0.025em] text-ink m-0">
+                Dari pendaftaran sampai laporan.
+            </h2>
+        </div>
+
+        @php
+            $steps = [
+                ['n' => '01', 'title' => 'Daftarkan anggota', 'body' => 'Tambah manual, impor Excel, atau sinkron dari sistem akademik.'],
+                ['n' => '02', 'title' => 'Enroll wajah', 'body' => 'Ambil foto lewat kamera web atau unggah berkas. Embedding dihitung di server lalu dienkripsi.'],
+                ['n' => '03', 'title' => 'Pairing terminal', 'body' => 'Terminal gate meminta pairing; administrator menyetujui dan menetapkan lokasi.'],
+                ['n' => '04', 'title' => 'Presensi harian', 'body' => 'Gate mengenali wajah secara lokal dan menulis ke ring buffer.'],
+                ['n' => '05', 'title' => 'Sinkronisasi', 'body' => 'Batch dikirim idempoten ke cloud; duplikat diabaikan, kegagalan diulang.'],
+                ['n' => '06', 'title' => 'Rekap & ekspor', 'body' => 'DTR dihitung otomatis dan dapat diunduh sebagai PDF, XLSX, atau CSV.'],
+            ];
+        @endphp
+
+        <ol class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md list-none m-0 p-0">
+            @foreach($steps as $s)
+                <li class="card">
+                    <span class="text-[11px] font-mono font-semibold text-primary">{{ $s['n'] }}</span>
+                    <h3 class="text-[13px] font-semibold text-ink m-0 mt-1 mb-1">{{ $s['title'] }}</h3>
+                    <p class="text-[12px] text-ink-muted leading-relaxed m-0">{{ $s['body'] }}</p>
+                </li>
+            @endforeach
+        </ol>
+    </div>
+</section>
+
+{{-- ─────────────────────────────── CTA ─────────────────────────────────── --}}
+<section class="bg-canvas-soft border-b border-hairline">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-12 flex flex-wrap items-center justify-between gap-md">
+        <div>
+            <h2 class="text-[20px] sm:text-[24px] font-bold tracking-tight text-ink m-0">Siap mencoba di gerbang Anda?</h2>
+            <p class="text-[12.5px] text-ink-muted m-0 mt-1">Masuk ke konsol untuk mengelola anggota, terminal, dan laporan.</p>
+        </div>
+        @auth
+            <a href="{{ route('dashboard') }}" class="btn btn-primary btn-lg">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                <span>Buka Dashboard</span>
+            </a>
+        @else
+            <a href="{{ route('login') }}" class="btn btn-primary btn-lg">
+                <i data-lucide="log-in" class="w-4 h-4"></i>
+                <span>Masuk Sekarang</span>
+            </a>
+        @endauth
+    </div>
+</section>
+
+{{-- ─────────────────────────────── Footer ──────────────────────────────── --}}
+<footer class="bg-canvas">
+    <div class="max-w-6xl mx-auto px-md md:px-lg py-8 flex flex-wrap items-center justify-between gap-sm text-[11.5px] text-ink-muted">
+        <div class="flex items-center gap-2">
+            <img src="{{ asset('images/logo.png') }}" class="w-5 h-5 object-contain" alt="">
+            <span class="font-semibold text-ink">Smart Absensi</span>
+            <span class="text-ink-faint">— Edge AI Vision Attendance</span>
+        </div>
+        <nav class="flex items-center gap-md" aria-label="Navigasi footer">
+            <a href="#arsitektur" class="hover:text-ink transition-colors">Arsitektur</a>
+            <a href="#fitur" class="hover:text-ink transition-colors">Fitur</a>
+            <a href="{{ route('login') }}" class="hover:text-ink transition-colors">Masuk</a>
+            <span class="font-mono text-[10.5px] text-ink-faint">v2.4.0</span>
+        </nav>
+    </div>
+</footer>
 
 </body>
 </html>

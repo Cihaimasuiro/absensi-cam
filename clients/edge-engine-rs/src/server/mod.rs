@@ -26,6 +26,7 @@ pub use control::{register_control_routes, ControlState, ServerConfig};
 #[derive(Clone)]
 pub struct FrameHub {
     sender: Arc<watch::Sender<Option<Bytes>>>,
+    mirror: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for FrameHub {
@@ -39,11 +40,22 @@ impl FrameHub {
         let (sender, _) = watch::channel(None);
         Self {
             sender: Arc::new(sender),
+            mirror: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
     pub fn publish(&self, frame: Bytes) {
         let _ = self.sender.send_replace(Some(frame));
+    }
+
+    /// Flips the preview horizontally. Applied by the MJPEG encoder when
+    /// `camera.mirror_preview` is enabled in the edge settings.
+    pub fn set_mirror(&self, enabled: bool) {
+        self.mirror.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn is_mirrored(&self) -> bool {
+        self.mirror.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn subscribe(&self) -> watch::Receiver<Option<Bytes>> {
@@ -143,15 +155,44 @@ pub struct StreamAuthQuery {
     pub expires: Option<String>,
 }
 
+fn is_stream_authorized(
+    auth: &auth::AuthManager,
+    headers: &HeaderMap,
+    query: &StreamAuthQuery,
+    device_code: &str,
+) -> bool {
+    let is_paired = std::env::var("SMART_ABSENSI_TOKEN")
+        .map(|t| !t.trim().is_empty())
+        .unwrap_or(false);
+
+    // If device is not paired yet, allow stream for initial setup and standalone testing
+    if !is_paired {
+        return true;
+    }
+
+    // Allow requests originating from or sent to localhost / loopback
+    if let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) {
+        if host.starts_with("127.0.0.1") || host.starts_with("localhost") {
+            return true;
+        }
+    }
+    if let Some(referer) = headers.get(header::REFERER).and_then(|r| r.to_str().ok()) {
+        if referer.contains("://127.0.0.1") || referer.contains("://localhost") {
+            return true;
+        }
+    }
+
+    // Session cookie or valid HMAC signed stream token
+    auth.check_session(headers)
+        || auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), device_code)
+}
+
 async fn snapshot_handler(
     State(state): State<ControlState>,
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    let is_auth = state.auth.check_session(&headers)
-        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
-
-    if !is_auth {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
         return (
             StatusCode::UNAUTHORIZED,
             [
@@ -188,10 +229,7 @@ async fn stream_handler(
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    let is_auth = state.auth.check_session(&headers)
-        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
-
-    if !is_auth {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
         return (
             StatusCode::UNAUTHORIZED,
             [
@@ -252,10 +290,7 @@ async fn events_handler(
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    let is_auth = state.auth.check_session(&headers)
-        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
-
-    if !is_auth {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
         return (
             StatusCode::UNAUTHORIZED,
             [

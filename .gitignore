@@ -80,11 +80,13 @@ step3_web_admin_plan.md
 project_gap_analysis.md
 *.db-wal
 *.db-shm
+/.agents/
 
 # ========================================
-# 7. Rust Cargo Build Outputs
+7. Rust Cargo Build Outputs & Edge Engine Local State
 # ========================================
 target/
-/.agents/
 clients/edge-engine-rs/*.db
+clients/edge-engine-rs/*.argon2
+clients/edge-engine-rs/setup_code.txt
 local_edge.db

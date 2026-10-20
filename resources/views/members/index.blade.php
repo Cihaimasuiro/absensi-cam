@@ -1,911 +1,657 @@
 @extends('layouts.app')
-@section('title', 'Manajemen Anggota')
+@section('title', $isRoster ? 'Data Anggota' : 'Pendaftaran Wajah')
 
 @section('header-actions')
-    <div class="flex items-center gap-xs">
-        <button onclick="document.getElementById('bulkEnrollModal').showModal()" class="btn btn-secondary inline-flex items-center gap-xs">
-            <i data-lucide="folder-up" class="w-4 h-4"></i> Bulk Enroll (ZIP)
-        </button>
-        <button onclick="document.getElementById('importModal').showModal()" class="btn btn-secondary inline-flex items-center gap-xs">
-            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Import Excel
-        </button>
-        <button onclick="document.getElementById('createModal').showModal()" class="btn btn-primary inline-flex items-center gap-xs">
-            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Anggota
-        </button>
-    </div>
+    <button type="button" @click="$refs.createModal.showModal()" class="btn btn-secondary btn-sm">
+        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Tambah Anggota
+    </button>
+    <button type="button" @click="$refs.importModal.showModal()" class="btn btn-secondary btn-sm">
+        <i data-lucide="upload" class="w-3.5 h-3.5"></i> Impor
+    </button>
+    <button type="button" @click="$refs.bulkEnrollModal.showModal()" class="btn btn-primary btn-sm">
+        <i data-lucide="scan-face" class="w-3.5 h-3.5"></i> Daftarkan Massal
+    </button>
 @endsection
 
 @section('content')
-<div x-data>
+<div x-data="membersData">
 
-@if(! ($isRoster ?? false))
-    {{-- LEVEL 1: RUANG / KELAS DIRECTORY --}}
-    
-    {{-- Search & Global Access Bar --}}
-    <div class="card p-sm px-md mb-md flex flex-wrap gap-sm items-center justify-between">
-        <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-sm items-center flex-1 max-w-[480px]">
-            <div class="relative flex-1 min-w-[200px]">
-                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
-                <input type="text" name="search" placeholder="Cari langsung nama atau kode anggota…" class="form-input pl-9 w-full">
-            </div>
-            <button type="submit" class="btn btn-secondary">Cari Anggota</button>
-        </form>
-        <div class="flex items-center gap-xs">
-            <a href="{{ route('students.index', ['view_all' => 1]) }}" class="btn btn-secondary inline-flex items-center gap-xs">
-                <i data-lucide="users" class="w-4 h-4"></i> Lihat Semua Anggota ({{ $totalMembers ?? 0 }})
-            </a>
+    @if(! $isRoster)
+    {{-- ───────────────────────────── Stat tiles ─────────────────────────── --}}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-sm mb-md">
+        <div class="card stat-tile">
+            <span class="stat-tile-label"><i data-lucide="users" class="w-3 h-3"></i> Total Anggota</span>
+            <span class="stat-tile-value">{{ number_format($totalMembers ?? 0, 0, ',', '.') }}</span>
+            <span class="stat-tile-hint">Seluruh data terdaftar</span>
+        </div>
+        <div class="card stat-tile">
+            <span class="stat-tile-label"><i data-lucide="scan-face" class="w-3 h-3"></i> Wajah Terdaftar</span>
+            <span class="stat-tile-value text-success">{{ number_format($totalEnrolled ?? 0, 0, ',', '.') }}</span>
+            <span class="stat-tile-hint">Siap dikenali mesin</span>
+        </div>
+        <div class="card stat-tile">
+            <span class="stat-tile-label"><i data-lucide="user-minus" class="w-3 h-3"></i> Belum Ada Wajah</span>
+            <span class="stat-tile-value text-warning">{{ number_format($unassignedEnrolled ?? 0, 0, ',', '.') }}</span>
+            <span class="stat-tile-hint">Perlu pendaftaran biometrik</span>
+        </div>
+        <div class="card stat-tile">
+            <span class="stat-tile-label"><i data-lucide="users-round" class="w-3 h-3"></i> Tanpa Kelas</span>
+            <span class="stat-tile-value">{{ number_format($unassignedCount ?? 0, 0, ',', '.') }}</span>
+            <span class="stat-tile-hint">Belum masuk rombel</span>
         </div>
     </div>
+    @endif
 
-    {{-- Classrooms Grid --}}
-    <div class="mb-lg">
-        <div class="flex items-center justify-between mb-sm">
-            <h3 class="text-[14px] font-semibold text-ink uppercase tracking-wide flex items-center gap-xs">
-                <i data-lucide="door-open" class="w-4 h-4 text-primary"></i> Daftar Ruang / Kelas
-            </h3>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
-            @forelse($classroomsWithStats ?? [] as $room)
-                <a href="{{ route('students.index', ['classroom_id' => $room->id]) }}" class="card p-md no-underline text-ink hover:border-primary transition-all duration-150 flex flex-col justify-between group cursor-pointer bg-surface">
-                    <div>
-                        <div class="flex items-start justify-between gap-xs mb-xs">
-                            <div class="flex items-center gap-xs">
-                                <div class="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
-                                    <i data-lucide="{{ $room->type === 'staff' ? 'briefcase' : 'graduation-cap' }}" class="w-4 h-4"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors leading-tight">
-                                        {{ $room->name }}
-                                    </h4>
-                                    <div class="text-[11px] text-ink-muted font-mono leading-tight mt-0.5">
-                                        {{ $room->code ?? 'Kode: -' }}
-                                    </div>
-                                </div>
-                            </div>
-                            <span class="badge {{ $room->type === 'staff' ? 'badge-primary' : 'badge-success' }} text-[10.5px]">
-                                {{ $room->type === 'staff' ? 'Staf' : 'Siswa' }}
-                            </span>
-                        </div>
-
-                        <div class="flex flex-col gap-0.5 text-caption text-ink-muted my-xs pt-xs border-t border-hairline/60">
-                            <div class="flex items-center justify-between">
-                                <span class="text-ink-faint">Organisasi / Gedung:</span>
-                                <span class="font-medium text-ink truncate max-w-[160px]">{{ $room->school->name ?? $room->building->name ?? '-' }}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-ink-faint">Jam Masuk:</span>
-                                <span class="font-mono">{{ substr($room->start_time, 0, 5) }} (Toleransi: {{ $room->late_tolerance_minutes ?? '0' }}m)</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-between pt-xs mt-xs border-t border-hairline bg-canvas-soft/50 -mx-md -mb-md px-md py-xs rounded-b-md">
-                        <div class="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-                            <i data-lucide="users" class="w-3.5 h-3.5 text-ink-muted"></i>
-                            {{ $room->students_count }} Anggota
-                        </div>
-                        <div class="flex items-center gap-1 text-[11px] {{ $room->enrolled_count === $room->students_count && $room->students_count > 0 ? 'text-accent-green' : 'text-ink-muted' }}">
-                            <i data-lucide="camera" class="w-3 h-3"></i>
-                            {{ $room->enrolled_count }}/{{ $room->students_count }} Wajah
-                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-ink-faint group-hover:translate-x-0.5 transition-transform"></i>
-                        </div>
-                    </div>
-                </a>
-            @empty
-                <div class="col-span-full card p-xl text-center text-ink-faint">
-                    <i data-lucide="door-closed" class="w-8 h-8 opacity-40 mx-auto mb-xs"></i>
-                    Belum ada ruang / kelas yang terdaftar. Tambahkan kelas di menu Manajemen Organisasi.
-                </div>
-            @endforelse
-
-            {{-- Unassigned Members Card --}}
-            @if(isset($unassignedCount) && $unassignedCount > 0)
-                <a href="{{ route('students.index', ['classroom_id' => 'unassigned']) }}" class="card p-md no-underline text-ink border-dashed hover:border-primary transition-all duration-150 flex flex-col justify-between group cursor-pointer bg-canvas-soft/30">
-                    <div>
-                        <div class="flex items-start justify-between gap-xs mb-xs">
-                            <div class="flex items-center gap-xs">
-                                <div class="w-8 h-8 rounded-md bg-canvas-soft border border-hairline text-ink-muted flex items-center justify-center shrink-0 group-hover:border-primary group-hover:text-primary transition-colors">
-                                    <i data-lucide="user-minus" class="w-4 h-4"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-[14px] font-semibold text-ink group-hover:text-primary transition-colors leading-tight">
-                                        Tanpa Ruang / Kelas
-                                    </h4>
-                                    <div class="text-[11px] text-ink-faint leading-tight mt-0.5">
-                                        Anggota Umum / Belum Ditempatkan
-                                    </div>
-                                </div>
-                            </div>
-                            <span class="badge badge-neutral text-[10.5px]">Umum</span>
-                        </div>
-                        <p class="text-caption text-ink-muted my-xs pt-xs border-t border-hairline/60">
-                            Daftar anggota yang belum terhubung dengan kelas aktif manapun.
-                        </p>
-                    </div>
-
-                    <div class="flex items-center justify-between pt-xs mt-xs border-t border-hairline bg-canvas-soft -mx-md -mb-md px-md py-xs rounded-b-md">
-                        <div class="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-                            <i data-lucide="users" class="w-3.5 h-3.5 text-ink-muted"></i>
-                            {{ $unassignedCount }} Anggota
-                        </div>
-                        <div class="flex items-center gap-1 text-[11px] text-ink-muted">
-                            <i data-lucide="camera" class="w-3 h-3"></i>
-                            {{ $unassignedEnrolled ?? 0 }}/{{ $unassignedCount }} Wajah
-                            <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-ink-faint group-hover:translate-x-0.5 transition-transform"></i>
-                        </div>
-                    </div>
-                </a>
-            @endif
-        </div>
-    </div>
-
-@else
-    {{-- LEVEL 2: ROSTER VIEW (ANGGOTA DALAM KELAS) --}}
-
-    {{-- Breadcrumb & Back Action Bar --}}
-    <div class="card p-sm px-md mb-md flex flex-wrap gap-sm items-center justify-between">
-        <div class="flex items-center gap-sm flex-wrap">
-            <a href="{{ route('students.index') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1">
-                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Daftar Ruang / Kelas
-            </a>
-            <span class="text-hairline">|</span>
+    @if(! $isRoster)
+    {{-- ═══════════════════════ Classroom directory ═════════════════════════ --}}
+    <section class="card p-0 overflow-hidden">
+        <div class="px-md py-sm border-b border-hairline flex flex-wrap items-center justify-between gap-xs">
             <div class="flex items-center gap-xs">
-                @if(isset($activeClassroom) && $activeClassroom)
-                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
-                        <i data-lucide="{{ $activeClassroom->type === 'staff' ? 'briefcase' : 'graduation-cap' }}" class="w-4 h-4 text-primary"></i>
-                        {{ $activeClassroom->name }}
-                    </span>
-                    <span class="badge {{ $activeClassroom->type === 'staff' ? 'badge-primary' : 'badge-success' }} text-[10.5px]">
-                        {{ $activeClassroom->type === 'staff' ? 'Staf' : 'Siswa' }}
-                    </span>
-                    <span class="text-caption text-ink-muted ml-xs">
-                        ({{ $activeClassroom->school->name ?? 'Organisasi' }} &bull; {{ $students->total() }} Anggota)
-                    </span>
-                @elseif(request('classroom_id') === 'unassigned')
-                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
-                        <i data-lucide="user-minus" class="w-4 h-4 text-ink-muted"></i>
-                        Tanpa Ruang / Kelas (Umum)
-                    </span>
-                    <span class="text-caption text-ink-muted ml-xs">
-                        ({{ $students->total() }} Anggota)
-                    </span>
-                @else
-                    <span class="font-semibold text-ink text-[13.5px] flex items-center gap-1">
-                        <i data-lucide="users" class="w-4 h-4 text-primary"></i>
-                        Semua Anggota
-                    </span>
-                    <span class="text-caption text-ink-muted ml-xs">
-                        ({{ $students->total() }} Anggota)
-                    </span>
-                @endif
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-primary"></i>
+                <h2 class="text-[12.5px] font-semibold text-ink m-0">Daftar Ruang / Kelas</h2>
             </div>
+            <a href="{{ route('students.index', ['view_all' => 1]) }}" class="btn-link">
+                Lihat semua anggota
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </a>
         </div>
 
-        {{-- Filter & Search Form --}}
-        <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap gap-xs items-center">
-            @if(request('classroom_id'))
-                <input type="hidden" name="classroom_id" value="{{ request('classroom_id') }}">
-            @endif
-            <div class="relative">
-                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint"></i>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama/kode…" class="form-input pl-8 py-1 text-[12px] w-[180px]">
-            </div>
-            <select name="filter" onchange="this.form.submit()" class="form-select py-1 text-[12px] w-auto">
-                <option value="">Semua Wajah</option>
-                <option value="enrolled" {{ request('filter') === 'enrolled' ? 'selected' : '' }}>Wajah Terdaftar</option>
-                <option value="non-enrolled" {{ request('filter') === 'non-enrolled' ? 'selected' : '' }}>Belum Terdaftar</option>
-            </select>
-            <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
-            @if(request('search') || request('filter'))
-                <a href="{{ route('students.index', ['classroom_id' => request('classroom_id')]) }}" class="btn-link text-ink-faint ml-xs">Reset</a>
-            @endif
-        </form>
-    </div>
-
-    {{-- Table --}}
-    <div class="card p-0 overflow-hidden">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Kode / NIS</th>
-                    <th>Nama Lengkap</th>
-                    <th>Ruang / Kelas</th>
-                    <th>Organisasi / Gedung</th>
-                    <th>Template Wajah</th>
-                    <th class="text-right">Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($students ?? [] as $student)
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <td class="font-mono text-[12px]">{{ $student->code }}</td>
-                        <td class="font-medium text-ink">{{ $student->name }}</td>
-                        <td class="text-ink-muted text-[13px]">{{ $student->classroom->name ?? $student->group->name ?? '-' }}</td>
-                        <td>{{ $student->school->name ?? '-' }}</td>
-                        <td>
-                            @if($student->faceTemplate)
-                                <div class="flex items-center gap-xs">
-                                    @if($student->faceTemplate->photo_path)
-                                        <img src="{{ route('students.photo', $student) }}" alt="{{ $student->name }}" class="w-6 h-6 rounded-full object-cover border border-hairline shrink-0">
-                                    @endif
-                                    <span class="badge badge-success">
-                                        <i data-lucide="check-circle-2" class="w-3 h-3"></i> Terdaftar
-                                    </span>
+                        <th>Ruang / Kelas</th>
+                        <th>Organisasi</th>
+                        <th>Gedung</th>
+                        <th>Jam Masuk</th>
+                        <th class="text-center">Anggota</th>
+                        <th class="text-center">Wajah Terdaftar</th>
+                        <th class="text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($classroomsWithStats ?? [] as $room)
+                        <tr>
+                            <td class="font-medium text-ink">{{ $room->name }}</td>
+                            <td class="text-ink-muted">{{ $room->school->name ?? '—' }}</td>
+                            <td class="text-ink-muted">{{ $room->building->name ?? '—' }}</td>
+                            <td class="font-mono">{{ $room->start_time ? substr($room->start_time, 0, 5) : '—' }}</td>
+                            <td class="text-center tabular-nums">{{ $room->students_count }}</td>
+                            <td class="text-center">
+                                @php($pct = $room->students_count > 0 ? round($room->enrolled_count / $room->students_count * 100) : 0)
+                                <span class="badge {{ $pct >= 90 ? 'badge-success' : ($pct >= 50 ? 'badge-warning' : 'badge-muted') }}">
+                                    {{ $room->enrolled_count }}/{{ $room->students_count }}
+                                </span>
+                            </td>
+                            <td class="text-right">
+                                <a href="{{ route('students.index', ['classroom_id' => $room->id]) }}" class="btn-link">
+                                    Buka <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <span class="empty-state-icon"><i data-lucide="layers" class="w-4 h-4"></i></span>
+                                    <span class="empty-state-title">Belum ada ruang / kelas</span>
+                                    <p class="empty-state-text">Tambahkan kelas pada menu Organisasi untuk mulai mengelompokkan anggota.</p>
                                 </div>
-                            @else
-                                <span class="badge badge-muted">Kosong</span>
-                            @endif
-                        </td>
-                        <td class="text-right">
-                            @if($student->has_active_consent ?? true)
-                            <button @click="$dispatch('open-enroll', {{ $student->toJson() }})" class="btn-link mr-sm {{ $student->faceTemplate ? 'text-primary' : 'text-ink-muted' }}">
-                                <i data-lucide="{{ $student->faceTemplate ? 'user-check' : 'camera' }}" class="w-3.5 h-3.5"></i> {{ $student->faceTemplate ? 'Kelola Wajah' : 'Wajah' }}
-                            </button>
-                            @endif
-                            <button @click="$dispatch('open-edit', {{ $student->toJson() }})" class="btn-link mr-sm">
-                                <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit
-                            </button>
-                            <form action="{{ route('students.destroy', $student) }}" method="POST" class="inline" @submit="confirmSubmit" data-confirm="Hapus anggota ini?">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn-danger-link">
-                                    <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6" class="text-center text-ink-faint p-xxl">
-                            <div class="flex flex-col items-center justify-center gap-sm">
-                                <i data-lucide="users" class="w-8 h-8 opacity-50"></i>
-                                Tidak ada anggota ditemukan di ruang / kelas ini.
-                            </div>
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                            </td>
+                        </tr>
+                    @endforelse
 
-        @if(isset($students) && $students->hasPages())
-            <div class="p-sm px-md border-t border-hairline bg-canvas-soft">
-                {{ $students->links('pagination::tailwind') }}
+                    @if(($unassignedCount ?? 0) > 0)
+                        <tr class="bg-canvas-soft">
+                            <td class="font-medium text-ink">Tanpa Kelas</td>
+                            <td class="text-ink-muted">—</td>
+                            <td class="text-ink-muted">—</td>
+                            <td class="text-ink-muted">—</td>
+                            <td class="text-center tabular-nums">{{ $unassignedCount }}</td>
+                            <td class="text-center">
+                                <span class="badge badge-muted">{{ $unassignedEnrolled ?? 0 }}/{{ $unassignedCount }}</span>
+                            </td>
+                            <td class="text-right">
+                                <a href="{{ route('students.index', ['classroom_id' => 'unassigned']) }}" class="btn-link">
+                                    Buka <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    @endif
+                </tbody>
+            </table>
+        </div>
+    </section>
+    @else
+    {{-- ═══════════════════════ Roster header ═══════════════════════════════ --}}
+    <div class="flex flex-wrap items-center justify-between gap-xs mb-sm">
+        <div class="flex items-center gap-xs min-w-0">
+            <a href="{{ route('students.index') }}" class="btn-icon" aria-label="Kembali ke daftar kelas">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </a>
+            <div class="min-w-0">
+                <p class="text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint m-0">Daftar Ruang / Kelas</p>
+                <p class="text-[13px] font-semibold text-ink truncate m-0">
+                    {{ $activeClassroom->name ?? (request('classroom_id') === 'unassigned' ? 'Tanpa Kelas' : 'Semua Anggota') }}
+                </p>
             </div>
+        </div>
+        @if($activeClassroom)
+            <p class="text-[11.5px] text-ink-muted m-0">
+                {{ $activeClassroom->school->name ?? '—' }}@if($activeClassroom->building) · {{ $activeClassroom->building->name }}@endif
+            </p>
         @endif
     </div>
 
-@endif
-
-{{-- Create Modal --}}
-<dialog id="createModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[440px] w-full backdrop:bg-black/40 shadow-xl m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota
-        </h3>
-        <button type="button" onclick="document.getElementById('createModal').close()" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    <form method="POST" action="{{ route('students.store') }}">
-        @csrf
-        <div class="mb-sm">
-            <label class="form-label">Kode / NIS *</label>
-            <input type="text" name="code" value="{{ old('code') }}" required class="form-input @error('code') border-danger @enderror" placeholder="misal: 10021">
-            @error('code')
-                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-            @enderror
-        </div>
-        <div class="mb-sm">
-            <label class="form-label">Nama Lengkap *</label>
-            <input type="text" name="name" value="{{ old('name') }}" required class="form-input @error('name') border-danger @enderror" placeholder="misal: Ahmad Fauzi">
-            @error('name')
-                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-            @enderror
-        </div>
-        <div class="grid grid-cols-2 gap-sm mb-sm">
-            <div>
-                <label class="form-label">Peran</label>
-                <select name="role" class="form-select @error('role') border-danger @enderror">
-                    <option value="student" {{ old('role') === 'student' ? 'selected' : '' }}>Siswa / Anggota</option>
-                    <option value="teacher" {{ old('role') === 'teacher' ? 'selected' : '' }}>Guru / Pengajar</option>
-                    <option value="employee" {{ old('role') === 'employee' ? 'selected' : '' }}>Karyawan / Staf</option>
-                </select>
-                @error('role')
-                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-                @enderror
+    {{-- ───────────────────────────── Filter bar ─────────────────────────── --}}
+    <section class="card p-sm mb-md">
+        <form method="GET" action="{{ route('students.index') }}" class="flex flex-wrap items-end gap-sm">
+            <div class="flex-1 min-w-[180px]">
+                <label for="member_search" class="form-label">Cari Anggota</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"></i>
+                    <input type="text" id="member_search" name="search" value="{{ request('search') }}"
+                           placeholder="Nama, NIS, atau email…" class="form-input pl-8 w-full">
+                </div>
             </div>
-            <div>
-                <label class="form-label">Gedung / Sekolah</label>
-                <select id="createSchool" name="school_id" onchange="filterClassrooms('create')" class="form-select @error('school_id') border-danger @enderror">
-                    <option value="">-- Pilih --</option>
-                    @foreach($schools as $school)
-                        <option value="{{ $school->id }}" {{ (old('school_id') == $school->id || (isset($activeClassroom) && $activeClassroom && $activeClassroom->school_id == $school->id)) ? 'selected' : '' }}>{{ $school->name }}</option>
-                    @endforeach
-                </select>
-                @error('school_id')
-                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-                @enderror
-            </div>
-        </div>
-        <div class="mb-sm">
-            <label class="form-label">Ruang Kelas / Kelompok</label>
-            <select id="createClassroom" name="classroom_id" class="form-select @error('classroom_id') border-danger @enderror">
-                <option value="">-- Tanpa Kelas / Umum --</option>
-                @foreach($classrooms as $classroom)
-                    <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}" {{ (old('classroom_id') == $classroom->id || (isset($activeClassroom) && $activeClassroom && $activeClassroom->id == $classroom->id)) ? 'selected' : '' }}>
-                        {{ $classroom->name }}
-                    </option>
-                @endforeach
-            </select>
-            @error('classroom_id')
-                <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-            @enderror
-        </div>
-        <div class="grid grid-cols-2 gap-sm mb-sm">
-            <div>
-                <label class="form-label">Email (Opsional)</label>
-                <input type="email" name="email" value="{{ old('email') }}" class="form-input @error('email') border-danger @enderror" placeholder="email@sekolah.sch.id">
-                @error('email')
-                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-                @enderror
-            </div>
-            <div>
-                <label class="form-label">No. Telepon (Opsional)</label>
-                <input type="text" name="phone" value="{{ old('phone') }}" class="form-input @error('phone') border-danger @enderror" placeholder="08xxxxxxxxxx">
-                @error('phone')
-                    <span class="text-danger text-[12px] mt-[2px] block">{{ $message }}</span>
-                @enderror
-            </div>
-        </div>
-        <div class="mb-sm flex items-center gap-xs mt-sm">
-            <input type="checkbox" name="has_consent" value="1" {{ old('has_consent', '1') ? 'checked' : '' }} id="createConsent">
-            <label for="createConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
-        </div>
-        <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('createModal').close()" class="btn btn-secondary">Batal</button>
-            <button type="submit" class="btn btn-primary">Simpan</button>
-        </div>
-    </form>
-</dialog>
-
-{{-- Edit Modal --}}
-<dialog id="editModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[440px] w-full backdrop:bg-black/40 shadow-xl m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota
-        </h3>
-        <button type="button" onclick="document.getElementById('editModal').close()" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    <form method="POST" id="editForm" action="">
-        @csrf
-        @method('PUT')
-        <div class="mb-sm">
-            <label class="form-label">Kode / NIS *</label>
-            <input type="text" id="editCode" name="code" required class="form-input">
-        </div>
-        <div class="mb-sm">
-            <label class="form-label">Nama Lengkap *</label>
-            <input type="text" id="editName" name="name" required class="form-input">
-        </div>
-        <div class="grid grid-cols-2 gap-sm mb-sm">
-            <div>
-                <label class="form-label">Peran</label>
-                <select id="editRole" name="role" class="form-select">
-                    <option value="student">Siswa / Anggota</option>
-                    <option value="teacher">Guru / Pengajar</option>
-                    <option value="employee">Karyawan / Staf</option>
-                </select>
-            </div>
-            <div>
-                <label class="form-label">Gedung / Sekolah</label>
-                <select id="editSchool" name="school_id" onchange="filterClassrooms('edit')" class="form-select">
-                    <option value="">-- Pilih --</option>
-                    @foreach($schools as $school)
-                        <option value="{{ $school->id }}">{{ $school->name }}</option>
+            <div class="min-w-[160px]">
+                <label for="member_classroom" class="form-label">Kelas / Grup</label>
+                <select id="member_classroom" name="classroom_id" class="form-select">
+                    <option value="">Semua kelas</option>
+                    @foreach($classrooms ?? [] as $cr)
+                        <option value="{{ $cr->id }}" @selected(request('classroom_id') == $cr->id)>{{ $cr->name }}</option>
                     @endforeach
                 </select>
             </div>
-        </div>
-        <div class="grid grid-cols-2 gap-sm mb-sm">
-            <div>
-                <label class="form-label">Ruang Kelas / Kelompok</label>
-                <select id="editClassroom" name="classroom_id" class="form-select">
-                    <option value="">-- Tanpa Kelas / Umum --</option>
-                    @foreach($classrooms as $classroom)
-                        <option value="{{ $classroom->id }}" data-school="{{ $classroom->school_id }}">{{ $classroom->name }}</option>
-                    @endforeach
+            <div class="min-w-[150px]">
+                <label for="member_filter" class="form-label">Status Wajah</label>
+                <select id="member_filter" name="filter" class="form-select">
+                    <option value="">Semua</option>
+                    <option value="enrolled" @selected(request('filter') === 'enrolled')>Sudah terdaftar</option>
+                    <option value="unenrolled" @selected(request('filter') === 'unenrolled')>Belum terdaftar</option>
                 </select>
             </div>
+            <div class="flex items-center gap-xs">
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="filter" class="w-3.5 h-3.5"></i> Terapkan
+                </button>
+                @if(request()->hasAny(['search', 'classroom_id', 'filter']))
+                    <a href="{{ route('students.index') }}" class="btn-link text-ink-muted">Reset</a>
+                @endif
+            </div>
+        </form>
+    </section>
+
+    {{-- ───────────────────────────── Member table ───────────────────────── --}}
+    <section class="card p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Nama</th>
+                        <th>NIS / NIP</th>
+                        <th>Kelas / Grup</th>
+                        <th>Organisasi</th>
+                        <th class="text-center">Wajah</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($students ?? [] as $student)
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="w-6 h-6 rounded-full bg-canvas-soft border border-hairline text-ink-muted
+                                                 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                        {{ mb_strtoupper(mb_substr($student->name, 0, 1)) }}
+                                    </span>
+                                    <span class="font-medium text-ink truncate">{{ $student->name }}</span>
+                                </div>
+                            </td>
+                            <td class="font-mono">{{ $student->code }}</td>
+                            <td>{{ $student->classroom->name ?? '—' }}</td>
+                            <td class="text-ink-muted">{{ $student->school->name ?? '—' }}</td>
+                            <td class="text-center">
+                                @if($student->face_template)
+                                    <span class="badge badge-success">Terdaftar</span>
+                                @else
+                                    <span class="badge badge-muted">Kosong</span>
+                                @endif
+                            </td>
+                            <td class="text-center">
+                                @if($student->is_active)
+                                    <span class="badge badge-primary">Aktif</span>
+                                @else
+                                    <span class="badge badge-neutral">Nonaktif</span>
+                                @endif
+                            </td>
+                            <td class="text-right whitespace-nowrap">
+                                <div class="flex items-center justify-end gap-sm">
+                                    <button type="button" @click="openEnroll({{ $student->toJson() }})" class="btn-link">
+                                        <i data-lucide="scan-face" class="w-3 h-3"></i>
+                                        {{ $student->face_template ? 'Kelola Wajah' : 'Daftarkan' }}
+                                    </button>
+                                    <button type="button" @click="openEdit({{ $student->toJson() }})" class="btn-link">
+                                        <i data-lucide="edit" class="w-3 h-3"></i> Edit
+                                    </button>
+                                    <form method="POST" action="{{ route('students.destroy', $student) }}" class="inline"
+                                          @submit="confirmSubmit"
+                                          data-confirm="Hapus {{ $student->name }} beserta seluruh riwayat absensi dan data wajahnya?">
+                                        @csrf @method('DELETE')
+                                        <button type="submit" class="btn-danger-link">
+                                            <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <span class="empty-state-icon"><i data-lucide="users" class="w-4 h-4"></i></span>
+                                    <span class="empty-state-title">Belum ada anggota</span>
+                                    <p class="empty-state-text">Tambahkan anggota satu per satu atau impor dari berkas Excel.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if(isset($students) && $students->hasPages())
+            <div class="px-md py-sm border-t border-hairline bg-canvas-soft">
+                {{ $students->appends(request()->query())->links('pagination::tailwind') }}
+            </div>
+        @endif
+    </section>
+    @endif
+
+    {{-- ═══════════════════════════ Create member ═══════════════════════════ --}}
+    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()"
+            class="w-[min(560px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota</h2>
+            <button type="button" @click="$refs.createModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ route('students.store') }}">
+            @csrf
+            <div class="modal-body grid grid-cols-1 sm:grid-cols-2 gap-sm">
+                <div>
+                    <label for="create_name" class="form-label">Nama Lengkap <span class="req">*</span></label>
+                    <input type="text" id="create_name" name="name" value="{{ old('name') }}"
+                           class="form-input @error('name') is-invalid @enderror" required>
+                    @error('name')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_code" class="form-label">NIS / NIP <span class="req">*</span></label>
+                    <input type="text" id="create_code" name="code" value="{{ old('code') }}"
+                           class="form-input @error('code') is-invalid @enderror" required>
+                    @error('code')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_role" class="form-label">Peran <span class="req">*</span></label>
+                    <select id="create_role" name="role" required class="form-select @error('role') is-invalid @enderror">
+                        <option value="student" @selected(old('role') === 'student')>Siswa</option>
+                        <option value="staff" @selected(old('role') === 'staff')>Guru / Staf</option>
+                    </select>
+                    @error('role')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_school" class="form-label">Organisasi <span class="req">*</span></label>
+                    <select id="create_school" name="school_id" required
+                            x-on:change="filterClassrooms('create')"
+                            class="form-select @error('school_id') is-invalid @enderror">
+                        <option value="">Pilih organisasi…</option>
+                        @foreach($schools ?? [] as $school)
+                            <option value="{{ $school->id }}" @selected(old('school_id') == $school->id)>{{ $school->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('school_id')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="create_classroom" class="form-label">Kelas / Grup</label>
+                    <select id="create_classroom" name="classroom_id"
+                            class="form-select @error('classroom_id') is-invalid @enderror">
+                        <option value="">— Belum ditentukan —</option>
+                        @foreach($classrooms ?? [] as $cr)
+                            <option value="{{ $cr->id }}" data-school="{{ $cr->school_id }}" @selected(old('classroom_id') == $cr->id)>
+                                {{ $cr->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('classroom_id')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_email" class="form-label">Email</label>
+                    <input type="email" id="create_email" name="email" value="{{ old('email') }}"
+                           class="form-input @error('email') is-invalid @enderror" placeholder="opsional">
+                    @error('email')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_phone" class="form-label">No. Telepon</label>
+                    <input type="text" id="create_phone" name="phone" value="{{ old('phone') }}"
+                           class="form-input @error('phone') is-invalid @enderror" placeholder="opsional">
+                    @error('phone')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div>
+                    <label for="create_active" class="form-label">Status</label>
+                    <select id="create_active" name="is_active" class="form-select">
+                        <option value="1" @selected(old('is_active', '1') === '1')>Aktif</option>
+                        <option value="0" @selected(old('is_active') === '0')>Nonaktif</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2 rounded-md border border-hairline bg-canvas-soft p-sm">
+                    <label class="flex items-start gap-xs cursor-pointer">
+                        <input type="checkbox" name="has_consent" value="1" required
+                               class="mt-0.5 w-3.5 h-3.5 rounded border-hairline text-primary focus:ring-2 focus:ring-primary/30 cursor-pointer shrink-0">
+                        <span class="text-[11.5px] text-ink-secondary leading-relaxed">
+                            Yang bersangkutan telah memberikan <strong class="font-semibold text-ink">persetujuan tertulis</strong>
+                            untuk pemrosesan data biometrik wajah sesuai kebijakan privasi instansi.
+                        </span>
+                    </label>
+                    @error('has_consent')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.createModal.close()" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Anggota</button>
+            </div>
+        </form>
+    </dialog>
+
+    {{-- ═══════════════════════════ Edit member ═════════════════════════════ --}}
+    <dialog x-ref="editModal" @click="$event.target === $refs.editModal && $refs.editModal.close()"
+            class="w-[min(560px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Edit Anggota</h2>
+            <button type="button" @click="$refs.editModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <form method="POST" x-ref="editForm" action="">
+            @csrf @method('PUT')
+            <div class="modal-body grid grid-cols-1 sm:grid-cols-2 gap-sm">
+                <div>
+                    <label for="edit_name" class="form-label">Nama Lengkap <span class="req">*</span></label>
+                    <input type="text" id="edit_name" name="name" required class="form-input">
+                </div>
+                <div>
+                    <label for="edit_code" class="form-label">NIS / NIP <span class="req">*</span></label>
+                    <input type="text" id="edit_code" name="code" required class="form-input">
+                </div>
+                <div>
+                    <label for="edit_role" class="form-label">Peran <span class="req">*</span></label>
+                    <select id="edit_role" name="role" required class="form-select">
+                        <option value="student">Siswa</option>
+                        <option value="staff">Guru / Staf</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="edit_school" class="form-label">Organisasi <span class="req">*</span></label>
+                    <select id="edit_school" name="school_id" required x-on:change="filterClassrooms('edit')" class="form-select">
+                        <option value="">Pilih organisasi…</option>
+                        @foreach($schools ?? [] as $school)
+                            <option value="{{ $school->id }}">{{ $school->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="edit_classroom" class="form-label">Kelas / Grup</label>
+                    <select id="edit_classroom" name="classroom_id" class="form-select">
+                        <option value="">— Belum ditentukan —</option>
+                        @foreach($classrooms ?? [] as $cr)
+                            <option value="{{ $cr->id }}" data-school="{{ $cr->school_id }}">{{ $cr->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="edit_email" class="form-label">Email</label>
+                    <input type="email" id="edit_email" name="email" class="form-input">
+                </div>
+                <div>
+                    <label for="edit_phone" class="form-label">No. Telepon</label>
+                    <input type="text" id="edit_phone" name="phone" class="form-input">
+                </div>
+                <div>
+                    <label for="edit_active" class="form-label">Status</label>
+                    <select id="edit_active" name="is_active" class="form-select">
+                        <option value="1">Aktif</option>
+                        <option value="0">Nonaktif</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2 rounded-md border border-hairline bg-canvas-soft p-sm">
+                    <label class="flex items-start gap-xs cursor-pointer">
+                        <input type="checkbox" name="has_consent" id="edit_consent" value="1"
+                               class="mt-0.5 w-3.5 h-3.5 rounded border-hairline text-primary focus:ring-2 focus:ring-primary/30 cursor-pointer shrink-0">
+                        <span class="text-[11.5px] text-ink-secondary leading-relaxed">
+                            Persetujuan biometrik tetap berlaku untuk anggota ini.
+                        </span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.editModal.close()" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+            </div>
+        </form>
+    </dialog>
+
+    {{-- ═══════════════════════════ Import members ══════════════════════════ --}}
+    <dialog x-ref="importModal" @click="$event.target === $refs.importModal && $refs.importModal.close()"
+            class="w-[min(480px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="upload" class="w-4 h-4 text-primary"></i> Impor Anggota</h2>
+            <button type="button" @click="$refs.importModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ route('students.import') }}" enctype="multipart/form-data">
+            @csrf
+            <div class="modal-body flex flex-col gap-sm">
+                <div>
+                    <label for="import_file" class="form-label">Berkas Excel <span class="req">*</span></label>
+                    <input type="file" id="import_file" name="file" accept=".xlsx,.xls,.csv" required
+                           class="form-input @error('file') is-invalid @enderror">
+                    <span class="form-hint">Format .xlsx, .xls, atau .csv — maksimal 5 MB.</span>
+                    @error('file')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div class="alert alert-info">
+                    <i data-lucide="info" class="w-4 h-4 shrink-0 mt-px"></i>
+                    <span>
+                        Gunakan templat resmi agar kolom sesuai.
+                        <a href="{{ route('students.template') }}" class="font-semibold underline">Unduh templat</a>.
+                    </span>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.importModal.close()" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-primary">Mulai Impor</button>
+            </div>
+        </form>
+    </dialog>
+
+    {{-- ═══════════════════════════ Bulk enroll ═════════════════════════════ --}}
+    <dialog x-ref="bulkEnrollModal" @click="$event.target === $refs.bulkEnrollModal && $refs.bulkEnrollModal.close()"
+            class="w-[min(480px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="scan-face" class="w-4 h-4 text-primary"></i> Daftarkan Wajah Massal</h2>
+            <button type="button" @click="$refs.bulkEnrollModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ route('students.bulk-enroll') }}" enctype="multipart/form-data">
+            @csrf
+            <div class="modal-body flex flex-col gap-sm">
+                <p class="text-[12px] text-ink-muted m-0">
+                    Unggah arsip ZIP berisi foto wajah. Nama berkas harus sama dengan NIS anggota
+                    (contoh: <code class="font-mono text-ink">00829102.jpg</code>).
+                </p>
+                <div>
+                    <label for="bulk_zip" class="form-label">Berkas ZIP <span class="req">*</span></label>
+                    <input type="file" id="bulk_zip" name="zip_file" accept=".zip" required
+                           class="form-input @error('zip_file') is-invalid @enderror">
+                    @error('zip_file')<span class="form-error">{{ $message }}</span>@enderror
+                </div>
+                <div class="alert alert-warning">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 mt-px"></i>
+                    <span>Proses berjalan di latar belakang. Anda dapat menutup halaman ini setelah unggahan selesai.</span>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.bulkEnrollModal.close()" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-primary">Unggah & Proses</button>
+            </div>
+        </form>
+    </dialog>
+
+    {{-- ═══════════════════════════ Enroll face ═════════════════════════════ --}}
+    <dialog x-ref="enrollModal" @close="closeEnrollModal()"
+            @click="$event.target === $el && closeEnrollModal()"
+            class="w-[min(520px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title">
+                <i data-lucide="scan-face" class="w-4 h-4 text-primary"></i>
+                <span x-text="enrollStudent && enrollStudent.face_template ? 'Kelola Wajah' : 'Daftarkan Wajah'">Daftarkan Wajah</span>
+            </h2>
+            <button type="button" @click="closeEnrollModal()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="modal-body flex flex-col gap-sm">
+            <div class="flex items-center justify-between gap-sm pb-sm border-b border-hairline">
+                <div class="min-w-0">
+                    <p class="text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint m-0">Anggota</p>
+                    <p class="text-[13px] font-semibold text-ink truncate m-0 mt-0.5" x-text="enrollStudent ? enrollStudent.name : '—'"></p>
+                </div>
+                <span class="badge" :class="enrollStudent && enrollStudent.face_template ? 'badge-success' : 'badge-muted'"
+                      x-text="enrollStudent && enrollStudent.face_template ? 'Terdaftar' : 'Kosong'"></span>
+            </div>
+
+            <div class="flex gap-0 border-b border-hairline" role="tablist">
+                <button type="button" role="tab" x-show="enrollStudent && enrollStudent.face_template"
+                        @click="switchEnrollTab('current')"
+                        class="flex-1 pb-1.5 text-[12px] font-medium border-b-2 -mb-px transition-colors cursor-pointer bg-transparent"
+                        :class="enrollTab === 'current' ? 'border-primary text-primary' : 'border-transparent text-ink-faint hover:text-ink'">
+                    Foto Terdaftar
+                </button>
+                <button type="button" role="tab" @click="switchEnrollTab('camera')"
+                        class="flex-1 pb-1.5 text-[12px] font-medium border-b-2 -mb-px transition-colors cursor-pointer bg-transparent"
+                        :class="enrollTab === 'camera' ? 'border-primary text-primary' : 'border-transparent text-ink-faint hover:text-ink'">
+                    Kamera Web
+                </button>
+                <button type="button" role="tab" @click="switchEnrollTab('upload')"
+                        class="flex-1 pb-1.5 text-[12px] font-medium border-b-2 -mb-px transition-colors cursor-pointer bg-transparent"
+                        :class="enrollTab === 'upload' ? 'border-primary text-primary' : 'border-transparent text-ink-faint hover:text-ink'">
+                    Unggah Berkas
+                </button>
+            </div>
+
+            <div x-show="enrollTab === 'current'" x-cloak
+                 class="relative bg-canvas-soft rounded-lg p-md flex flex-col items-center justify-center border border-hairline min-h-[260px]">
+                <template x-if="enrollStudent && enrollStudent.face_template && enrollStudent.face_template.photo_path">
+                    <img :src="'/students/' + enrollStudent.id + '/photo?t=' + Date.now()"
+                         alt="Foto wajah terdaftar"
+                         class="max-h-[220px] max-w-full rounded-md border border-hairline object-cover mb-xs">
+                </template>
+                <template x-if="enrollStudent && enrollStudent.face_template && !enrollStudent.face_template.photo_path">
+                    <div class="p-lg bg-surface border border-hairline rounded-lg text-ink-muted text-[12px] flex flex-col items-center gap-xs text-center">
+                        <i data-lucide="user-check" class="w-7 h-7 text-success"></i>
+                        <p class="m-0">Data biometrik aktif pada mesin absensi.</p>
+                        <p class="text-[11px] text-ink-faint m-0">File foto mentah sebelumnya tidak diarsipkan di server.</p>
+                    </div>
+                </template>
+                <p class="text-[11.5px] text-ink-muted mt-xs mb-0"
+                   x-text="enrollStudent && enrollStudent.face_template && enrollStudent.face_template.created_at
+                       ? 'Terdaftar sejak: ' + new Date(enrollStudent.face_template.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                       : ''"></p>
+            </div>
+
+            <div x-show="enrollTab === 'camera'" x-cloak
+                 class="relative bg-black rounded-lg overflow-hidden h-[300px] flex items-center justify-center border border-hairline">
+                <video x-ref="enrollVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div x-show="cameraLoading" x-cloak
+                     class="absolute inset-0 bg-surface/85 flex items-center justify-center text-ink-faint text-[12px]">
+                    <span x-text="cameraError || 'Membuka kamera…'"></span>
+                </div>
+                <canvas x-ref="enrollCanvas" class="hidden"></canvas>
+            </div>
+
+            <div x-show="enrollTab === 'upload'" x-cloak
+                 class="relative bg-canvas-soft rounded-lg h-[300px] flex flex-col items-center justify-center border border-hairline border-dashed p-md gap-xs">
+                <i data-lucide="upload-cloud" class="w-8 h-8 text-ink-faint"></i>
+                <p class="text-[12px] text-ink-faint m-0">Pilih foto wajah (.jpg, .png) maksimal 5 MB.</p>
+                <input type="file" x-ref="enrollFileInput" accept="image/jpeg,image/png,image/webp"
+                       @change="previewUpload($event)"
+                       class="form-input max-w-[260px] text-[11.5px]">
+                <template x-if="uploadPreview">
+                    <img :src="uploadPreview" alt="Pratinjau foto"
+                         class="mt-sm max-h-[150px] rounded border border-hairline object-cover">
+                </template>
+            </div>
+
+            <template x-if="enrollStatus">
+                <div class="alert" :class="enrollStatusType === 'success' ? 'alert-success' : (enrollStatusType === 'error' ? 'alert-error' : 'alert-info')"
+                     role="status">
+                    <i data-lucide="info" class="w-4 h-4 shrink-0 mt-px"></i>
+                    <span x-text="enrollStatus"></span>
+                </div>
+            </template>
+        </div>
+
+        <div class="modal-foot justify-between">
             <div>
-                <label class="form-label">Status Aktif</label>
-                <select id="editActive" name="is_active" class="form-select">
-                    <option value="1">Aktif</option>
-                    <option value="0">Tidak Aktif</option>
-                </select>
+                <button type="button" x-show="enrollStudent && enrollStudent.face_template" x-cloak
+                        @click="deleteFaceTemplate()" :disabled="enrollBusy"
+                        class="btn btn-danger-outline btn-sm">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus Wajah
+                </button>
+            </div>
+            <div class="flex items-center gap-xs">
+                <button type="button" @click="closeEnrollModal()" class="btn btn-secondary">Tutup</button>
+                <button type="button" x-show="enrollTab === 'current'" x-cloak
+                        @click="switchEnrollTab('camera')" class="btn btn-secondary btn-sm">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Ganti Wajah
+                </button>
+                <button type="button" x-show="enrollTab === 'camera'" x-cloak
+                        @click="captureAndEnroll()" :disabled="enrollBusy"
+                        class="btn btn-primary">
+                    <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                    <span x-text="enrollBusy ? 'Memproses…' : 'Ambil & Simpan'">Ambil & Simpan</span>
+                </button>
+                <button type="button" x-show="enrollTab === 'upload'" x-cloak
+                        @click="submitUploadAndEnroll()" :disabled="enrollBusy"
+                        class="btn btn-primary">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                    <span x-text="enrollBusy ? 'Memproses…' : 'Simpan Wajah'">Simpan Wajah</span>
+                </button>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-sm mb-sm">
-            <div>
-                <label class="form-label">Email (Opsional)</label>
-                <input type="email" id="editEmail" name="email" class="form-input" placeholder="email@sekolah.sch.id">
-            </div>
-            <div>
-                <label class="form-label">No. Telepon (Opsional)</label>
-                <input type="text" id="editPhone" name="phone" class="form-input" placeholder="08xxxxxxxxxx">
-            </div>
-        </div>
-        <div class="mb-sm flex items-center gap-xs mt-sm">
-            <input type="checkbox" name="has_consent" value="1" id="editConsent">
-            <label for="editConsent" class="text-[13px] text-ink-faint">Saya menyatakan bahwa anggota ini menyetujui data wajahnya diproses.</label>
-        </div>
-        <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('editModal').close()" class="btn btn-secondary">Batal</button>
-            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
-        </div>
-    </form>
-</dialog>
+    </dialog>
+</div>
+@endsection
 
-{{-- Import Modal --}}
-<dialog id="importModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-xl m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-primary"></i> Import Anggota (Excel)
-        </h3>
-        <button type="button" onclick="document.getElementById('importModal').close()" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    
-    <div class="mb-sm p-sm bg-canvas-soft border border-hairline rounded-md">
-        <p class="text-[12px] text-ink-muted mb-xs">Gunakan format template yang telah disediakan agar proses impor berjalan lancar.</p>
-        <a href="{{ route('students.template') }}" class="btn btn-secondary inline-flex items-center gap-xs">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i> Unduh Template Excel
-        </a>
-    </div>
-
-    <form method="POST" action="{{ route('students.import') }}" enctype="multipart/form-data">
-        @csrf
-        <div class="mb-sm">
-            <label class="form-label">Berkas Excel (.xlsx / .xls)</label>
-            <input type="file" name="file" accept=".xlsx, .xls" required class="text-[12.5px] form-input">
-        </div>
-        <p class="text-[11px] text-ink-faint mb-md">Sistem otomatis mendaftarkan anggota tanpa profil wajah. Profil wajah dapat di-enroll menyusul.</p>
-        <div class="flex justify-end gap-xs">
-            <button type="button" onclick="document.getElementById('importModal').close()" class="btn btn-secondary">Batal</button>
-            <button type="submit" class="btn btn-primary">Import Data</button>
-        </div>
-    </form>
-</dialog>
-
-{{-- Bulk Enroll Modal --}}
-<dialog id="bulkEnrollModal" onclick="const r = this.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) this.close();" class="p-lg max-w-[460px] w-full m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
-            <i data-lucide="folder-up" class="w-4 h-4 text-primary"></i> Bulk Enroll (via ZIP)
-        </h3>
-        <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    <form method="POST" action="{{ route('students.bulk-enroll') }}" enctype="multipart/form-data">
-        @csrf
-        <div class="mb-sm">
-            <label class="form-label">Berkas ZIP Foto</label>
-            <input type="file" name="zip_file" accept=".zip" required class="text-[12.5px] form-input">
-        </div>
-        <p class="text-[11.5px] text-ink-faint mb-md">Penting: Namai foto siswa dengan Kode/NIS mereka (contoh: <code>12345.jpg</code> atau <code>12345.png</code>) lalu masukkan ke dalam satu file ZIP.</p>
-        <div class="mb-sm flex items-center gap-xs">
-            <input type="checkbox" name="has_consent" value="1" required id="bulkConsent">
-            <label for="bulkConsent" class="text-[11.5px] text-ink-faint">Saya mengonfirmasi bahwa semua siswa dalam ZIP ini telah menyetujui pemrosesan data wajah.</label>
-        </div>
-        <div class="flex justify-end gap-xs mt-md">
-            <button type="button" onclick="document.getElementById('bulkEnrollModal').close()" class="btn btn-secondary">Batal</button>
-            <button type="submit" class="btn btn-primary">Mulai Proses Massal</button>
-        </div>
-    </form>
-</dialog>
-{{-- Enroll Modal (CRUD Wajah) --}}
-<dialog id="enrollModal" onclick="if(event.target === this) closeEnrollModal()" oncancel="closeEnrollModal()" class="p-lg max-w-[460px] w-full m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs">
-            <i data-lucide="camera" class="w-4 h-4 text-primary"></i> <span id="enrollModalTitle">Kelola Wajah</span>
-        </h3>
-        <button onclick="closeEnrollModal()" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    
-    <div class="text-center mb-sm">
-        <div class="flex items-center justify-center gap-xs mb-sm">
-            <span class="text-[12.5px] text-ink-faint">Anggota:</span>
-            <strong id="enrollStudentName" class="text-ink text-[13px]"></strong>
-            <span id="enrollStatusBadge" class="badge"></span>
-        </div>
-        
-        <div class="flex gap-2 mb-sm border-b border-hairline">
-            <button type="button" id="tabCurrent" onclick="switchEnrollTab('current')" class="hidden flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer">Foto Terdaftar</button>
-            <button type="button" id="tabCamera" onclick="switchEnrollTab('camera')" class="flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Kamera Web</button>
-            <button type="button" id="tabUpload" onclick="switchEnrollTab('upload')" class="flex-1 pb-xs text-[12.5px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer">Upload Berkas</button>
-        </div>
-
-        {{-- Current Enrolled Face View --}}
-        <div id="viewCurrent" class="hidden relative bg-canvas-soft rounded-lg p-md flex flex-col items-center justify-center border border-hairline min-h-[260px]">
-            <img id="currentFaceImg" src="" alt="Foto Wajah" class="hidden max-h-[220px] max-w-full rounded-md border border-hairline object-cover shadow-sm mb-xs">
-            <div id="currentFacePlaceholder" class="hidden p-lg bg-surface border border-hairline rounded-lg text-ink-muted text-[12.5px] flex flex-col items-center gap-xs">
-                <i data-lucide="user-check" class="w-7 h-7 text-accent-green"></i>
-                <p class="m-0">Data biometrik aktif pada mesin absensi.</p>
-                <p class="text-[11px] text-ink-faint m-0">File foto mentah sebelumnya tidak diarsipkan di server.</p>
-            </div>
-            <p id="currentFaceDate" class="text-[11.5px] text-ink-muted mt-xs"></p>
-        </div>
-
-        {{-- Camera View --}}
-        <div id="viewCamera" class="relative bg-black rounded-lg overflow-hidden h-[300px] flex items-center justify-center border border-hairline">
-            <video id="enrollVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
-            <div id="enrollLoading" class="absolute inset-0 bg-surface/80 flex items-center justify-center text-ink-faint text-[12.5px]">
-                Membuka Kamera...
-            </div>
-            <canvas id="enrollCanvas" class="hidden"></canvas>
-        </div>
-
-        {{-- Upload View --}}
-        <div id="viewUpload" class="hidden relative bg-canvas-soft rounded-lg h-[300px] flex flex-col items-center justify-center border border-hairline border-dashed p-md">
-            <i data-lucide="upload-cloud" class="w-8 h-8 text-ink-faint mb-xs"></i>
-            <p class="text-[12.5px] text-ink-faint mb-sm">Pilih foto wajah (.jpg, .png) max 5MB.</p>
-            <input type="file" id="enrollFileInput" accept="image/jpeg,image/png,image/webp" class="text-[12px] text-ink w-full max-w-[250px] file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11.5px] file:bg-primary/10 file:text-primary hover:file:bg-primary/20">
-            <img id="enrollPreview" class="hidden mt-sm max-h-[150px] rounded border border-hairline object-cover">
-        </div>
-    </div>
-
-    <div id="enrollStatus" class="hidden p-xs text-center text-[12px] rounded mb-sm"></div>
-
-    <div class="flex items-center justify-between mt-md pt-xs border-t border-hairline">
-        <div>
-            <button type="button" id="btnDeleteFace" onclick="deleteFaceTemplate()" class="hidden btn btn-danger btn-sm">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah
-            </button>
-        </div>
-        <div class="flex gap-xs">
-            <button type="button" onclick="closeEnrollModal()" class="btn btn-secondary">Tutup</button>
-            <button type="button" id="btnRetakeFace" onclick="switchEnrollTab('camera')" class="hidden btn btn-secondary btn-sm">
-                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Ganti Wajah
-            </button>
-            <button type="button" id="btnCapture" onclick="captureAndEnroll()" class="btn btn-primary">
-                <i data-lucide="camera" class="w-3.5 h-3.5"></i> Ambil & Simpan
-            </button>
-            <button type="button" id="btnUpload" onclick="submitUploadAndEnroll()" class="hidden btn btn-primary">
-                <i data-lucide="upload" class="w-3.5 h-3.5"></i> Simpan Wajah
-            </button>
-        </div>
-    </div>
-</dialog>
-
-
+@push('scripts')
 <script nonce="{{ \Illuminate\Support\Facades\Vite::cspNonce() }}">
-    document.addEventListener('open-edit', (e) => editStudent(e.detail));
-    document.addEventListener('open-enroll', (e) => openEnrollModal(e.detail));
-
-    function editStudent(student) {
-        document.getElementById('editForm').action = '/students/' + student.id;
-        document.getElementById('editCode').value = student.code || '';
-        document.getElementById('editName').value = student.name || '';
-        document.getElementById('editRole').value = student.role || 'student';
-        document.getElementById('editSchool').value = student.school_id || '';
-        filterClassrooms('edit');
-        document.getElementById('editClassroom').value = student.classroom_id || '';
-        document.getElementById('editEmail').value = student.email || '';
-        document.getElementById('editPhone').value = student.phone || '';
-        document.getElementById('editActive').value = student.is_active ? '1' : '0';
-        document.getElementById('editConsent').checked = true;
-        document.getElementById('editModal').showModal();
-    }
-
     function filterClassrooms(prefix) {
-        const schoolSelect = document.getElementById(prefix + 'School');
-        const classroomSelect = document.getElementById(prefix + 'Classroom');
+        const schoolSelect = document.getElementById(prefix + '_school');
+        const classroomSelect = document.getElementById(prefix + '_classroom');
         if (!schoolSelect || !classroomSelect) return;
         const selectedSchool = schoolSelect.value;
-        const currentClassroomVal = classroomSelect.value;
+        const currentValue = classroomSelect.value;
 
         Array.from(classroomSelect.options).forEach(opt => {
             if (!opt.value) return;
             const schoolId = opt.getAttribute('data-school');
-            if (!selectedSchool || !schoolId || schoolId === selectedSchool) {
-                opt.hidden = false;
-            } else {
-                opt.hidden = true;
-                if (opt.value === currentClassroomVal) {
-                    classroomSelect.value = '';
-                }
-            }
+            const visible = !selectedSchool || !schoolId || schoolId === selectedSchool;
+            opt.hidden = !visible;
+            if (!visible && opt.value === currentValue) classroomSelect.value = '';
         });
     }
-
-    @if($errors->any())
-    document.addEventListener('DOMContentLoaded', () => {
-        const modal = document.getElementById('createModal');
-        if (modal) {
-            modal.showModal();
-            filterClassrooms('create');
-        }
-    });
-    @endif
-
-    let enrollStream = null;
-    let currentEnrollStudent = null;
-    let activeEnrollMode = 'camera';
-
-    function switchEnrollTab(mode) {
-        activeEnrollMode = mode;
-        const tabCurrent = document.getElementById('tabCurrent');
-        const tabCamera = document.getElementById('tabCamera');
-        const tabUpload = document.getElementById('tabUpload');
-
-        const viewCurrent = document.getElementById('viewCurrent');
-        const viewCamera = document.getElementById('viewCamera');
-        const viewUpload = document.getElementById('viewUpload');
-
-        const btnCapture = document.getElementById('btnCapture');
-        const btnUpload = document.getElementById('btnUpload');
-        const btnRetakeFace = document.getElementById('btnRetakeFace');
-
-        const activeClass = "flex-1 pb-xs text-[13px] font-medium border-b-2 border-primary text-primary bg-transparent cursor-pointer";
-        const inactiveClass = "flex-1 pb-xs text-[13px] font-medium border-b-2 border-transparent text-ink-faint hover:text-ink bg-transparent cursor-pointer";
-
-        tabCurrent.className = (mode === 'current') ? activeClass : inactiveClass;
-        tabCamera.className = (mode === 'camera') ? activeClass : inactiveClass;
-        tabUpload.className = (mode === 'upload') ? activeClass : inactiveClass;
-
-        if (mode === 'current') {
-            viewCurrent.classList.remove('hidden');
-            viewCamera.classList.add('hidden');
-            viewUpload.classList.add('hidden');
-
-            btnCapture.classList.add('hidden');
-            btnUpload.classList.add('hidden');
-            btnRetakeFace.classList.remove('hidden');
-            stopCamera();
-        } else if (mode === 'camera') {
-            viewCamera.classList.remove('hidden');
-            viewCurrent.classList.add('hidden');
-            viewUpload.classList.add('hidden');
-
-            btnCapture.classList.remove('hidden');
-            btnUpload.classList.add('hidden');
-            btnRetakeFace.classList.add('hidden');
-            startCamera();
-        } else {
-            viewUpload.classList.remove('hidden');
-            viewCurrent.classList.add('hidden');
-            viewCamera.classList.add('hidden');
-
-            btnUpload.classList.remove('hidden');
-            btnCapture.classList.add('hidden');
-            btnRetakeFace.classList.add('hidden');
-            stopCamera();
-        }
-
-        if (window.lucide) window.lucide.createIcons();
-    }
-
-    async function startCamera() {
-        if (enrollStream) return;
-        try {
-            document.getElementById('enrollLoading').classList.remove('hidden');
-            enrollStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-            document.getElementById('enrollVideo').srcObject = enrollStream;
-            document.getElementById('enrollLoading').classList.add('hidden');
-        } catch (e) {
-            document.getElementById('enrollLoading').textContent = 'Kamera tidak dapat diakses.';
-            document.getElementById('btnCapture').disabled = true;
-        }
-    }
-
-    function stopCamera() {
-        if (enrollStream) {
-            enrollStream.getTracks().forEach(track => track.stop());
-            enrollStream = null;
-        }
-    }
-
-    async function openEnrollModal(student) {
-        currentEnrollStudent = student;
-        document.getElementById('enrollStudentName').textContent = student.name;
-        document.getElementById('enrollStatus').className = 'hidden p-xs text-center text-[13px] rounded mb-sm';
-        document.getElementById('btnCapture').disabled = false;
-        document.getElementById('btnUpload').disabled = false;
-        
-        // Reset file input & preview
-        document.getElementById('enrollFileInput').value = '';
-        document.getElementById('enrollPreview').classList.add('hidden');
-        document.getElementById('enrollPreview').src = '';
-
-        const isEnrolled = !!student.face_template;
-        const tabCurrent = document.getElementById('tabCurrent');
-        const btnDeleteFace = document.getElementById('btnDeleteFace');
-        const title = document.getElementById('enrollModalTitle');
-        const badge = document.getElementById('enrollStatusBadge');
-
-        if (isEnrolled) {
-            if (title) title.textContent = 'Kelola Wajah';
-            if (tabCurrent) tabCurrent.classList.remove('hidden');
-            if (btnDeleteFace) btnDeleteFace.classList.remove('hidden');
-            if (badge) {
-                badge.className = 'badge badge-success text-[11px]';
-                badge.innerHTML = '<i data-lucide="check-circle-2" class="w-3 h-3"></i> Terdaftar';
-            }
-
-            const img = document.getElementById('currentFaceImg');
-            const placeholder = document.getElementById('currentFacePlaceholder');
-            const dateInfo = document.getElementById('currentFaceDate');
-
-            if (student.face_template && student.face_template.photo_path) {
-                if (img) {
-                    img.src = '/students/' + student.id + '/photo?t=' + Date.now();
-                    img.classList.remove('hidden');
-                }
-                if (placeholder) placeholder.classList.add('hidden');
-            } else {
-                if (img) img.classList.add('hidden');
-                if (placeholder) placeholder.classList.remove('hidden');
-            }
-
-            const createdDate = (student.face_template && student.face_template.created_at)
-                ? new Date(student.face_template.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                : '-';
-            if (dateInfo) dateInfo.textContent = 'Terdaftar sejak: ' + createdDate;
-
-            switchEnrollTab('current');
-        } else {
-            if (title) title.textContent = 'Daftarkan Wajah';
-            if (tabCurrent) tabCurrent.classList.add('hidden');
-            if (btnDeleteFace) btnDeleteFace.classList.add('hidden');
-            if (badge) {
-                badge.className = 'badge badge-muted text-[11px]';
-                badge.textContent = 'Kosong';
-            }
-
-            switchEnrollTab('camera');
-        }
-
-        const modal = document.getElementById('enrollModal');
-        modal.showModal();
-
-        if (window.lucide) window.lucide.createIcons();
-    }
-
-    document.getElementById('enrollFileInput').addEventListener('change', function(e) {
-        if (this.files && this.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = document.getElementById('enrollPreview');
-                img.src = e.target.result;
-                img.classList.remove('hidden');
-            }
-            reader.readAsDataURL(this.files[0]);
-        }
-    });
-
-    function closeEnrollModal() {
-        stopCamera();
-        document.getElementById('enrollModal').close();
-    }
-
-    async function processEnrollRequest(formData, btnId, defaultText) {
-        const btn = document.getElementById(btnId);
-        const status = document.getElementById('enrollStatus');
-        
-        btn.disabled = true;
-        btn.innerHTML = 'Memproses...';
-        
-        try {
-            const res = await fetch(`/students/${currentEnrollStudent.id}/enroll`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json'
-                },
-                body: formData
-            });
-            
-            const result = await res.json();
-            
-            if (res.ok) {
-                status.textContent = 'Wajah berhasil didaftarkan! Memuat ulang...';
-                status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-success/10 text-success border border-success/20';
-                setTimeout(() => window.location.reload(), 1500);
-            } else {
-                status.textContent = result.message || 'Gagal mendaftar wajah.';
-                status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
-                btn.disabled = false;
-                btn.innerHTML = defaultText;
-                window.refreshIcons?.();
-            }
-        } catch (err) {
-            status.textContent = 'Terjadi kesalahan jaringan.';
-            status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
-            btn.disabled = false;
-            btn.innerHTML = defaultText;
-            window.refreshIcons?.();
-        }
-    }
-
-    async function captureAndEnroll() {
-        if (!currentEnrollStudent || !enrollStream) return;
-        
-        const video = document.getElementById('enrollVideo');
-        const canvas = document.getElementById('enrollCanvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        
-        canvas.toBlob(async (blob) => {
-            const formData = new FormData();
-            formData.append('photo', blob, 'face.jpg');
-            await processEnrollRequest(formData, 'btnCapture', '<i data-lucide="camera" class="w-4 h-4"></i> Ambil & Simpan');
-        }, 'image/jpeg', 0.9);
-    }
-
-    async function submitUploadAndEnroll() {
-        const fileInput = document.getElementById('enrollFileInput');
-        if (!currentEnrollStudent || !fileInput.files.length) {
-            alert('Silakan pilih berkas foto terlebih dahulu.');
-            return;
-        }
-        
-        const formData = new FormData();
-        formData.append('photo', fileInput.files[0]);
-        await processEnrollRequest(formData, 'btnUpload', '<i data-lucide="upload" class="w-4 h-4"></i> Simpan Wajah');
-    }
-
-    async function deleteFaceTemplate() {
-        if (!currentEnrollStudent) return;
-        if (!confirm(`Hapus data biometrik wajah untuk ${currentEnrollStudent.name}?\n\nPerangkat kamera absensi tidak akan lagi mengenali anggota ini.`)) {
-            return;
-        }
-
-        const btn = document.getElementById('btnDeleteFace');
-        const status = document.getElementById('enrollStatus');
-
-        btn.disabled = true;
-        btn.innerHTML = 'Menghapus...';
-        status.textContent = 'Menghapus data wajah dari sistem...';
-        status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-surface border border-hairline text-ink';
-        status.classList.remove('hidden');
-
-        try {
-            const res = await fetch(`/students/${currentEnrollStudent.id}/enroll`, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json'
-                }
-            });
-
-            const result = await res.json();
-
-            if (res.ok) {
-                status.textContent = 'Data wajah berhasil dihapus! Memuat ulang...';
-                status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-success/10 text-success border border-success/20';
-                setTimeout(() => window.location.reload(), 1200);
-            } else {
-                status.textContent = result.message || 'Gagal menghapus data wajah.';
-                status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
-                btn.disabled = false;
-                btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah';
-                window.refreshIcons?.();
-            }
-        } catch (err) {
-            status.textContent = 'Terjadi kesalahan jaringan saat menghapus.';
-            status.className = 'p-xs text-center text-[13px] rounded mb-sm bg-danger/10 text-danger border border-danger/20';
-            btn.disabled = false;
-            btn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Wajah';
-            window.refreshIcons?.();
-        }
-    }
 </script>
-</div>
-@endsection
+@endpush

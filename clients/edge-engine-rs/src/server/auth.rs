@@ -40,6 +40,15 @@ impl AuthManager {
         // If no password file exists, generate a physical setup code
         if !password_file.exists() {
             let code = format!("{:06}", (Uuid::new_v4().as_u128() % 900_000) + 100_000);
+            let code_file = db_dir.join("setup_code.txt");
+            let _ = std::fs::write(&code_file, &code);
+
+            println!("==================================================================");
+            println!(" [FIRST-TIME SETUP] Physical Setup Verification Code: [ {} ]", code);
+            println!(" (Saved to {})", code_file.display());
+            println!(" Open http://127.0.0.1:5000/control to set your admin password.");
+            println!("==================================================================");
+
             warn!("==================================================================");
             warn!("FIRST-TIME SETUP: No admin password configured!");
             warn!("Physical Setup Verification Code: [ {} ]", code);
@@ -77,6 +86,8 @@ impl AuthManager {
                 self.save_password(new_password)?;
                 let mut guard = self.setup_code.write().map_err(|_| "Lock error")?;
                 *guard = None;
+                let code_file = self.password_file.parent().unwrap_or(Path::new(".")).join("setup_code.txt");
+                let _ = std::fs::remove_file(code_file);
                 info!("Admin password successfully initialized via setup code.");
                 Ok(())
             }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Smart Absensi') — Smart Absensi</title>
+    <title>@yield('title', 'Beranda') — Smart Absensi</title>
     <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('favicon-16x16.png') }}">
@@ -18,176 +18,201 @@
 </head>
 <body x-data="layoutData" class="bg-canvas-soft text-ink font-sans antialiased min-h-screen">
 
-{{-- Mobile Drawer Backdrop --}}
-<div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity" x-cloak></div>
+{{-- Mobile drawer backdrop --}}
+<div x-show="sidebarOpen" x-transition.opacity @click="sidebarOpen = false"
+     class="fixed inset-0 bg-ink/40 z-40 md:hidden" x-cloak></div>
 
-{{-- Sidebar --}}
-<aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 bg-canvas border-r border-hairline flex flex-col transition-all duration-300 ease-in-out z-50 shadow-sm md:translate-x-0 w-[240px] [.sidebar-collapsed_&]:md:w-[72px] overflow-hidden">
-    <div class="h-[56px] flex items-center border-b border-hairline shrink-0 px-md transition-all duration-300 overflow-hidden">
-        <a href="{{ route('dashboard') }}" class="flex items-center gap-xs">
-            <img src="{{ asset('images/logo.png') }}" class="w-7 h-7 rounded-md object-contain shrink-0 transition-all duration-300" alt="Logo">
-            <span class="text-[15px] font-bold text-ink tracking-tight whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Smart Absensi</span>
+{{-- ─────────────────────────────── Sidebar ─────────────────────────────── --}}
+<aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+       class="fixed inset-y-0 left-0 z-50 w-[240px] bg-canvas border-r border-hairline flex flex-col
+              transition-[transform,width] duration-200 ease-out md:translate-x-0
+              [.sidebar-collapsed_&]:md:w-[64px]">
+
+    <div class="h-[56px] shrink-0 flex items-center border-b border-hairline px-sm overflow-hidden">
+        <a href="{{ route('dashboard') }}" class="flex items-center gap-xs min-w-0">
+            <img src="{{ asset('images/logo.png') }}" alt="Smart Absensi"
+                 class="w-7 h-7 rounded-md object-contain shrink-0">
+            <span class="text-[15px] font-bold tracking-tight text-ink whitespace-nowrap
+                         transition-opacity duration-200
+                         [.sidebar-collapsed_&]:md:opacity-0 [.sidebar-collapsed_&]:md:pointer-events-none">
+                Smart Absensi
+            </span>
         </a>
     </div>
 
-    <div class="flex-1 overflow-y-auto py-sm custom-scroll overflow-x-hidden">
-        <ul class="flex flex-col gap-[2px] transition-all duration-300 px-xs [.sidebar-collapsed_&]:md:px-1">
+    <nav class="flex-1 overflow-y-auto overflow-x-hidden custom-scroll py-xs px-xs" aria-label="Navigasi utama">
+        <ul class="flex flex-col gap-[2px] list-none m-0 p-0">
             <li>
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="video" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Live Kamera</span>
+                <a href="{{ route('dashboard') }}" title="Live Kamera"
+                   class="nav-item {{ request()->routeIs('dashboard') || request()->routeIs('live-camera.*') ? 'is-active' : '' }}">
+                    <i data-lucide="video" class="w-4 h-4"></i>
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Live Kamera</span>
                 </a>
             </li>
 
-            <li class="mt-sm mb-xxs px-sm relative flex items-center h-[18px] transition-all duration-300 overflow-hidden">
-                <span class="text-[10px] font-semibold text-ink-faint uppercase tracking-wider whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Aplikasi</span>
-                <span class="transition-all duration-300 absolute left-1/2 -translate-x-1/2 text-ink-faint hidden md:opacity-0 [.sidebar-collapsed_&]:md:opacity-100 [.sidebar-collapsed_&]:md:block">•••</span>
-            </li>
-            
-            <li>
-                <a href="{{ route('students.index') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('students.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="users" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Anggota</span>
-                </a>
-            </li>
-            <li>
-                <a href="{{ route('reports.index') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('reports.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="file-text" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Laporan</span>
-                </a>
-            </li>
-
-            <li class="mt-sm mb-xxs px-sm relative flex items-center h-[18px] transition-all duration-300 overflow-hidden">
-                <span class="text-[10px] font-semibold text-ink-faint uppercase tracking-wider whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Manajemen</span>
-                <span class="transition-all duration-300 absolute left-1/2 -translate-x-1/2 text-ink-faint hidden md:opacity-0 [.sidebar-collapsed_&]:md:opacity-100 [.sidebar-collapsed_&]:md:block">•••</span>
+            <li class="nav-section" aria-hidden="true">
+                <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Aplikasi</span>
             </li>
 
             <li>
-                <a href="{{ route('schools.index') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('schools.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="building" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Organisasi</span>
+                <a href="{{ route('students.index') }}" title="Anggota"
+                   class="nav-item {{ request()->routeIs('students.*') ? 'is-active' : '' }}">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Anggota</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('devices.index') }}" class="flex items-center gap-xs py-[7px] px-sm rounded-md transition-colors text-[13px] {{ request()->routeIs('devices.*') ? 'bg-primary/10 text-primary font-semibold' : 'text-ink-secondary hover:bg-canvas-soft hover:text-ink font-medium' }}">
-                    <i data-lucide="cpu" class="w-4 h-4 shrink-0"></i>
-                    <span class="whitespace-nowrap transition-all duration-300 overflow-hidden md:max-w-[180px] md:opacity-100 [.sidebar-collapsed_&]:md:max-w-0 [.sidebar-collapsed_&]:md:opacity-0">Perangkat</span>
+                <a href="{{ route('reports.index') }}" title="Laporan"
+                   class="nav-item {{ request()->routeIs('reports.*') ? 'is-active' : '' }}">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Laporan</span>
+                </a>
+            </li>
+
+            <li class="nav-section" aria-hidden="true">
+                <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Manajemen</span>
+            </li>
+
+            <li>
+                <a href="{{ route('schools.index') }}" title="Organisasi"
+                   class="nav-item {{ request()->routeIs('schools.*') ? 'is-active' : '' }}">
+                    <i data-lucide="building" class="w-4 h-4"></i>
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Organisasi</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('devices.index') }}" title="Perangkat"
+                   class="nav-item {{ request()->routeIs('devices.*') ? 'is-active' : '' }}">
+                    <i data-lucide="cpu" class="w-4 h-4"></i>
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Perangkat</span>
                 </a>
             </li>
         </ul>
+    </nav>
+
+    <div class="shrink-0 border-t border-hairline p-xs">
+        <a href="{{ route('landing') }}" title="Halaman Depan" class="nav-item text-ink-muted">
+            <i data-lucide="globe" class="w-4 h-4"></i>
+            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Halaman Depan</span>
+        </a>
     </div>
 </aside>
 
-{{-- Main Content Shell --}}
-<main class="min-h-screen flex flex-col transition-all duration-300 ease-in-out relative ml-0 md:ml-[240px] [.sidebar-collapsed_&]:md:ml-[72px]">
-    
-    {{-- Navbar Header --}}
-    <header class="h-[56px] px-lg bg-canvas border-b border-hairline flex items-center justify-between sticky top-0 z-40">
-        <div class="flex items-center gap-xs">
-            <button type="button" @click="toggleSidebar()" aria-label="Toggle Sidebar" class="btn-icon w-8 h-8 text-ink-muted hover:text-primary">
+{{-- ─────────────────────────────── Main shell ─────────────────────────── --}}
+<main class="min-h-screen flex flex-col transition-[margin] duration-200 ease-out
+             ml-0 md:ml-[240px] [.sidebar-collapsed_&]:md:ml-[64px]">
+
+    <header class="h-[56px] shrink-0 px-md md:px-lg bg-canvas border-b border-hairline
+                   flex items-center justify-between sticky top-0 z-30">
+        <div class="flex items-center gap-xs min-w-0">
+            <button type="button" @click="toggleSidebar()" aria-label="Buka atau tutup sidebar"
+                    class="btn-icon w-8 h-8 text-ink-muted hover:text-ink">
                 <i data-lucide="menu" class="w-4 h-4"></i>
             </button>
+            <span class="hidden sm:inline text-[13px] font-semibold text-ink-muted truncate">@yield('title', 'Beranda')</span>
         </div>
-        
-        <div class="flex items-center gap-sm">
-            <a href="{{ route('landing') }}" class="btn-icon hover:text-primary text-ink-muted" title="Halaman Depan" aria-label="Halaman Depan">
-                <i data-lucide="globe" class="w-4 h-4"></i>
-            </a>
-            <div class="flex items-center gap-xs cursor-pointer pl-xs">
-                <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0 text-primary font-bold text-[12px]">
-                    {{ substr(Auth::user()->name ?? 'A', 0, 1) }}
+
+        <div class="flex items-center gap-sm shrink-0">
+            <div class="flex items-center gap-xs">
+                <div class="w-7 h-7 rounded-full bg-primary-soft border border-primary/20 shrink-0
+                            flex items-center justify-center text-primary font-bold text-[12px]">
+                    {{ mb_strtoupper(mb_substr(Auth::user()->name ?? 'A', 0, 1)) }}
                 </div>
-                <div class="hidden md:block text-left mr-xs">
-                    <p class="text-[13px] font-semibold text-ink leading-tight">{{ Auth::user()->name ?? 'Admin User' }}</p>
-                    <p class="text-[11px] text-ink-muted leading-tight capitalize">{{ Auth::user()->roles->first()?->name ?? 'Administrator' }}</p>
+                <div class="hidden md:block text-left">
+                    <p class="text-[12.5px] font-semibold text-ink leading-tight truncate max-w-[160px]">
+                        {{ Auth::user()->name ?? 'Admin' }}
+                    </p>
+                    <p class="text-[11px] text-ink-muted leading-tight capitalize">
+                        {{ Auth::user()->roles->first()?->name ?? 'Administrator' }}
+                    </p>
                 </div>
-                <form method="POST" action="{{ route('logout') }}" class="m-0">
-                    @csrf
-                    <button type="submit" class="btn-icon hover:text-danger" aria-label="Logout">
-                        <i data-lucide="log-out" class="w-4 h-4"></i>
-                    </button>
-                </form>
             </div>
+            <form method="POST" action="{{ route('logout') }}" class="m-0">
+                @csrf
+                <button type="submit" class="btn-icon hover:text-danger" aria-label="Keluar" title="Keluar">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                </button>
+            </form>
         </div>
     </header>
 
-    {{-- Main Body --}}
-    <div class="flex-1 {{ (request()->routeIs('dashboard') || request()->routeIs('live-camera.*')) ? 'p-0 flex flex-col bg-canvas-soft overflow-hidden' : 'p-lg md:p-xl' }}">
-        @if(!request()->routeIs('dashboard') && !request()->routeIs('live-camera.*'))
-            {{-- Breadcrumb Area --}}
-            <div class="flex flex-wrap items-center justify-between gap-sm mb-lg">
-                <div>
-                    <h1 class="text-[20px] font-bold text-ink tracking-tight mb-0.5">@yield('title')</h1>
-                    <nav aria-label="Breadcrumb">
-                        <ul class="flex items-center gap-1.5 text-[12px] text-ink-muted">
-                            <li>
-                                <a href="{{ route('dashboard') }}" class="hover:text-primary transition-colors">Beranda</a>
-                            </li>
-                            <li><span class="text-hairline">/</span></li>
-                            <li class="text-ink-secondary font-medium">@yield('title')</li>
-                        </ul>
+    @php($isFullBleed = request()->routeIs('dashboard') || request()->routeIs('live-camera.*'))
+
+    <div class="flex-1 min-h-0 {{ $isFullBleed ? 'flex flex-col bg-canvas-soft overflow-hidden' : 'p-md md:p-lg' }}">
+
+        @unless($isFullBleed)
+            <div class="flex flex-wrap items-start justify-between gap-sm mb-md">
+                <div class="min-w-0">
+                    <h1 class="text-[20px] font-bold text-ink tracking-tight m-0">@yield('title')</h1>
+                    <nav aria-label="Breadcrumb" class="mt-0.5">
+                        <ol class="flex items-center gap-1.5 text-[11.5px] text-ink-muted list-none m-0 p-0">
+                            <li><a href="{{ route('dashboard') }}" class="hover:text-primary transition-colors">Beranda</a></li>
+                            <li aria-hidden="true" class="text-hairline">/</li>
+                            <li class="text-ink-secondary font-medium" aria-current="page">@yield('title')</li>
+                        </ol>
                     </nav>
                 </div>
                 @hasSection('header-actions')
-                    <div class="flex items-center gap-xs">
-                        @yield('header-actions')
-                    </div>
+                    <div class="flex items-center gap-xs shrink-0">@yield('header-actions')</div>
                 @endif
             </div>
 
-            {{-- Flash Messages & Validation Errors --}}
-            @if(session('success') || session('error') || ($errors->any()))
-                <div class="mb-lg">
+            @if(session('success') || session('error') || $errors->any())
+                <div class="flex flex-col gap-xs mb-md">
                     @if(session('success'))
-                        <div class="alert alert-success flex items-center gap-xs" role="alert">
-                            <i data-lucide="check-circle" class="w-4 h-4"></i> {{ session('success') }}
+                        <div class="alert alert-success" role="status">
+                            <i data-lucide="check-circle" class="w-4 h-4 shrink-0 mt-px"></i>
+                            <span>{{ session('success') }}</span>
                         </div>
                     @endif
                     @if(session('error'))
-                        <div class="alert alert-error flex items-center gap-xs" role="alert">
-                            <i data-lucide="alert-circle" class="w-4 h-4"></i> {{ session('error') }}
+                        <div class="alert alert-error" role="alert">
+                            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-px"></i>
+                            <span>{{ session('error') }}</span>
                         </div>
                     @endif
                     @if($errors->any())
-                        <div class="alert alert-error flex flex-col gap-xs" role="alert">
-                            <div class="flex items-center gap-xs font-semibold">
-                                <i data-lucide="alert-circle" class="w-4 h-4"></i> Terdapat kesalahan pada formulir:
+                        <div class="alert alert-error" role="alert">
+                            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-px"></i>
+                            <div>
+                                <p class="font-semibold m-0">Terdapat kesalahan pada formulir:</p>
+                                <ul class="list-disc list-inside m-0 mt-1 pl-1">
+                                    @foreach($errors->all() as $err)
+                                        <li>{{ $err }}</li>
+                                    @endforeach
+                                </ul>
                             </div>
-                            <ul class="list-disc list-inside text-[13px] m-0 pl-xs">
-                                @foreach($errors->all() as $err)
-                                    <li>{{ $err }}</li>
-                                @endforeach
-                            </ul>
                         </div>
                     @endif
                 </div>
             @endif
-        @endif
+        @endunless
 
-        {{-- Page Content --}}
         @yield('content')
     </div>
-
 </main>
 
-    {{-- Global Confirm Modal --}}
-    <dialog x-ref="globalConfirmModal" @click="$event.target === $refs.globalConfirmModal && $refs.globalConfirmModal.close()" class="p-lg border border-hairline bg-surface rounded-lg max-w-[400px] w-full backdrop:bg-black/40 shadow-2xl m-auto">
-        <div class="flex justify-between items-center mb-md border-b pb-xs">
-            <h3 class="m-0 text-[16px] font-semibold flex items-center gap-xs">
-                <i data-lucide="alert-triangle" class="w-4 h-4 text-danger"></i> Konfirmasi
-            </h3>
-            <button type="button" @click="$refs.globalConfirmModal.close()" aria-label="Tutup" class="btn-icon">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-        </div>
-        <div class="mb-lg">
-            <p class="text-[14px] text-ink" x-text="confirmMessage"></p>
-        </div>
-        <div class="flex justify-end gap-xs">
-            <button type="button" @click="$refs.globalConfirmModal.close()" class="btn btn-secondary">Batal</button>
-            <button type="button" @click="executeConfirm()" class="btn btn-primary">Ya, Lanjutkan</button>
-        </div>
-    </dialog>
+{{-- Global confirm dialog --}}
+<dialog x-ref="globalConfirmModal"
+        @click="$event.target === $refs.globalConfirmModal && $refs.globalConfirmModal.close()"
+        class="w-[min(400px,92vw)] m-auto">
+    <div class="modal-head">
+        <h2 class="modal-title">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-warning"></i> Konfirmasi
+        </h2>
+        <button type="button" @click="$refs.globalConfirmModal.close()" aria-label="Tutup" class="btn-icon">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+    <div class="modal-body">
+        <p class="text-[13px] text-ink m-0 leading-relaxed" x-text="confirmMessage"></p>
+    </div>
+    <div class="modal-foot">
+        <button type="button" @click="$refs.globalConfirmModal.close()" class="btn btn-secondary">Batal</button>
+        <button type="button" @click="executeConfirm()" class="btn btn-primary">Ya, Lanjutkan</button>
+    </div>
+</dialog>
 
+@stack('scripts')
 </body>
 </html>

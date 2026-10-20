@@ -441,24 +441,484 @@
     }
     .toast.success { border-left: 3px solid var(--success); }
     .toast.error { border-left: 3px solid var(--danger); }
+
+    [x-cloak] {
+      display: none !important;
+    }
+
+    .feed-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-faint);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 24px;
+      text-align: center;
+    }
   </style>
+
+  <!-- Component Logic registered on alpine:init BEFORE Alpine.start -->
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('edgePanel', () => ({
+        showSettings: false,
+        showLogin: false,
+        needsSetup: false,
+        setupCode: '',
+        loginPassword: '',
+        isAuthenticated: false,
+        streamConnected: false,
+        feedUrl: '',
+        theme: localStorage.getItem('theme_preference') || 'dark',
+
+        availableCameras: [],
+        networkRollback: { active: false, remaining: 0, timer: null },
+
+        info: {
+          device_code: '',
+          firmware_version: '0.1.0',
+          cpu_temp_c: 0,
+          outbox_count: 0,
+          is_paired: false,
+        },
+
+        settings: {
+          general: { language: 'auto', device_name: '' },
+          camera: { source: '/dev/video0', resolution: '640x480', fps_cap: 15, mirror_preview: false },
+          network: { interface: 'eth0', mode: 'dhcp', wifi_ssid: '', wifi_password: '', static_ip: '', subnet: '', gateway: '', dns: '' },
+          time: { timezone: 'Asia/Jakarta', ntp_enabled: true },
+          server: { url: '' }
+        },
+
+        pwdForm: { current: '', new_pwd: '', confirm_pwd: '' },
+        toasts: [],
+
+        init() {
+          this.applyTheme(this.theme);
+          this.checkAuthStatus();
+          setInterval(() => {
+            if (this.isAuthenticated) this.refreshFeed();
+          }, 3000);
+          setInterval(() => {
+            if (this.isAuthenticated) this.fetchInfo();
+          }, 5000);
+        },
+
+        openSettings() {
+          this.fetchSettings();
+          this.fetchCameraDevices();
+          this.checkRollbackStatus();
+          this.showSettings = true;
+        },
+
+        closeSettings() {
+          this.showSettings = false;
+        },
+
+        async saveAndClose() {
+          await this.saveSettings();
+          this.closeSettings();
+        },
+
+        refreshFeed() {
+          this.feedUrl = '/snapshot.jpg?t=' + Date.now();
+        },
+
+        handleStreamError() {
+          this.streamConnected = false;
+        },
+
+        showToast(message, type = 'success') {
+          const id = Date.now();
+          this.toasts.push({ id, message, type });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 4000);
+        },
+
+        setTheme(t) {
+          this.theme = t;
+          localStorage.setItem('theme_preference', t);
+          this.applyTheme(t);
+        },
+
+        applyTheme(t) {
+          if (t === 'light') {
+            document.documentElement.style.setProperty('--bg', '#f4f4f5');
+            document.documentElement.style.setProperty('--surface', '#ffffff');
+            document.documentElement.style.setProperty('--surface-elevated', '#fafafa');
+            document.documentElement.style.setProperty('--border', '#e4e4e7');
+            document.documentElement.style.setProperty('--text', '#18181b');
+            document.documentElement.style.setProperty('--text-muted', '#71717a');
+            document.documentElement.style.setProperty('--text-faint', '#a1a1aa');
+            document.documentElement.style.setProperty('--accent-white', '#18181b');
+            document.documentElement.style.setProperty('--accent-black', '#ffffff');
+          } else {
+            document.documentElement.style.setProperty('--bg', '#0b0b0d');
+            document.documentElement.style.setProperty('--surface', '#131316');
+            document.documentElement.style.setProperty('--surface-elevated', '#1a1a1e');
+            document.documentElement.style.setProperty('--border', '#242429');
+            document.documentElement.style.setProperty('--text', '#eaeaea');
+            document.documentElement.style.setProperty('--text-muted', '#8e8e93');
+            document.documentElement.style.setProperty('--text-faint', '#55555c');
+            document.documentElement.style.setProperty('--accent-white', '#ffffff');
+            document.documentElement.style.setProperty('--accent-black', '#000000');
+          }
+        },
+
+        async checkAuthStatus() {
+          try {
+            const res = await fetch('/api/control/info');
+            if (res.status === 401) {
+              this.isAuthenticated = false;
+              this.showLogin = true;
+            } else if (res.status === 428) {
+              this.needsSetup = true;
+              this.showLogin = true;
+            } else if (res.ok) {
+              this.isAuthenticated = true;
+              this.showLogin = false;
+              this.info = await res.json();
+              this.streamConnected = true;
+              this.refreshFeed();
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+        },
+
+        async submitLogin() {
+          try {
+            const res = await fetch('/api/control/auth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password: this.loginPassword })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.isAuthenticated = true;
+              this.showLogin = false;
+              this.loginPassword = '';
+              this.showToast('Login successful');
+              await this.fetchInfo();
+              this.refreshFeed();
+            } else {
+              this.showToast(data.message || 'Login failed', 'error');
+            }
+          } catch (e) {
+            this.showToast('Connection failed: ' + e, 'error');
+          }
+        },
+
+        async submitSetup() {
+          try {
+            const res = await fetch('/api/control/setup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: this.setupCode, password: this.loginPassword })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.needsSetup = false;
+              this.showToast('Password initialized. Logging in...');
+              await this.submitLogin();
+            } else {
+              this.showToast(data.message || 'Setup failed', 'error');
+            }
+          } catch (e) {
+            this.showToast('Setup error: ' + e, 'error');
+          }
+        },
+
+        async logout() {
+          try {
+            await fetch('/api/control/logout', { method: 'POST' });
+            this.isAuthenticated = false;
+            this.showToast('Logged out');
+            location.reload();
+          } catch (e) {
+            console.warn(e);
+          }
+        },
+
+        async fetchInfo() {
+          try {
+            const res = await fetch('/api/control/info');
+            if (res.ok) {
+              this.info = await res.json();
+              this.streamConnected = true;
+            }
+          } catch (e) {
+            this.streamConnected = false;
+          }
+        },
+
+        async fetchSettings() {
+          try {
+            const res = await fetch('/api/control/settings');
+            if (res.ok) {
+              const data = await res.json();
+              this.settings = Object.assign(this.settings, data);
+            }
+          } catch (e) {
+            this.showToast('Failed to load settings', 'error');
+          }
+        },
+
+        async saveSettings() {
+          try {
+            const res = await fetch('/api/control/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.settings)
+            });
+            const data = await res.json();
+            if (res.ok) {
+              this.showToast('Settings saved successfully');
+            } else {
+              this.showToast(data.error || 'Failed to save settings', 'error');
+            }
+          } catch (e) {
+            this.showToast('Error saving settings: ' + e, 'error');
+          }
+        },
+
+        async fetchCameraDevices() {
+          try {
+            const res = await fetch('/api/control/camera/devices');
+            if (res.ok) {
+              this.availableCameras = await res.json();
+            }
+          } catch (e) {
+            console.warn('Could not query cameras:', e);
+          }
+        },
+
+        async applyNetwork() {
+          if (!confirm('Apply network configuration? You will have 60 seconds to confirm the change.')) return;
+          try {
+            const res = await fetch('/api/control/network/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.settings.network)
+            });
+            const d = await res.json();
+            if (res.ok) {
+              this.showToast('Network applied. Countdown started.');
+              this.checkRollbackStatus();
+            } else {
+              this.showToast(d.message || d.error || 'Network apply failed', 'error');
+            }
+          } catch (e) {
+            this.showToast('Network apply error: ' + e, 'error');
+          }
+        },
+
+        async confirmNetwork() {
+          try {
+            const res = await fetch('/api/control/network/confirm', { method: 'POST' });
+            const d = await res.json();
+            this.showToast(d.message);
+            this.networkRollback.active = false;
+            clearInterval(this.networkRollback.timer);
+          } catch (e) {
+            this.showToast('Confirm failed: ' + e, 'error');
+          }
+        },
+
+        async cancelNetwork() {
+          try {
+            const res = await fetch('/api/control/network/cancel', { method: 'POST' });
+            const d = await res.json();
+            this.showToast(d.message);
+            this.networkRollback.active = false;
+            clearInterval(this.networkRollback.timer);
+            this.fetchSettings();
+          } catch (e) {
+            this.showToast('Revert failed: ' + e, 'error');
+          }
+        },
+
+        async checkRollbackStatus() {
+          try {
+            const res = await fetch('/api/control/network/rollback-status');
+            if (res.ok) {
+              const d = await res.json();
+              this.networkRollback.active = d.active;
+              this.networkRollback.remaining = d.remaining_seconds;
+              if (d.active && !this.networkRollback.timer) {
+                this.networkRollback.timer = setInterval(async () => {
+                  if (this.networkRollback.remaining > 0) {
+                    this.networkRollback.remaining--;
+                  } else {
+                    this.networkRollback.active = false;
+                    clearInterval(this.networkRollback.timer);
+                    this.networkRollback.timer = null;
+                  }
+                }, 1000);
+              }
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+        },
+
+        async syncRtc() {
+          await this.triggerAction('sync_rtc');
+        },
+
+        async testServerConnection() {
+          try {
+            this.showToast('Testing server connection...', 'info');
+            const res = await fetch('/api/control/server/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: this.settings.server.url })
+            });
+            const d = await res.json();
+            this.showToast(d.message, d.success ? 'success' : 'error');
+          } catch (e) {
+            this.showToast('Connection test error: ' + e, 'error');
+          }
+        },
+
+        async confirmRepair() {
+          if (!confirm('Re-pairing will clear local pairing credentials. Are you sure?')) return;
+          try {
+            const res = await fetch('/api/control/server/repair', { method: 'POST' });
+            const d = await res.json();
+            this.showToast(d.message);
+            this.fetchInfo();
+          } catch (e) {
+            this.showToast('Repair failed: ' + e, 'error');
+          }
+        },
+
+        async restartEngine() {
+          if (!confirm('Restart Rust AI Vision engine?')) return;
+          await this.triggerAction('restart_engine');
+        },
+
+        async restartSync() {
+          if (!confirm('Restart Smart Absensi sync daemon?')) return;
+          await this.triggerAction('restart_sync');
+        },
+
+        async downloadLogs() {
+          window.location.href = '/api/control/system/logs';
+        },
+
+        async backupConfig() {
+          window.location.href = '/api/control/system/backup';
+        },
+
+        async checkUpdate() {
+          try {
+            this.showToast('Checking for firmware updates...', 'info');
+            const res = await fetch('/api/control/system/check-update', { method: 'POST' });
+            const d = await res.json();
+            this.showToast(d.message);
+          } catch (e) {
+            this.showToast('Check update failed: ' + e, 'error');
+          }
+        },
+
+        async changePassword() {
+          if (this.pwdForm.new_pwd !== this.pwdForm.confirm_pwd) {
+            this.showToast('New passwords do not match', 'error');
+            return;
+          }
+          if (this.pwdForm.new_pwd.length < 8) {
+            this.showToast('Password must be at least 8 characters', 'error');
+            return;
+          }
+          try {
+            const res = await fetch('/api/control/security/password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ current: this.pwdForm.current, new_pwd: this.pwdForm.new_pwd })
+            });
+            const d = await res.json();
+            if (res.ok && d.success) {
+              this.showToast('Password updated successfully');
+              this.pwdForm = { current: '', new_pwd: '', confirm_pwd: '' };
+            } else {
+              this.showToast(d.message || 'Password change failed', 'error');
+            }
+          } catch (e) {
+            this.showToast('Password error: ' + e, 'error');
+          }
+        },
+
+        handleConfigFileUpload(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const parsed = JSON.parse(e.target.result);
+              const res = await fetch('/api/control/system/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed)
+              });
+              const d = await res.json();
+              if (res.ok && d.success) {
+                this.showToast('Configuration restored successfully');
+                this.fetchSettings();
+              } else {
+                this.showToast(d.message || 'Restore failed', 'error');
+              }
+            } catch (err) {
+              this.showToast('Invalid JSON file format', 'error');
+            }
+            event.target.value = '';
+          };
+          reader.readAsText(file);
+        },
+
+        async confirmReboot() {
+          const code = prompt("Reboot entire gate device?\nType 'REBOOT' to confirm:");
+          if (code !== 'REBOOT') {
+            if (code !== null) this.showToast('Reboot cancelled (mismatch)', 'error');
+            return;
+          }
+          await this.triggerAction('reboot', 'REBOOT');
+        },
+
+        async triggerAction(action, confirm_code = null) {
+          try {
+            const res = await fetch('/api/control/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action, confirm_code })
+            });
+            const d = await res.json();
+            this.showToast(d.message);
+          } catch (e) {
+            this.showToast('Action failed: ' + e, 'error');
+          }
+        }
+      }));
+    });
+  </script>
 
   <!-- Vendored Alpine.js -->
   <script>
     __ALPINE_VENDORED_BUNDLE__
   </script>
 </head>
-<body x-data="edgePanel()" @keydown.escape.window="closeSettings()">
+<body x-data="edgePanel" @keydown.escape.window="closeSettings()">
 
   <!-- 1. Top Command Header -->
   <header>
     <div class="brand-title">
       <!-- Minimalist Hex Shield Logo -->
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
-        <path d="M12 2L3 7v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7l-9-5z"/>
-        <path d="M12 9v6m-3-3h6"/>
-      </svg>
-      <span>Smart Absensi Gate</span>
+      <span>Smart Absensi</span>
       <span class="status-dot" :class="streamConnected ? '' : 'offline'" title="Live Status"></span>
     </div>
 
@@ -494,7 +954,14 @@
   <main>
     <div class="video-card">
       <div class="video-viewport">
-        <img :src="feedUrl" alt="Live Gate Preview" @error="handleStreamError()" />
+        <img :src="feedUrl" alt="Live Gate Preview" x-show="feedUrl && streamConnected" @error="handleStreamError()" @load="streamConnected = true" />
+        <div class="feed-placeholder font-mono" x-show="!feedUrl || !streamConnected" x-cloak>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <span x-text="isAuthenticated ? 'Connecting to camera feed...' : (needsSetup ? 'First-time setup required' : 'Authentication required to view stream')"></span>
+        </div>
       </div>
       <div class="video-overlay-bar font-mono">
         <div>
@@ -509,7 +976,7 @@
   </main>
 
   <!-- 3. Settings Modal Dialog (Visual Reference Spec) -->
-  <div class="modal-backdrop" x-show="showSettings" style="display: none;" @click.self="closeSettings()">
+  <div class="modal-backdrop" x-show="showSettings" x-cloak @click.self="closeSettings()">
     <div class="modal-dialog">
       
       <!-- Fixed Header -->
@@ -828,7 +1295,7 @@
   </div>
 
   <!-- 4. Login Modal Dialog (When session required) -->
-  <div class="modal-backdrop" x-show="showLogin" style="display: none;">
+  <div class="modal-backdrop" x-show="showLogin" x-cloak>
     <div class="modal-dialog" style="max-width: 380px; height: auto;">
       <div class="modal-header">
         <div class="modal-title">Admin Authentication</div>
@@ -870,463 +1337,5 @@
     </template>
   </div>
 
-  <!-- Control Client Logic -->
-  <script>
-    function edgePanel() {
-      return {
-        showSettings: false,
-        showLogin: false,
-        needsSetup: false,
-        setupCode: '',
-        loginPassword: '',
-        isAuthenticated: false,
-        streamConnected: true,
-        feedUrl: '/snapshot.jpg?t=' + Date.now(),
-        theme: localStorage.getItem('theme_preference') || 'dark',
-
-        availableCameras: [],
-        networkRollback: { active: false, remaining: 0, timer: null },
-
-        info: {
-          device_code: '',
-          firmware_version: '0.1.0',
-          cpu_temp_c: 0,
-          outbox_count: 0,
-          is_paired: false,
-        },
-
-        settings: {
-          general: { language: 'auto', device_name: '' },
-          camera: { source: '/dev/video0', resolution: '640x480', fps_cap: 15, mirror_preview: false },
-          network: { interface: 'eth0', mode: 'dhcp', wifi_ssid: '', wifi_password: '', static_ip: '', subnet: '', gateway: '', dns: '' },
-          time: { timezone: 'Asia/Jakarta', ntp_enabled: true },
-          server: { url: '' }
-        },
-
-        pwdForm: { current: '', new_pwd: '', confirm_pwd: '' },
-        toasts: [],
-
-        init() {
-          this.applyTheme(this.theme);
-          this.checkAuthStatus();
-          setInterval(() => this.refreshFeed(), 3000);
-          setInterval(() => this.fetchInfo(), 5000);
-        },
-
-        openSettings() {
-          this.fetchSettings();
-          this.fetchCameraDevices();
-          this.checkRollbackStatus();
-          this.showSettings = true;
-        },
-
-        closeSettings() {
-          this.showSettings = false;
-        },
-
-        async saveAndClose() {
-          await this.saveSettings();
-          this.closeSettings();
-        },
-
-        refreshFeed() {
-          this.feedUrl = '/snapshot.jpg?t=' + Date.now();
-        },
-
-        handleStreamError() {
-          this.streamConnected = false;
-        },
-
-        showToast(message, type = 'success') {
-          const id = Date.now();
-          this.toasts.push({ id, message, type });
-          setTimeout(() => {
-            this.toasts = this.toasts.filter(t => t.id !== id);
-          }, 4000);
-        },
-
-        setTheme(t) {
-          this.theme = t;
-          localStorage.setItem('theme_preference', t);
-          this.applyTheme(t);
-        },
-
-        applyTheme(t) {
-          if (t === 'light') {
-            document.documentElement.style.setProperty('--bg', '#f4f4f5');
-            document.documentElement.style.setProperty('--surface', '#ffffff');
-            document.documentElement.style.setProperty('--surface-elevated', '#fafafa');
-            document.documentElement.style.setProperty('--border', '#e4e4e7');
-            document.documentElement.style.setProperty('--text', '#18181b');
-            document.documentElement.style.setProperty('--text-muted', '#71717a');
-            document.documentElement.style.setProperty('--text-faint', '#a1a1aa');
-            document.documentElement.style.setProperty('--accent-white', '#18181b');
-            document.documentElement.style.setProperty('--accent-black', '#ffffff');
-          } else {
-            document.documentElement.style.setProperty('--bg', '#0b0b0d');
-            document.documentElement.style.setProperty('--surface', '#131316');
-            document.documentElement.style.setProperty('--surface-elevated', '#1a1a1e');
-            document.documentElement.style.setProperty('--border', '#242429');
-            document.documentElement.style.setProperty('--text', '#eaeaea');
-            document.documentElement.style.setProperty('--text-muted', '#8e8e93');
-            document.documentElement.style.setProperty('--text-faint', '#55555c');
-            document.documentElement.style.setProperty('--accent-white', '#ffffff');
-            document.documentElement.style.setProperty('--accent-black', '#000000');
-          }
-        },
-
-        async checkAuthStatus() {
-          try {
-            const res = await fetch('/api/control/info');
-            if (res.status === 401) {
-              this.isAuthenticated = false;
-            } else if (res.status === 428) {
-              this.needsSetup = true;
-              this.showLogin = true;
-            } else if (res.ok) {
-              this.isAuthenticated = true;
-              this.info = await res.json();
-              this.streamConnected = true;
-            }
-          } catch (e) {
-            console.warn(e);
-          }
-        },
-
-        async submitLogin() {
-          try {
-            const res = await fetch('/api/control/auth', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ password: this.loginPassword })
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-              this.isAuthenticated = true;
-              this.showLogin = false;
-              this.loginPassword = '';
-              this.showToast('Login successful');
-              this.fetchInfo();
-            } else {
-              this.showToast(data.message || 'Login failed', 'error');
-            }
-          } catch (e) {
-            this.showToast('Connection failed: ' + e, 'error');
-          }
-        },
-
-        async submitSetup() {
-          try {
-            const res = await fetch('/api/control/setup', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code: this.setupCode, password: this.loginPassword })
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-              this.needsSetup = false;
-              this.showToast('Password initialized. You may now log in.');
-            } else {
-              this.showToast(data.message || 'Setup failed', 'error');
-            }
-          } catch (e) {
-            this.showToast('Setup error: ' + e, 'error');
-          }
-        },
-
-        async logout() {
-          try {
-            await fetch('/api/control/logout', { method: 'POST' });
-            this.isAuthenticated = false;
-            this.showToast('Logged out');
-            location.reload();
-          } catch (e) {
-            console.warn(e);
-          }
-        },
-
-        async fetchInfo() {
-          try {
-            const res = await fetch('/api/control/info');
-            if (res.ok) {
-              this.info = await res.json();
-              this.streamConnected = true;
-            }
-          } catch (e) {
-            this.streamConnected = false;
-          }
-        },
-
-        async fetchSettings() {
-          try {
-            const res = await fetch('/api/control/settings');
-            if (res.ok) {
-              this.settings = await res.json();
-            }
-          } catch (e) {
-            console.error('Failed to load settings', e);
-          }
-        },
-
-        async saveSettings() {
-          try {
-            const res = await fetch('/api/control/settings', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.settings)
-            });
-            if (res.ok) {
-              this.showToast('Settings saved successfully');
-            } else {
-              this.showToast('Failed to save settings', 'error');
-            }
-          } catch (e) {
-            this.showToast('Error saving settings: ' + e, 'error');
-          }
-        },
-
-        async changePassword() {
-          if (this.pwdForm.new_pwd !== this.pwdForm.confirm_pwd) {
-            this.showToast('New passwords do not match', 'error');
-            return;
-          }
-          try {
-            const res = await fetch('/api/control/security/password', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ current: this.pwdForm.current, new_pwd: this.pwdForm.new_pwd })
-            });
-            const d = await res.json();
-            if (res.ok && d.success) {
-              this.showToast('Admin password updated. Please re-authenticate.');
-              this.pwdForm = { current: '', new_pwd: '', confirm_pwd: '' };
-              this.logout();
-            } else {
-              this.showToast(d.message || 'Password update failed', 'error');
-            }
-          } catch (e) {
-            this.showToast('Error updating password: ' + e, 'error');
-          }
-        },
-
-        async testServerConnection() {
-          this.showToast('Testing connectivity to ' + this.settings.server.url + '...');
-          try {
-            const res = await fetch('/api/control/server/test', { method: 'POST' });
-            const d = await res.json();
-            this.showToast(d.message, d.success ? 'success' : 'error');
-          } catch (e) {
-            this.showToast('Connection test failed: ' + e, 'error');
-          }
-        },
-
-        async confirmRepair() {
-          if (confirm("Disconnect and reset pairing with central server? You will need to scan a new QR code to reconnect.")) {
-            try {
-              const res = await fetch('/api/control/server/repair', { method: 'POST' });
-              const d = await res.json();
-              this.showToast(d.message);
-              this.fetchInfo();
-            } catch (e) {
-              this.showToast('Repair error: ' + e, 'error');
-            }
-          }
-        },
-
-        async syncRtc() {
-          this.showToast('Syncing hardware RTC clock...');
-          try {
-            const res = await fetch('/api/control/action', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'sync_rtc' })
-            });
-            const d = await res.json();
-            this.showToast(d.message || 'RTC sync triggered');
-          } catch (e) {
-            this.showToast('RTC sync failed: ' + e, 'error');
-          }
-        },
-
-        async restartEngine() {
-          if (!confirm("Restart edge inference engine process?")) return;
-          await this.triggerAction('restart_engine');
-        },
-
-        async restartSync() {
-          if (!confirm("Restart background sync daemon?")) return;
-          await this.triggerAction('restart_sync');
-        },
-
-        async backupConfig() {
-          window.location.href = '/api/control/system/backup';
-        },
-
-        async downloadLogs() {
-          window.location.href = '/api/control/system/logs';
-        },
-
-        async checkUpdate() {
-          this.showToast('Checking for firmware updates...');
-          try {
-            const res = await fetch('/api/control/system/check-update', { method: 'POST' });
-            const d = await res.json();
-            this.showToast(d.message || 'Engine is up to date.');
-          } catch (e) {
-            this.showToast('Update check failed: ' + e, 'error');
-          }
-        },
-
-        async fetchCameraDevices() {
-          try {
-            const res = await fetch('/api/control/camera/devices');
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data.devices)) {
-                this.availableCameras = data.devices;
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to load camera devices', e);
-          }
-        },
-
-        async checkRollbackStatus() {
-          try {
-            const res = await fetch('/api/control/network/rollback-status');
-            if (res.ok) {
-              const data = await res.json();
-              this.networkRollback.active = data.active;
-              this.networkRollback.remaining = data.remaining_seconds;
-              if (data.active && !this.networkRollback.timer) {
-                this.startRollbackCountdown();
-              }
-            }
-          } catch (e) {
-            console.warn(e);
-          }
-        },
-
-        startRollbackCountdown() {
-          if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
-          this.networkRollback.timer = setInterval(() => {
-            if (this.networkRollback.remaining > 0) {
-              this.networkRollback.remaining--;
-            } else {
-              this.networkRollback.active = false;
-              clearInterval(this.networkRollback.timer);
-              this.networkRollback.timer = null;
-              this.showToast('Network settings rolled back (timeout expired)', 'error');
-              this.fetchSettings();
-            }
-          }, 1000);
-        },
-
-        async applyNetwork() {
-          if (!confirm('Apply network configuration? You will have 60 seconds to confirm the connection.')) return;
-          try {
-            const res = await fetch('/api/control/network/apply', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.settings.network)
-            });
-            const data = await res.json();
-            if (res.ok && data.success) {
-              this.networkRollback.active = true;
-              this.networkRollback.remaining = data.rollback_seconds || 60;
-              this.startRollbackCountdown();
-              this.showToast(data.message);
-            } else {
-              this.showToast(data.error || 'Failed to apply network configuration', 'error');
-            }
-          } catch (e) {
-            this.showToast('Network apply error: ' + e, 'error');
-          }
-        },
-
-        async confirmNetwork() {
-          try {
-            const res = await fetch('/api/control/network/confirm', { method: 'POST' });
-            const data = await res.json();
-            if (res.ok && data.success) {
-              this.networkRollback.active = false;
-              if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
-              this.networkRollback.timer = null;
-              this.showToast('Network settings confirmed permanently.');
-              this.fetchSettings();
-            } else {
-              this.showToast(data.message || 'Confirmation failed', 'error');
-            }
-          } catch (e) {
-            this.showToast('Confirmation error: ' + e, 'error');
-          }
-        },
-
-        async cancelNetwork() {
-          try {
-            const res = await fetch('/api/control/network/cancel', { method: 'POST' });
-            const data = await res.json();
-            this.networkRollback.active = false;
-            if (this.networkRollback.timer) clearInterval(this.networkRollback.timer);
-            this.networkRollback.timer = null;
-            this.showToast(data.message || 'Network changes reverted.');
-            this.fetchSettings();
-          } catch (e) {
-            this.showToast('Revert error: ' + e, 'error');
-          }
-        },
-
-        async handleConfigFileUpload(event) {
-          const file = event.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            try {
-              const parsed = JSON.parse(e.target.result);
-              const res = await fetch('/api/control/system/restore', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsed)
-              });
-              const data = await res.json();
-              if (res.ok && data.success) {
-                this.showToast('Configuration restored successfully.');
-                this.fetchSettings();
-              } else {
-                this.showToast(data.message || 'Restore failed', 'error');
-              }
-            } catch (err) {
-              this.showToast('Invalid backup JSON file: ' + err, 'error');
-            }
-            event.target.value = '';
-          };
-          reader.readAsText(file);
-        },
-
-        async confirmReboot() {
-          const code = prompt("Reboot entire gate device?\nType 'REBOOT' to confirm:");
-          if (code !== 'REBOOT') {
-            if (code !== null) this.showToast('Reboot cancelled (mismatch)', 'error');
-            return;
-          }
-          await this.triggerAction('reboot', 'REBOOT');
-        },
-
-        async triggerAction(action, confirm_code = null) {
-          try {
-            const res = await fetch('/api/control/action', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action, confirm_code })
-            });
-            const d = await res.json();
-            this.showToast(d.message);
-          } catch (e) {
-            this.showToast('Action failed: ' + e, 'error');
-          }
-        }
-      };
-    }
-  </script>
 </body>
 </html>

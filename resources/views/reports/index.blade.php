@@ -3,221 +3,240 @@
 
 @section('header-actions')
     @role('super_admin|admin')
-    <div class="flex items-center gap-xs">
-        <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-secondary">
+        <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-secondary btn-sm">
             <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
         </a>
-        <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-secondary">
-            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-accent-green"></i> XLSX
+        <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-secondary btn-sm">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> XLSX
         </a>
-        <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-secondary">
-            <i data-lucide="file-text" class="w-3.5 h-3.5 text-accent-orange"></i> PDF
+        <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-secondary btn-sm">
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF
         </a>
-    </div>
     @endrole
 @endsection
 
 @section('content')
 <div x-data="reportsData">
 
-{{-- Filter bar --}}
-<div class="card p-md mb-md">
-    <form method="GET" action="{{ route('reports.index') }}" class="flex gap-md items-end flex-wrap">
-        <div>
-            <label class="form-label">Tanggal Mulai</label>
-            <input type="date" name="start_date" value="{{ request('start_date', now()->format('Y-m-d')) }}" class="form-input w-[160px]">
-        </div>
-        <div>
-            <label class="form-label">Tanggal Akhir</label>
-            <input type="date" name="end_date" value="{{ request('end_date', now()->format('Y-m-d')) }}" class="form-input w-[160px]">
-        </div>
-        <div class="flex-1 min-w-[160px]">
-            <label class="form-label">Cari</label>
-            <div class="relative">
-                <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"></i>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Ketik untuk cari…" class="form-input pl-9 w-full">
+    {{-- ───────────────────────────── Filter bar ─────────────────────────── --}}
+    <section class="card p-md mb-md">
+        <form method="GET" action="{{ route('reports.index') }}" class="flex flex-wrap gap-sm items-end">
+            <div>
+                <label for="start_date" class="form-label">Tanggal Mulai</label>
+                <input type="date" id="start_date" name="start_date"
+                       value="{{ request('start_date', $start ?? now()->format('Y-m-d')) }}"
+                       class="form-input w-[150px]">
             </div>
+            <div>
+                <label for="end_date" class="form-label">Tanggal Akhir</label>
+                <input type="date" id="end_date" name="end_date"
+                       value="{{ request('end_date', $end ?? now()->format('Y-m-d')) }}"
+                       class="form-input w-[150px]">
+            </div>
+            <div class="flex-1 min-w-[180px]">
+                <label for="report_search" class="form-label">Cari</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none"></i>
+                    <input type="text" id="report_search" name="search" value="{{ request('search') }}"
+                           placeholder="Nama atau NIS…" class="form-input pl-8 w-full">
+                </div>
+            </div>
+            <div class="flex items-center gap-xs">
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="filter" class="w-3.5 h-3.5"></i> Terapkan
+                </button>
+                @if(request('start_date') || request('end_date') || request('search'))
+                    <a href="{{ route('reports.index') }}" class="btn-link text-ink-muted">Reset</a>
+                @endif
+            </div>
+        </form>
+    </section>
+
+    {{-- ───────────────────────────── DTR table ──────────────────────────── --}}
+    <section class="card p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Nama Anggota</th>
+                        <th>NIS</th>
+                        <th>Gedung / Organisasi</th>
+                        <th>Waktu Masuk</th>
+                        <th>Terakhir Terdeteksi</th>
+                        <th class="text-center">Deteksi</th>
+                        @role('super_admin|admin')
+                            <th class="text-right">Aksi</th>
+                        @endrole
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($logs ?? [] as $log)
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-ink">{{ $log->student->name ?? '—' }}</span>
+                                    @if($log->is_corrected)
+                                        <span class="badge badge-warning" title="Dikoreksi manual">Dikoreksi</span>
+                                    @endif
+                                </div>
+                            </td>
+                            <td class="font-mono">{{ $log->student->code ?? '—' }}</td>
+                            <td>{{ $log->student->school->name ?? '—' }}</td>
+                            <td class="whitespace-nowrap">
+                                <span class="font-semibold text-ink tabular-nums">{{ \Carbon\Carbon::parse($log->first_in)->format('H:i:s') }}</span>
+                                <span class="block text-[10.5px] text-ink-muted">{{ \Carbon\Carbon::parse($log->first_in)->format('d M Y') }}</span>
+                            </td>
+                            <td class="text-ink-muted tabular-nums whitespace-nowrap">
+                                @if($log->last_out && $log->last_out !== $log->first_in)
+                                    {{ \Carbon\Carbon::parse($log->last_out)->format('H:i:s') }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+                            <td class="text-center font-mono text-ink-muted">{{ $log->total_logs }}×</td>
+                            @role('super_admin|admin')
+                                <td class="text-right">
+                                    <div class="flex items-center justify-end gap-sm">
+                                        <button type="button" class="btn-link"
+                                                data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}"
+                                                @click="openCorrectionModal">
+                                            Koreksi
+                                        </button>
+                                        <button type="button" class="btn-link"
+                                                @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
+                                            <i data-lucide="list" class="w-3 h-3"></i> Log
+                                        </button>
+                                    </div>
+                                </td>
+                            @endrole
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <span class="empty-state-icon"><i data-lucide="inbox" class="w-4 h-4"></i></span>
+                                    <span class="empty-state-title">Tidak ada data absensi</span>
+                                    <p class="empty-state-text">Ubah rentang tanggal atau filter untuk melihat data lain.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
-        <div class="flex gap-xs items-center">
-            <button type="submit" class="btn btn-primary inline-flex items-center gap-xs">
-                <i data-lucide="filter" class="w-3.5 h-3.5"></i> Filter
+
+        @if(isset($logs) && $logs->hasPages())
+            <div class="px-md py-sm border-t border-hairline bg-canvas-soft">
+                {{ $logs->links('pagination::tailwind') }}
+            </div>
+        @endif
+    </section>
+
+    @role('super_admin|admin')
+    {{-- ───────────────────────── Correction modal ───────────────────────── --}}
+    <dialog x-ref="correctionModal" @click="$event.target === $refs.correctionModal && closeCorrectionModal()"
+            class="w-[min(440px,92vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Koreksi Absensi</h2>
+            <button type="button" @click="closeCorrectionModal" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
             </button>
-            @if(request('start_date') || request('end_date') || request('search'))
-                <a href="{{ route('reports.index') }}" class="text-[12px] text-ink-faint hover:text-ink transition-colors ml-xs">Reset</a>
-            @endif
         </div>
-    </form>
-</div>
-
-{{-- Table --}}
-<div class="card p-0 overflow-hidden">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Nama Anggota</th>
-                <th>NIS</th>
-                <th>Gedung / Organisasi</th>
-                <th>Waktu Masuk</th>
-                <th>Terakhir Terdeteksi</th>
-                <th>Jumlah Deteksi</th>
-                @role('super_admin|admin')
-                <th>Aksi</th>
-                @endrole
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($logs ?? [] as $log)
-                <tr>
-                    <td class="font-medium text-ink flex items-center gap-2">
-                        {{ $log->student->name ?? '-' }}
-                        @if($log->is_corrected)
-                            <span class="badge badge-warning text-[10px]" title="Dikoreksi Manual">Edited</span>
-                        @endif
-                    </td>
-                    <td class="font-mono text-[12px]">{{ $log->student->code ?? '-' }}</td>
-                    <td>{{ $log->student->school->name ?? '-' }}</td>
-                    <td>
-                        <span class="font-medium">{{ \Carbon\Carbon::parse($log->first_in)->format('H:i:s') }}</span>
-                        <div class="text-[10px] text-ink-muted">{{ \Carbon\Carbon::parse($log->first_in)->format('d M Y') }}</div>
-                    </td>
-                    <td class="text-ink-muted text-[13px]">
-                        @if($log->last_out && $log->last_out !== $log->first_in)
-                            {{ \Carbon\Carbon::parse($log->last_out)->format('H:i:s') }}
-                        @else
-                            -
-                        @endif
-                    </td>
-                    <td class="font-mono text-[12px] text-ink-muted">{{ $log->total_logs }}x</td>
-                    @role('super_admin|admin')
-                    <td>
-                        <div class="flex gap-xs items-center">
-                            <button type="button" class="btn btn-secondary btn-sm" data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}" @click="openCorrectionModal">
-                                Koreksi
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-sm" @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
-                                <i data-lucide="list" class="w-3 h-3"></i> Log
-                            </button>
-                        </div>
-                    </td>
-                    @endrole
-                </tr>
-            @empty
-                <tr>
-                    <td colspan="7" class="text-center text-ink-faint p-xxl">
-                        <div class="flex flex-col items-center justify-center gap-sm">
-                            <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                            Tidak ada data absensi.
-                        </div>
-                    </td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    @if(isset($logs) && $logs->hasPages())
-        <div class="p-sm px-md border-t border-hairline bg-canvas-soft">
-            {{ $logs->links('pagination::tailwind') }}
-        </div>
-    @endif
-</div>
-
-@role('super_admin|admin')
-<dialog x-ref="correctionModal" @click="$event.target === $refs.correctionModal && closeCorrectionModal()" class="p-lg max-w-[440px] w-full m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
-            <i data-lucide="edit-3" class="w-4 h-4 text-primary"></i> Koreksi Absensi
-        </h3>
-        <button type="button" @click="closeCorrectionModal" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    <form x-ref="correctionForm" method="POST" action="" class="flex flex-col gap-md">
-        @csrf
-        <div>
-            <label for="corrected_captured_at" class="form-label">Waktu Sebenarnya (Lokal) *</label>
-            <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at" required class="form-input w-full" x-model="correctionLogData.captured_at">
-        </div>
-        <div>
-            <label for="corrected_direction" class="form-label">Status Absensi *</label>
-            <select name="corrected_direction" id="corrected_direction" class="form-input w-full" required x-model="correctionLogData.direction">
-                <option value="in">Masuk</option>
-                <option value="out">Keluar</option>
-            </select>
-        </div>
-        <div>
-            <label for="correction_reason" class="form-label">Alasan Koreksi *</label>
-            <textarea name="reason" id="correction_reason" required rows="2" class="form-input w-full" placeholder="Misal: Lupa absen, mesin error, dll"></textarea>
-        </div>
-        <div class="flex justify-end gap-xs mt-sm">
-            <button type="button" @click="closeCorrectionModal" class="btn btn-secondary">Batal</button>
-            <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
-        </div>
-    </form>
-</dialog>
-@endrole
-
-<dialog x-ref="logsModal" @click="$event.target === $refs.logsModal && closeLogsModal()" class="p-lg max-w-[500px] w-full m-auto">
-    <div class="flex justify-between items-center mb-md border-b border-hairline pb-xs">
-        <h3 class="m-0 text-[15px] font-semibold flex items-center gap-xs text-ink">
-            <i data-lucide="history" class="w-4 h-4 text-primary"></i> Riwayat Deteksi
-        </h3>
-        <button type="button" @click="closeLogsModal" aria-label="Tutup Modal" class="btn-icon">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    </div>
-    
-    <div class="flex flex-col gap-sm">
-        <template x-if="isFetchingLogs">
-            <div class="py-md text-center text-ink-faint flex flex-col items-center gap-xs">
-                <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-primary"></i>
-                Memuat data...
+        <form x-ref="correctionForm" method="POST" action="">
+            @csrf
+            <div class="modal-body flex flex-col gap-sm">
+                <div>
+                    <label for="corrected_captured_at" class="form-label">Waktu Sebenarnya (lokal) <span class="req">*</span></label>
+                    <input type="datetime-local" name="corrected_captured_at" id="corrected_captured_at"
+                           required class="form-input" x-model="correctionLogData.captured_at">
+                </div>
+                <div>
+                    <label for="corrected_direction" class="form-label">Status Absensi <span class="req">*</span></label>
+                    <select name="corrected_direction" id="corrected_direction" required class="form-select"
+                            x-model="correctionLogData.direction">
+                        <option value="in">Masuk</option>
+                        <option value="out">Keluar</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="correction_reason" class="form-label">Alasan Koreksi <span class="req">*</span></label>
+                    <textarea name="reason" id="correction_reason" required rows="2" class="form-textarea"
+                              placeholder="Misal: lupa absen, mesin error, dll"></textarea>
+                    <span class="form-hint">Alasan dicatat pada audit log bersama identitas operator.</span>
+                </div>
             </div>
-        </template>
-        
-        <template x-if="!isFetchingLogs && logs.length === 0">
-            <div class="py-md text-center text-ink-faint">
-                Tidak ada data log.
+            <div class="modal-foot">
+                <button type="button" @click="closeCorrectionModal" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-primary">Simpan Koreksi</button>
             </div>
-        </template>
+        </form>
+    </dialog>
+    @endrole
 
-        <template x-if="!isFetchingLogs && logs.length > 0">
-            <div class="max-h-[300px] overflow-y-auto pr-sm relative space-y-3">
-                <template x-for="log in logs" :key="log.id">
-                    <div class="flex items-center justify-between p-sm border border-hairline rounded bg-canvas-soft relative">
-                        <div class="flex flex-col gap-1">
-                            <div class="flex items-center gap-2">
-                                <span class="font-medium text-[14px]" x-text="log.time"></span>
-                                <template x-if="log.is_first">
-                                    <span class="badge badge-success text-[10px]">Masuk (Dihitung)</span>
+    {{-- ───────────────────────── Detection log modal ────────────────────── --}}
+    <dialog x-ref="logsModal" @click="$event.target === $refs.logsModal && closeLogsModal()"
+            class="w-[min(500px,92vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title"><i data-lucide="history" class="w-4 h-4 text-primary"></i> Riwayat Deteksi</h2>
+            <button type="button" @click="closeLogsModal" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <template x-if="isFetchingLogs">
+                <div class="py-lg text-center text-ink-faint flex flex-col items-center gap-xs">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-primary"></i>
+                    <span class="text-[12px]">Memuat data…</span>
+                </div>
+            </template>
+
+            <template x-if="!isFetchingLogs && logs.length === 0">
+                <div class="empty-state">
+                    <span class="empty-state-icon"><i data-lucide="inbox" class="w-4 h-4"></i></span>
+                    <span class="empty-state-title">Tidak ada log</span>
+                </div>
+            </template>
+
+            <template x-if="!isFetchingLogs && logs.length > 0">
+                <div class="max-h-[320px] overflow-y-auto custom-scroll flex flex-col gap-xs pr-1">
+                    <template x-for="log in logs" :key="log.id">
+                        <div class="flex items-center justify-between gap-sm p-sm border border-hairline rounded-md bg-canvas-soft">
+                            <div class="flex flex-col gap-1 min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="font-semibold text-[13px] tabular-nums text-ink" x-text="log.time"></span>
+                                    <template x-if="log.is_first">
+                                        <span class="badge badge-success">Masuk (dihitung)</span>
+                                    </template>
+                                    <template x-if="log.is_last && !log.is_first">
+                                        <span class="badge badge-muted">Terakhir</span>
+                                    </template>
+                                    <template x-if="log.is_corrected">
+                                        <span class="badge badge-warning">Dikoreksi</span>
+                                    </template>
+                                </div>
+                                <div class="text-[11px] text-ink-muted flex items-center gap-1.5">
+                                    <i data-lucide="camera" class="w-3 h-3"></i>
+                                    <span x-text="log.device"></span>
+                                </div>
+                            </div>
+                            <div class="shrink-0">
+                                <template x-if="log.direction === 'in'">
+                                    <span class="badge badge-success">Masuk</span>
                                 </template>
-                                <template x-if="log.is_last && !log.is_first">
-                                    <span class="badge badge-muted text-[10px]">Terakhir</span>
-                                </template>
-                                <template x-if="log.is_corrected">
-                                    <span class="badge badge-warning text-[10px]">Edited</span>
+                                <template x-if="log.direction === 'out'">
+                                    <span class="badge badge-primary">Keluar</span>
                                 </template>
                             </div>
-                            <div class="text-[11px] text-ink-muted flex items-center gap-2">
-                                <span><i data-lucide="camera" class="w-3 h-3 inline"></i> <span x-text="log.device"></span></span>
-                            </div>
                         </div>
-                        <div class="text-right">
-                            <template x-if="log.direction === 'in'">
-                                <span class="text-emerald-600 text-xs font-medium"><i data-lucide="log-in" class="w-3 h-3 inline"></i> IN</span>
-                            </template>
-                            <template x-if="log.direction === 'out'">
-                                <span class="text-amber-600 text-xs font-medium"><i data-lucide="log-out" class="w-3 h-3 inline"></i> OUT</span>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </template>
-    </div>
-    <div class="flex justify-end gap-xs mt-md pt-sm border-t border-hairline">
-        <button type="button" @click="closeLogsModal" class="btn btn-secondary">Tutup</button>
-    </div>
-</dialog>
+                    </template>
+                </div>
+            </template>
+        </div>
 
+        <div class="modal-foot">
+            <button type="button" @click="closeLogsModal" class="btn btn-secondary">Tutup</button>
+        </div>
+    </dialog>
 </div>
 @endsection

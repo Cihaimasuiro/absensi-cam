@@ -41,8 +41,8 @@ class DevicePairDev extends Command
 
         $url = $this->option('url');
         
-        // Ensure embed key exists, fallback to empty (pairing.py also had this fallback)
-        $embedKey = env('ENROLLMENT_EMBED_KEY', 'development_default_key_32_bytes_!');
+        // Ensure embed key matches server config
+        $embedKey = config('app.enrollment_embed_key') ?: env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
 
         $envContent = sprintf(
             "SMART_ABSENSI_URL=%s\nSMART_ABSENSI_TOKEN=%s\nSMART_ABSENSI_DEVICE_ID=%s\nENROLLMENT_EMBED_KEY=%s\n",

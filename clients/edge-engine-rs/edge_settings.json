@@ -1,0 +1,29 @@
+{
+  "general": {
+    "language": "auto",
+    "device_name": "Hallo1"
+  },
+  "camera": {
+    "source": "/dev/video0",
+    "resolution": "640x480",
+    "fps_cap": 15,
+    "mirror_preview": false
+  },
+  "network": {
+    "interface": "eth0",
+    "mode": "dhcp",
+    "wifi_ssid": "",
+    "wifi_password": null,
+    "static_ip": "",
+    "subnet": "255.255.255.0",
+    "gateway": "",
+    "dns": "1.1.1.1"
+  },
+  "time": {
+    "timezone": "Asia/Jakarta",
+    "ntp_enabled": true
+  },
+  "server": {
+    "url": "http://192.168.10.66:8000"
+  }
+}

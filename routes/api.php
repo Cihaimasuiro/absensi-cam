@@ -25,6 +25,14 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// --- Health Check for Edge Engine & Monitoring ---
+Route::get('health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'timestamp' => now()->toIso8601String(),
+    ]);
+})->name('api.health');
+
 Route::prefix('v1')->group(function () {
 
     // --- Device Pairing (legacy public, strict rate limit: 5/min per IP) ---

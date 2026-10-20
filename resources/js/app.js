@@ -8,7 +8,11 @@ import {
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
     UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
-    Sparkles, ShieldCheck, Eye, Pause, Play, createIcons
+    Sparkles, ShieldCheck, Eye, Pause, Play, createIcons,
+    ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
+    UsersRound, LogIn as LogInIcon, Edit2 as Edit2Icon, Info, ScanLine, WifiOff,
+    ArrowRightLeft, CircleCheck, BadgeCheck, FileCheck2, Timer, Layers,
+    MonitorCog, ExternalLink
 } from 'lucide'
 
 Alpine.data('layoutData', () => ({
@@ -144,6 +148,138 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
     closeConfig() {
         this.configDevice = null;
         this.newDeviceEnv = null;
+    },
+
+    // ── Embedded edge control panel ─────────────────────────────────────
+    controlDevice: null,
+    controlLoading: false,
+
+    openControl(device) {
+        this.controlDevice = device;
+        this.controlLoading = !!device.ip_address;
+        this.$refs.controlModal.showModal();
+        setTimeout(() => window.refreshIcons?.(), 30);
+    },
+
+    closeControl() {
+        this.controlDevice = null;
+        this.controlLoading = false;
+        if (this.$refs.controlModal?.open) this.$refs.controlModal.close();
+    },
+
+    reloadControl() {
+        const frame = this.$refs.controlFrame;
+        if (!frame || !this.controlDevice?.ip_address) return;
+        this.controlLoading = true;
+        frame.src = 'http://' + this.controlDevice.ip_address + ':5000/control?t=' + Date.now();
+    },
+
+    // ── Device telemetry ────────────────────────────────────────────────
+    telemetryDevice: null,
+    telemetry: null,
+    telemetryError: '',
+    telemetryLoading: false,
+    telemetryUpdatedAt: '',
+    telemetryTimer: null,
+
+    openTelemetry(device) {
+        this.telemetryDevice = device;
+        this.telemetry = null;
+        this.telemetryError = '';
+        this.telemetryUpdatedAt = '';
+        this.$refs.telemetryModal.showModal();
+
+        if (!device.ip_address) return;
+
+        this.refreshTelemetry();
+        this.telemetryTimer = setInterval(() => {
+            if (!document.hidden) this.refreshTelemetry();
+        }, 5000);
+    },
+
+    closeTelemetry() {
+        if (this.telemetryTimer) {
+            clearInterval(this.telemetryTimer);
+            this.telemetryTimer = null;
+        }
+        this.telemetryDevice = null;
+        this.telemetry = null;
+        this.telemetryError = '';
+        if (this.$refs.telemetryModal?.open) this.$refs.telemetryModal.close();
+    },
+
+    async refreshTelemetry() {
+        const ip = this.telemetryDevice?.ip_address;
+        if (!ip) return;
+
+        this.telemetryLoading = true;
+        try {
+            // /health is unauthenticated, so it doubles as a reachability probe.
+            const health = await fetch('http://' + ip + ':5000/api/control/health', {
+                cache: 'no-store',
+                signal: AbortSignal.timeout(4000)
+            });
+            if (!health.ok) throw new Error('HTTP ' + health.status);
+
+            // Full telemetry requires the edge admin session cookie.
+            const res = await fetch('http://' + ip + ':5000/api/control/info', {
+                credentials: 'include',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(6000)
+            });
+
+            if (res.status === 401) {
+                this.telemetryError = 'Perangkat online, tetapi sesi admin edge belum aktif. Buka panel Kontrol dan login sekali.';
+                this.telemetry = null;
+                return;
+            }
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            this.telemetry = await res.json();
+            this.telemetryError = '';
+            this.telemetryUpdatedAt = new Date().toLocaleTimeString('id-ID', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        } catch (e) {
+            this.telemetryError = 'Tidak dapat menghubungi ' + ip + ':5000 — ' + (e.message || e);
+            this.telemetry = null;
+        } finally {
+            this.telemetryLoading = false;
+        }
+    },
+
+    // ── Formatting helpers used by the telemetry modal ──────────────────
+    clampPct(v) {
+        return Math.max(0, Math.min(100, Number(v) || 0));
+    },
+
+    fmtPct(v) {
+        return (Number(v) || 0).toFixed(1) + '%';
+    },
+
+    barColor(pct) {
+        const v = Number(pct) || 0;
+        if (v >= 90) return 'bg-[#f87171]';
+        if (v >= 75) return 'bg-[#fbbf24]';
+        return 'bg-[#4ade80]';
+    },
+
+    fmtBytes(bytes) {
+        const n = Number(bytes) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+        return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    },
+
+    fmtUptime(sec) {
+        const s = Number(sec) || 0;
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
     }
 }));
 
@@ -365,6 +501,187 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
     };
 });
 
+Alpine.data('membersData', () => ({
+    // ── Edit modal ──────────────────────────────────────────────────────
+    openEdit(student) {
+        const f = this.$refs.editForm;
+        f.action = '/students/' + student.id;
+        f.querySelector('[name="code"]').value = student.code || '';
+        f.querySelector('[name="name"]').value = student.name || '';
+        f.querySelector('[name="role"]').value = student.role || 'student';
+        f.querySelector('[name="school_id"]').value = student.school_id || '';
+        f.querySelector('[name="email"]').value = student.email || '';
+        f.querySelector('[name="phone"]').value = student.phone || '';
+        f.querySelector('[name="is_active"]').value = student.is_active ? '1' : '0';
+        f.querySelector('[name="has_consent"]').checked = true;
+
+        window.filterClassrooms?.('edit');
+        f.querySelector('[name="classroom_id"]').value = student.classroom_id || '';
+
+        this.$refs.editModal.showModal();
+    },
+
+    // ── Face enrollment ─────────────────────────────────────────────────
+    enrollStudent: null,
+    enrollTab: 'camera',
+    enrollStatus: '',
+    enrollStatusType: 'info',
+    enrollBusy: false,
+    cameraLoading: false,
+    cameraError: '',
+    uploadPreview: '',
+    stream: null,
+
+    openEnroll(student) {
+        this.enrollStudent = student;
+        this.enrollStatus = '';
+        this.enrollBusy = false;
+        this.uploadPreview = '';
+        if (this.$refs.enrollFileInput) this.$refs.enrollFileInput.value = '';
+
+        this.$refs.enrollModal.showModal();
+        this.switchEnrollTab(student.face_template ? 'current' : 'camera');
+    },
+
+    closeEnrollModal() {
+        this.stopCamera();
+        this.uploadPreview = '';
+        if (this.$refs.enrollModal?.open) this.$refs.enrollModal.close();
+    },
+
+    switchEnrollTab(tab) {
+        this.enrollTab = tab;
+        if (tab === 'camera') {
+            this.startCamera();
+        } else {
+            this.stopCamera();
+        }
+        setTimeout(() => window.refreshIcons?.(), 30);
+    },
+
+    async startCamera() {
+        if (this.stream) return;
+        this.cameraLoading = true;
+        this.cameraError = '';
+        try {
+            this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            this.$refs.enrollVideo.srcObject = this.stream;
+            this.cameraLoading = false;
+        } catch (e) {
+            this.cameraError = 'Kamera tidak dapat diakses. Gunakan tab Unggah Berkas.';
+            this.cameraLoading = true;
+        }
+    },
+
+    stopCamera() {
+        if (this.stream) {
+            this.stream.getTracks().forEach(t => t.stop());
+            this.stream = null;
+        }
+    },
+
+    previewUpload(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) { this.uploadPreview = ''; return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => { this.uploadPreview = ev.target.result; };
+        reader.readAsDataURL(file);
+    },
+
+    async postEnroll(formData) {
+        this.enrollBusy = true;
+        this.enrollStatus = 'Memproses pendaftaran wajah…';
+        this.enrollStatusType = 'info';
+        try {
+            const res = await fetch('/students/' + this.enrollStudent.id + '/enroll', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
+            const result = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+                this.enrollStatus = 'Wajah berhasil didaftarkan. Memuat ulang…';
+                this.enrollStatusType = 'success';
+                setTimeout(() => window.location.reload(), 1400);
+                return;
+            }
+            this.enrollStatus = result.message || 'Gagal mendaftarkan wajah.';
+            this.enrollStatusType = 'error';
+        } catch (e) {
+            this.enrollStatus = 'Terjadi kesalahan jaringan.';
+            this.enrollStatusType = 'error';
+        } finally {
+            this.enrollBusy = false;
+        }
+    },
+
+    captureAndEnroll() {
+        if (!this.enrollStudent || !this.stream) return;
+        const video = this.$refs.enrollVideo;
+        const canvas = this.$refs.enrollCanvas;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        canvas.toBlob((blob) => {
+            const fd = new FormData();
+            fd.append('photo', blob, 'face.jpg');
+            this.postEnroll(fd);
+        }, 'image/jpeg', 0.9);
+    },
+
+    submitUploadAndEnroll() {
+        const input = this.$refs.enrollFileInput;
+        if (!this.enrollStudent || !input || !input.files.length) {
+            this.enrollStatus = 'Pilih berkas foto terlebih dahulu.';
+            this.enrollStatusType = 'error';
+            return;
+        }
+        const fd = new FormData();
+        fd.append('photo', input.files[0]);
+        this.postEnroll(fd);
+    },
+
+    async deleteFaceTemplate() {
+        if (!this.enrollStudent) return;
+        if (!confirm('Hapus data biometrik wajah untuk ' + this.enrollStudent.name + '?\n\nPerangkat kamera absensi tidak akan lagi mengenali anggota ini.')) {
+            return;
+        }
+
+        this.enrollBusy = true;
+        this.enrollStatus = 'Menghapus data wajah dari sistem…';
+        this.enrollStatusType = 'info';
+        try {
+            const res = await fetch('/students/' + this.enrollStudent.id + '/enroll', {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                }
+            });
+            const result = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+                this.enrollStatus = 'Data wajah berhasil dihapus. Memuat ulang…';
+                this.enrollStatusType = 'success';
+                setTimeout(() => window.location.reload(), 1200);
+                return;
+            }
+            this.enrollStatus = result.message || 'Gagal menghapus data wajah.';
+            this.enrollStatusType = 'error';
+        } catch (e) {
+            this.enrollStatus = 'Terjadi kesalahan jaringan.';
+            this.enrollStatusType = 'error';
+        } finally {
+            this.enrollBusy = false;
+        }
+    }
+}));
+
 window.Alpine = Alpine
 Alpine.start()
 
@@ -375,7 +692,10 @@ const lucideIcons = {
     FileSpreadsheet, Inbox, X, Plus, Edit, Trash2, ChevronDown, ChevronLeft, Edit3, Edit2,
     AlertTriangle, FolderUp, Upload, CheckCircle2, Camera, UserPlus, UploadCloud,
     UserCheck, RefreshCw, PlusCircle, List, Loader2, Radio, Check, Maximize2, Minimize2,
-    Sparkles, ShieldCheck, Eye, Pause, Play
+    Sparkles, ShieldCheck, Eye, Pause, Play,
+    ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
+    UsersRound, LogInIcon, Info, ScanLine, WifiOff, ArrowRightLeft, CircleCheck,
+    BadgeCheck, FileCheck2, Timer, Layers, MonitorCog, ExternalLink
 };
 
 export function refreshIcons() {

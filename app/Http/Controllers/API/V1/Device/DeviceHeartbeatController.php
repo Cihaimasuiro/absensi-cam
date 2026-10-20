@@ -39,32 +39,54 @@ class DeviceHeartbeatController extends Controller
                 $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
             }
 
-            $templates = \App\Domain\Enrollment\Models\FaceTemplate::whereNull('deleted_at')
-                ->with('student:id,name,school_id,classroom_id')
-                ->whereHas('student', function ($query) use ($schoolId) {
-                    $query->whereNull('deleted_at');
-                    if ($schoolId) {
-                        $query->where('school_id', $schoolId);
-                    }
-                })
-                ->get(['id', 'student_id', 'version_cursor']);
+            // Aggregate query for count and max cursor
+            $scopeQuery = \Illuminate\Support\Facades\DB::table('face_templates')
+                ->join('students', 'students.id', '=', 'face_templates.student_id')
+                ->whereNull('face_templates.deleted_at')
+                ->whereNull('students.deleted_at');
 
-            $classroomBuildings = \App\Domain\School\Models\Classroom::whereNotNull('building_id')->pluck('building_id', 'id');
-
-            $validTemplates = $templates->filter(function (\App\Domain\Enrollment\Models\FaceTemplate $t) use ($buildingHasClassrooms, $buildingId, $classroomBuildings) {
-                if (!$buildingHasClassrooms || !$buildingId) {
-                    return true;
-                }
-                $student = $t->student;
-                $studentBuildingId = $student ? $classroomBuildings->get($student->classroom_id) : null;
-                return $studentBuildingId === $buildingId;
-            })->sortBy('student_id');
-
-            $combined = '';
-            foreach ($validTemplates as $t) {
-                $combined .= $t->student_id . ':' . ($t->version_cursor ?? 1) . "\n";
+            if ($schoolId) {
+                $scopeQuery->where('students.school_id', $schoolId);
             }
-            $serverHash = hash('sha256', $combined);
+
+            if ($buildingId && $buildingHasClassrooms) {
+                $scopeQuery->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+                    ->where('classrooms.building_id', $buildingId);
+            }
+
+            $meta = $scopeQuery->selectRaw('COUNT(*) as total_count, MAX(face_templates.version_cursor) as max_cursor')->first();
+            $count = $meta->total_count ?? 0;
+            $maxCursor = $meta->max_cursor ?? 0;
+
+            // Scoped cache key with invalidation epoch, count, max_cursor, and 60-second TTL
+            $epoch = \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1);
+            $cacheKey = "device_templates_hash:e{$epoch}:s" . ($schoolId ?? 'all') . ":b" . ($buildingId ?? 'all') . ":c{$count}:m{$maxCursor}";
+
+            $serverHash = \Illuminate\Support\Facades\Cache::remember($cacheKey, 60, function () use ($schoolId, $buildingId, $buildingHasClassrooms) {
+                $query = \Illuminate\Support\Facades\DB::table('face_templates')
+                    ->join('students', 'students.id', '=', 'face_templates.student_id')
+                    ->whereNull('face_templates.deleted_at')
+                    ->whereNull('students.deleted_at');
+
+                if ($schoolId) {
+                    $query->where('students.school_id', $schoolId);
+                }
+
+                if ($buildingId && $buildingHasClassrooms) {
+                    $query->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')
+                        ->where('classrooms.building_id', $buildingId);
+                }
+
+                $records = $query->orderBy('face_templates.student_id')
+                    ->select(['face_templates.student_id', 'face_templates.version_cursor'])
+                    ->get();
+
+                $combined = '';
+                foreach ($records as $r) {
+                    $combined .= $r->student_id . ':' . ($r->version_cursor ?? 1) . "\n";
+                }
+                return hash('sha256', $combined);
+            });
 
             if ($reportedHash !== $serverHash) {
                 $action = 'reconcile_templates';

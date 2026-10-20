@@ -283,15 +283,15 @@ class DtrTest extends TestCase
         ]));
         $response->assertSessionHasErrors('end');
 
-        // test 30 days diff (31 days inclusive) -> PASS
-        $responsePass = $this->get(route('reports.export.dtr.pdf', [
+        // test 30 days diff (31 days inclusive) on XLSX -> PASS
+        $responsePass = $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->subDays(30)->toDateString(),
             'end' => Carbon::now()->toDateString()
         ]));
         $responsePass->assertStatus(200);
 
-        // test 31 days diff (32 days inclusive) -> FAIL
-        $responseFail = $this->get(route('reports.export.dtr.pdf', [
+        // test 31 days diff (32 days inclusive) on XLSX -> FAIL
+        $responseFail = $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->subDays(31)->toDateString(),
             'end' => Carbon::now()->toDateString()
         ]));
@@ -335,5 +335,34 @@ class DtrTest extends TestCase
 
         $this->assertStringContainsString('2026-10-06', $html);
         $this->assertStringContainsString('=SUM(1)', $html); // PDF view doesn't sanitize CSV injection, just HTML escaping
+    }
+
+    public function test_dtr_pdf_export_blocks_unfiltered_requests_over_7_days()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $response = $this->actingAs($admin)->get('/reports/dtr/pdf?start=2026-10-01&end=2026-10-10');
+
+        $response->assertSessionHasErrors(['end']);
+    }
+
+    public function test_dtr_pdf_export_allows_filtered_classroom_requests_within_limit()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $school = \App\Domain\School\Models\School::create(['name' => 'School Test']);
+        $classroom = Classroom::create([
+            'school_id' => $school->id,
+            'name' => 'Class A',
+            'start_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+        ]);
+
+        $response = $this->actingAs($admin)->get("/reports/dtr/pdf?start=2026-10-01&end=2026-10-14&classroom_id={$classroom->id}");
+
+        $response->assertSessionHasNoErrors();
+        $response->assertStatus(200);
     }
 }

@@ -56,6 +56,14 @@ class FaceTemplate extends Model
                 ->where('id', $template->id)
                 ->update(['version_cursor' => $template->version_cursor]);
         });
+
+        static::saved(function () {
+            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+        });
+
+        static::deleted(function () {
+            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+        });
     }
 }
 

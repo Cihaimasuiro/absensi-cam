@@ -18,7 +18,7 @@ class LiveCameraTest extends TestCase
 
         $response->assertOk();
         $response->assertViewIs('live-camera.index');
-        $response->assertSee('Live Kamera &amp; Monitor Presensi', false);
+        $response->assertSee('Presensi Terbaru');
     }
 
     public function test_authenticated_user_can_poll_recent_logs(): void

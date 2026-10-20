@@ -184,6 +184,19 @@ class ReportController extends Controller
 
     public function exportDtrPdf(Request $request, \App\Domain\Report\Services\DtrService $dtrService)
     {
+        $start   = $request->input('start', today()->toDateString());
+        $end     = $request->input('end',   today()->toDateString());
+        $groupId = $request->input('classroom_id');
+
+        $startC = \Carbon\Carbon::parse($start);
+        $endC   = \Carbon\Carbon::parse($end);
+
+        if (empty($groupId) && $startC->diffInDays($endC) > 7) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'end' => ['Ekspor PDF untuk seluruh kelas dibatasi maksimal 7 hari untuk mencegah kehabisan memori. Silakan pilih kelas spesifik atau gunakan ekspor Excel.'],
+            ]);
+        }
+
         $dtrRecords = $this->getDtrRecords($request, $dtrService, $start, $end, $groupId);
 
         activity('report')

@@ -1570,6 +1570,11 @@ cap.release()",
     }
 
     // Jalankan Axum HTTP stream & control server
+    let settings_path = Path::new(&db_path)
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("edge_settings.json");
+
     let server_config = server::ServerConfig {
         db_path: db_path.clone(),
         camera_device: device.clone(),
@@ -1577,6 +1582,8 @@ cap.release()",
         height,
         model_version: model_version.clone(),
         start_time: Instant::now(),
+        device_code: env::var("SMART_ABSENSI_DEVICE_ID").unwrap_or_else(|_| "GATE-01".to_string()),
+        settings_path,
     };
 
     tokio::select! {

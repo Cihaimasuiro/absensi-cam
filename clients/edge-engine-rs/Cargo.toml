@@ -50,6 +50,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 libsql = { version = "0.6", default-features = false, features = ["core"] }
 libsql-sys = { version = "0.8", default-features = false, features = ["rusqlite"] }
 aes-gcm = "0.10"
+argon2 = "0.5"
+hmac = "0.12"
 
 # Vision & AI
 image = "0.25"

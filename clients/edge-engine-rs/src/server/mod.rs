@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
-    extract::State,
-    http::{header, StatusCode},
+    extract::{Query, State},
+    http::{header, HeaderMap, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Json, Response,
@@ -18,9 +18,11 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::info;
 
+pub mod auth;
+pub mod control;
+pub use control::{register_control_routes, ControlState, ServerConfig};
+
 /// Central frame distribution hub backed by tokio::sync::watch.
-/// Each consumer receives only the newest frame, completely preventing
-/// slow HTTP clients from buffering or stalling the V4L2 capture thread.
 #[derive(Clone)]
 pub struct FrameHub {
     sender: Arc<watch::Sender<Option<Bytes>>>,
@@ -40,23 +42,18 @@ impl FrameHub {
         }
     }
 
-    /// Publish a newly captured frame to all connected viewers.
-    /// Uses send_replace so that latest frame is retained for snapshot even if no active stream receivers exist.
     pub fn publish(&self, frame: Bytes) {
         let _ = self.sender.send_replace(Some(frame));
     }
 
-    /// Subscribe to receiving live frames.
     pub fn subscribe(&self) -> watch::Receiver<Option<Bytes>> {
         self.sender.subscribe()
     }
 
-    /// Get the single most recent frame, if available.
     pub fn latest(&self) -> Option<Bytes> {
         self.sender.borrow().clone()
     }
 
-    /// Check if any active HTTP stream subscribers are currently connected.
     pub fn has_viewers(&self) -> bool {
         self.sender.receiver_count() > 0
     }
@@ -102,7 +99,6 @@ impl Default for OverlayState {
     }
 }
 
-/// Central distribution hub for face bounding boxes, labels, and attendance logs.
 #[derive(Clone)]
 pub struct OverlayHub {
     sender: Arc<watch::Sender<OverlayState>>,
@@ -141,8 +137,33 @@ pub struct AppState {
     pub overlay_hub: OverlayHub,
 }
 
-async fn snapshot_handler(State(state): State<AppState>) -> Response {
-    if let Some(frame) = state.frame_hub.latest() {
+#[derive(Debug, Deserialize)]
+pub struct StreamAuthQuery {
+    pub token: Option<String>,
+    pub expires: Option<String>,
+}
+
+async fn snapshot_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Query(query): Query<StreamAuthQuery>,
+) -> Response {
+    let is_auth = state.auth.check_session(&headers)
+        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
+
+    if !is_auth {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [
+                (header::CONTENT_TYPE, "text/plain"),
+                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+            ],
+            "Unauthorized: Stream token or active session required",
+        )
+            .into_response();
+    }
+
+    if let Some(frame) = state.app_state.frame_hub.latest() {
         (
             [
                 (header::CONTENT_TYPE, "image/jpeg"),
@@ -162,8 +183,27 @@ async fn snapshot_handler(State(state): State<AppState>) -> Response {
     }
 }
 
-async fn stream_handler(State(state): State<AppState>) -> Response {
-    let rx = state.frame_hub.subscribe();
+async fn stream_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Query(query): Query<StreamAuthQuery>,
+) -> Response {
+    let is_auth = state.auth.check_session(&headers)
+        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
+
+    if !is_auth {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [
+                (header::CONTENT_TYPE, "text/plain"),
+                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+            ],
+            "Unauthorized: Stream token or active session required",
+        )
+            .into_response();
+    }
+
+    let rx = state.app_state.frame_hub.subscribe();
     let stream = WatchStream::new(rx)
         .filter_map(|opt_frame| async move { opt_frame })
         .map(|frame| -> Result<Bytes, std::convert::Infallible> {
@@ -193,22 +233,41 @@ async fn stream_handler(State(state): State<AppState>) -> Response {
         .into_response()
 }
 
-async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
+async fn status_handler(State(state): State<ControlState>) -> impl IntoResponse {
     (
         [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Json(state.overlay_hub.latest()),
+        Json(state.app_state.overlay_hub.latest()),
     )
 }
 
-async fn history_handler(State(state): State<AppState>) -> impl IntoResponse {
+async fn history_handler(State(state): State<ControlState>) -> impl IntoResponse {
     (
         [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Json(state.overlay_hub.latest().history),
+        Json(state.app_state.overlay_hub.latest().history),
     )
 }
 
-async fn events_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let rx = state.overlay_hub.subscribe();
+async fn events_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Query(query): Query<StreamAuthQuery>,
+) -> Response {
+    let is_auth = state.auth.check_session(&headers)
+        || state.auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), &state.config.device_code);
+
+    if !is_auth {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [
+                (header::CONTENT_TYPE, "text/plain"),
+                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+            ],
+            "Unauthorized: Stream token or active session required",
+        )
+            .into_response();
+    }
+
+    let rx = state.app_state.overlay_hub.subscribe();
     let stream = WatchStream::new(rx).map(|overlay| -> Result<Event, std::convert::Infallible> {
         let json_str = serde_json::to_string(&overlay).unwrap_or_else(|_| "{}".to_string());
         Ok(Event::default().data(json_str))
@@ -218,10 +277,8 @@ async fn events_handler(State(state): State<AppState>) -> impl IntoResponse {
         [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
         Sse::new(stream).keep_alive(KeepAlive::default()),
     )
+        .into_response()
 }
-
-pub mod control;
-pub use control::{register_control_routes, ControlState, ServerConfig};
 
 pub async fn start_stream_server(
     port: u16,
@@ -234,24 +291,27 @@ pub async fn start_stream_server(
         overlay_hub,
     };
 
+    let stream_secret = std::env::var("SMART_ABSENSI_TOKEN")
+        .unwrap_or_else(|_| "dev_stream_secret_key_123".to_string());
+    let db_dir = std::path::Path::new(&config.db_path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
+    let auth = Arc::new(auth::AuthManager::new(db_dir, stream_secret));
+
     let control_state = ControlState {
-        app_state: state.clone(),
+        app_state: state,
         config,
-        sessions: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashSet::new())),
+        auth,
     };
 
-    let stream_routes = Router::new()
-        .route("/", get(stream_handler))
+    let app = Router::new()
         .route("/stream", get(stream_handler))
         .route("/snapshot.jpg", get(snapshot_handler))
         .route("/status", get(status_handler))
         .route("/history", get(history_handler))
         .route("/events", get(events_handler))
-        .with_state(state);
-
-    let control_routes = register_control_routes(Router::new()).with_state(control_state);
-
-    let app = stream_routes.merge(control_routes);
+        .merge(register_control_routes(Router::new()))
+        .with_state(control_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("MJPEG Stream & Control server aktif di http://{}", addr);

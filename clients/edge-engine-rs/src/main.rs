@@ -676,7 +676,6 @@ async fn run_stream(
             PathBuf::from("packages/models"),
             PathBuf::from("../../packages/models"),
             PathBuf::from("../packages/models"),
-            PathBuf::from("archive/edge-engine-py/models"),
             PathBuf::from("/opt/smart-absensi/edge-engine/models"),
             PathBuf::from("."),
         ];

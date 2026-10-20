@@ -10,8 +10,6 @@ fn find_model(names: &[&str]) -> Option<PathBuf> {
         manifest.join("../../../packages/models"),
         manifest.join("target/aarch64-unknown-linux-gnu/release"),
         manifest.join("../../target/aarch64-unknown-linux-gnu/release"),
-        manifest.join("../../archive/edge-engine-py/models"),
-        manifest.join("../../../archive/edge-engine-py/models"),
     ];
 
     for dir in &dirs {

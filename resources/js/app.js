@@ -12,8 +12,44 @@ import {
     ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
     UsersRound, LogIn as LogInIcon, Edit2 as Edit2Icon, Info, ScanLine, WifiOff,
     ArrowRightLeft, CircleCheck, BadgeCheck, FileCheck2, Timer, Layers,
-    MonitorCog, ExternalLink
+    MonitorCog, ExternalLink, FileDown
 } from 'lucide'
+
+window.openModal = function(id) {
+    const modal = document.getElementById(id);
+    if (modal && typeof modal.showModal === 'function') {
+        modal.showModal();
+    }
+};
+
+window.closeModal = function(id) {
+    const modal = document.getElementById(id);
+    if (modal && typeof modal.close === 'function') {
+        modal.close();
+    }
+};
+
+window.showGlobalConfirm = function(message, callback) {
+    const modal = document.getElementById('globalConfirmModal');
+    const textEl = document.getElementById('globalConfirmMessage');
+    if (textEl) textEl.textContent = message;
+    window.__globalConfirmAction = callback;
+    if (modal && typeof modal.showModal === 'function') {
+        modal.showModal();
+    } else if (window.confirm(message)) {
+        callback();
+    }
+};
+
+window.executeGlobalConfirm = function() {
+    const modal = document.getElementById('globalConfirmModal');
+    if (modal?.open) modal.close();
+    if (typeof window.__globalConfirmAction === 'function') {
+        const action = window.__globalConfirmAction;
+        window.__globalConfirmAction = null;
+        action();
+    }
+};
 
 Alpine.data('layoutData', () => ({
     sidebarOpen: false,
@@ -34,21 +70,30 @@ Alpine.data('layoutData', () => ({
         }
     },
 
+    openModalByData(e) {
+        const id = e.currentTarget.dataset.modalId;
+        if (!id) return;
+        window.openModal(id);
+    },
+
+    closeModalByData(e) {
+        const id = e.currentTarget.dataset.modalId;
+        if (!id) return;
+        window.closeModal(id);
+    },
+
     confirmMessage: '',
     confirmAction: null,
     confirmSubmit(e) {
         e.preventDefault();
-        this.confirmMessage = e.target.getAttribute('data-confirm') || 'Anda yakin?';
-        this.confirmAction = () => {
-            e.target.submit();
-        };
-        this.$refs.globalConfirmModal.showModal();
+        const form = e.target.closest('form');
+        if (!form) return;
+        const msg = form.getAttribute('data-confirm') || 'Anda yakin?';
+        this.confirmMessage = msg;
+        window.showGlobalConfirm(msg, () => form.submit());
     },
     executeConfirm() {
-        if (this.confirmAction) {
-            this.confirmAction();
-        }
-        this.$refs.globalConfirmModal.close();
+        window.executeGlobalConfirm();
     }
 }));
 
@@ -74,9 +119,12 @@ Alpine.data('schoolsData', () => ({
         this.$refs.editForm.action = '/schools/' + data.id;
     },
 
-    openCreateClassroom(schoolId) {
+    openCreateClassroom(param) {
+        const schoolId = (typeof param === 'number' || typeof param === 'string')
+            ? param
+            : param?.currentTarget?.dataset?.schoolId;
         this.createClassroomSchoolId = schoolId;
-        this.$refs.createClassroomModal.showModal();
+        this.$refs.createClassroomModal?.showModal();
     },
 
     openEditClassroom(e) {
@@ -85,15 +133,30 @@ Alpine.data('schoolsData', () => ({
         if (data.start_time) {
             this.editClassroomData.start_time = data.start_time.substring(0, 5);
         }
-        this.$refs.editClassroomModal.showModal();
-        this.$refs.editClassroomForm.action = '/schools/classrooms/' + data.id;
+        this.$refs.editClassroomModal?.showModal();
+        if (this.$refs.editClassroomForm) {
+            this.$refs.editClassroomForm.action = '/schools/classrooms/' + data.id;
+        }
     },
 
-    openBulkEdit(schoolId) {
+    openBulkEdit(param) {
+        const schoolId = (typeof param === 'number' || typeof param === 'string')
+            ? param
+            : param?.currentTarget?.dataset?.schoolId;
         this.bulkEditSchoolId = schoolId;
         this.confirmRetroactive = false;
-        this.$refs.bulkEditClassroomModal.showModal();
-        this.$refs.bulkEditClassroomForm.action = '/schools/' + schoolId + '/classrooms/timing';
+        this.$refs.bulkEditClassroomModal?.showModal();
+        if (this.$refs.bulkEditClassroomForm) {
+            this.$refs.bulkEditClassroomForm.action = '/schools/' + schoolId + '/classrooms/timing';
+        }
+    },
+
+    confirmSubmit(e) {
+        e.preventDefault();
+        const form = e.target.closest('form');
+        if (!form) return;
+        const msg = form.getAttribute('data-confirm') || 'Anda yakin?';
+        window.showGlobalConfirm(msg, () => form.submit());
     }
 }));
 
@@ -103,16 +166,24 @@ Alpine.data('reportsData', () => ({
     isFetchingLogs: false,
     openCorrectionModal(e) {
         this.correctionLogData = JSON.parse(e.currentTarget.dataset.log);
-        this.$refs.correctionModal.showModal();
-        this.$refs.correctionForm.action = '/reports/logs/' + this.correctionLogData.id + '/correct';
+        this.$refs.correctionModal?.showModal();
+        if (this.$refs.correctionForm) {
+            this.$refs.correctionForm.action = '/reports/logs/' + this.correctionLogData.id + '/correct';
+        }
     },
     closeCorrectionModal() {
-        this.$refs.correctionModal.close();
+        this.$refs.correctionModal?.close();
     },
-    async fetchLogs(studentId, date) {
+    async fetchLogs(paramA, paramB) {
+        let studentId = paramA;
+        let date = paramB;
+        if (paramA?.currentTarget?.dataset) {
+            studentId = paramA.currentTarget.dataset.studentId;
+            date = paramA.currentTarget.dataset.date;
+        }
         this.isFetchingLogs = true;
         this.logs = [];
-        this.$refs.logsModal.showModal();
+        this.$refs.logsModal?.showModal();
         try {
             const res = await fetch(`/reports/student-logs?student_id=${studentId}&date=${date}`);
             this.logs = await res.json();
@@ -124,51 +195,186 @@ Alpine.data('reportsData', () => ({
         }
     },
     closeLogsModal() {
-        this.$refs.logsModal.close();
+        this.$refs.logsModal?.close();
     }
 }));
 
-Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null, initialNewDeviceEnv = null) => ({
-    editDevice: initialEditDevice,
-    configDevice: initialConfigDevice,
-    newDeviceEnv: initialNewDeviceEnv,
-    addDeviceModal: false,
-    openEdit(device) {
-        this.editDevice = device;
-        this.newDeviceEnv = null;
+Alpine.data('devicesData', () => ({
+    editDevice: null,
+    editActionUrl: '',
+    configDevice: null,
+    configResetUrl: '',
+    newDeviceEnv: null,
+
+    init() {
+        try {
+            const rawConfig = this.$el.dataset.initialConfig;
+            if (rawConfig && rawConfig !== 'null') {
+                const parsed = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
+                const dev = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+                if (dev && dev.id) {
+                    this.configDevice = dev;
+                    this.configResetUrl = '/devices/' + dev.id + '/reset-token';
+                    const rawEnv = this.$el.dataset.initialEnv;
+                    if (rawEnv && rawEnv !== 'null') {
+                        this.newDeviceEnv = typeof rawEnv === 'string' ? JSON.parse(rawEnv) : rawEnv;
+                    }
+                    this.$nextTick(() => {
+                        this.$refs.configModal?.showModal();
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse initial config device:', e);
+        }
+
+        try {
+            const rawEdit = this.$el.dataset.initialEdit;
+            if (rawEdit && rawEdit !== 'null') {
+                const parsed = typeof rawEdit === 'string' ? JSON.parse(rawEdit) : rawEdit;
+                const dev = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+                if (dev && dev.id) {
+                    this.$nextTick(() => {
+                        this.openEdit(dev);
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse initial edit device:', e);
+        }
+
+        this.$nextTick(() => {
+            const frame = document.getElementById('edgeControlFrame');
+            if (frame) {
+                frame.addEventListener('load', () => {
+                    this.controlLoading = false;
+                });
+            }
+        });
     },
+
+    openAdd() {
+        this.newDeviceEnv = null;
+        this.$refs.addModal?.showModal();
+    },
+
+    closeAdd() {
+        if (this.$refs.addModal?.open) {
+            this.$refs.addModal.close();
+        }
+    },
+
+    openEdit(param) {
+        let device = null;
+        if (param && param.id) {
+            device = param;
+        } else if (param?.currentTarget?.dataset?.device) {
+            try {
+                device = JSON.parse(param.currentTarget.dataset.device);
+            } catch (err) {
+                console.error('Failed to parse device dataset:', err);
+            }
+        }
+        if (!device) return;
+
+        this.editDevice = { ...device };
+        this.editActionUrl = '/devices/' + device.id;
+        this.newDeviceEnv = null;
+        this.$refs.editModal?.showModal();
+        if (this.$refs.editForm) {
+            this.$refs.editForm.action = '/devices/' + device.id;
+        }
+    },
+
     closeEdit() {
         this.editDevice = null;
         this.newDeviceEnv = null;
+        if (this.$refs.editModal?.open) {
+            this.$refs.editModal.close();
+        }
     },
-    openConfig(device) {
+
+    openConfig(param) {
+        let device = null;
+        if (param && param.id) {
+            device = param;
+        } else if (param?.currentTarget?.dataset?.device) {
+            try {
+                device = JSON.parse(param.currentTarget.dataset.device);
+            } catch (err) {
+                console.error('Failed to parse device dataset:', err);
+            }
+        }
+        if (!device) return;
+
         this.configDevice = device;
+        this.configResetUrl = '/devices/' + device.id + '/reset-token';
         this.newDeviceEnv = null;
+        this.$refs.configModal?.showModal();
     },
+
     closeConfig() {
         this.configDevice = null;
         this.newDeviceEnv = null;
+        if (this.$refs.configModal?.open) {
+            this.$refs.configModal.close();
+        }
+    },
+
+    getConfigEnvText() {
+        if (this.newDeviceEnv) return this.newDeviceEnv;
+        const code = this.configDevice?.device_code || '';
+        const host = window.location.origin;
+        return `SMART_ABSENSI_URL=${host}\nSMART_ABSENSI_TOKEN=<RAHASIA — generate ulang bila lupa>\nSMART_ABSENSI_DEVICE_ID=${code}\nENROLLMENT_EMBED_KEY=<DARI_SERVER_ENV>`;
+    },
+
+    confirmSubmit(e) {
+        e.preventDefault();
+        const form = e.target.closest('form');
+        if (!form) return;
+        const msg = form.getAttribute('data-confirm') || 'Anda yakin?';
+        window.showGlobalConfirm(msg, () => form.submit());
     },
 
     // ── Embedded edge control panel ─────────────────────────────────────
     controlDevice: null,
     controlLoading: false,
 
-    openControl(device) {
+    openControl(param) {
+        let device = null;
+        if (param && param.id) {
+            device = param;
+        } else if (param?.currentTarget?.dataset?.device) {
+            try {
+                device = JSON.parse(param.currentTarget.dataset.device);
+            } catch (err) {
+                console.error('Failed to parse device dataset:', err);
+            }
+        }
+        if (!device) return;
+
         this.controlDevice = device;
         this.controlLoading = !!device.ip_address;
-        this.$refs.controlModal.showModal();
+        this.$refs.controlModal?.showModal();
+        const frame = document.getElementById('edgeControlFrame');
+        if (frame && device.ip_address) {
+            frame.src = 'http://' + device.ip_address + ':5000/control';
+        }
         setTimeout(() => window.refreshIcons?.(), 30);
     },
 
     closeControl() {
         this.controlDevice = null;
         this.controlLoading = false;
+        const frame = document.getElementById('edgeControlFrame');
+        if (frame) {
+            frame.src = 'about:blank';
+        }
         if (this.$refs.controlModal?.open) this.$refs.controlModal.close();
     },
 
     reloadControl() {
-        const frame = this.$refs.controlFrame;
+        const frame = document.getElementById('edgeControlFrame');
         if (!frame || !this.controlDevice?.ip_address) return;
         this.controlLoading = true;
         frame.src = 'http://' + this.controlDevice.ip_address + ':5000/control?t=' + Date.now();
@@ -182,12 +388,24 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
     telemetryUpdatedAt: '',
     telemetryTimer: null,
 
-    openTelemetry(device) {
+    openTelemetry(param) {
+        let device = null;
+        if (param && param.id) {
+            device = param;
+        } else if (param?.currentTarget?.dataset?.device) {
+            try {
+                device = JSON.parse(param.currentTarget.dataset.device);
+            } catch (err) {
+                console.error('Failed to parse device dataset:', err);
+            }
+        }
+        if (!device) return;
+
         this.telemetryDevice = device;
         this.telemetry = null;
         this.telemetryError = '';
         this.telemetryUpdatedAt = '';
-        this.$refs.telemetryModal.showModal();
+        this.$refs.telemetryModal?.showModal();
 
         if (!device.ip_address) return;
 
@@ -259,9 +477,9 @@ Alpine.data('devicesData', (initialEditDevice = null, initialConfigDevice = null
 
     barColor(pct) {
         const v = Number(pct) || 0;
-        if (v >= 90) return 'bg-[#f87171]';
-        if (v >= 75) return 'bg-[#fbbf24]';
-        return 'bg-[#4ade80]';
+        if (v >= 90) return 'bg-danger';
+        if (v >= 75) return 'bg-warning';
+        return 'bg-success';
     },
 
     fmtBytes(bytes) {
@@ -503,7 +721,19 @@ Alpine.data('cameraFeedData', (defaultIp = '', initialPresent = 0) => {
 
 Alpine.data('membersData', () => ({
     // ── Edit modal ──────────────────────────────────────────────────────
-    openEdit(student) {
+    openEdit(param) {
+        let student = null;
+        if (param && param.id) {
+            student = param;
+        } else if (param?.currentTarget?.dataset?.student) {
+            try {
+                student = JSON.parse(param.currentTarget.dataset.student);
+            } catch (err) {
+                console.error('Failed to parse student dataset:', err);
+            }
+        }
+        if (!student) return;
+
         const f = this.$refs.editForm;
         f.action = '/students/' + student.id;
         f.querySelector('[name="code"]').value = student.code || '';
@@ -518,7 +748,15 @@ Alpine.data('membersData', () => ({
         window.filterClassrooms?.('edit');
         f.querySelector('[name="classroom_id"]').value = student.classroom_id || '';
 
-        this.$refs.editModal.showModal();
+        this.$refs.editModal?.showModal();
+    },
+
+    confirmSubmit(e) {
+        e.preventDefault();
+        const form = e.target.closest('form');
+        if (!form) return;
+        const msg = form.getAttribute('data-confirm') || 'Anda yakin?';
+        window.showGlobalConfirm(msg, () => form.submit());
     },
 
     // ── Face enrollment ─────────────────────────────────────────────────
@@ -532,14 +770,26 @@ Alpine.data('membersData', () => ({
     uploadPreview: '',
     stream: null,
 
-    openEnroll(student) {
+    openEnroll(param) {
+        let student = null;
+        if (param && param.id) {
+            student = param;
+        } else if (param?.currentTarget?.dataset?.student) {
+            try {
+                student = JSON.parse(param.currentTarget.dataset.student);
+            } catch (err) {
+                console.error('Failed to parse student dataset:', err);
+            }
+        }
+        if (!student) return;
+
         this.enrollStudent = student;
         this.enrollStatus = '';
         this.enrollBusy = false;
         this.uploadPreview = '';
         if (this.$refs.enrollFileInput) this.$refs.enrollFileInput.value = '';
 
-        this.$refs.enrollModal.showModal();
+        this.$refs.enrollModal?.showModal();
         this.switchEnrollTab(student.face_template ? 'current' : 'camera');
     },
 
@@ -682,9 +932,6 @@ Alpine.data('membersData', () => ({
     }
 }));
 
-window.Alpine = Alpine
-Alpine.start()
-
 const lucideIcons = {
     ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
     Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
@@ -695,16 +942,35 @@ const lucideIcons = {
     Sparkles, ShieldCheck, Eye, Pause, Play,
     ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
     UsersRound, LogInIcon, Info, ScanLine, WifiOff, ArrowRightLeft, CircleCheck,
-    BadgeCheck, FileCheck2, Timer, Layers, MonitorCog, ExternalLink
+    BadgeCheck, FileCheck2, Timer, Layers, MonitorCog, ExternalLink, FileDown
 };
 
 export function refreshIcons() {
-    createIcons({ icons: lucideIcons });
+    try {
+        createIcons({ icons: lucideIcons });
+    } catch (e) {
+        console.error('Failed to create Lucide icons:', e);
+    }
 }
 
+// Initialize Lucide icons early
 refreshIcons();
 window.refreshIcons = refreshIcons;
 window.lucide = { createIcons: refreshIcons };
+
+document.addEventListener('DOMContentLoaded', () => {
+    refreshIcons();
+});
+
+window.Alpine = Alpine;
+try {
+    Alpine.start();
+} catch (e) {
+    console.error('Alpine start failed:', e);
+}
+
+// Re-run refreshIcons after Alpine initialization to hydrate any dynamic Alpine templates
+refreshIcons();
 
 // ═════════════════════════════════════════════════════════════════════
 // Modern Web Animations: Lenis Smooth Scroll & GSAP

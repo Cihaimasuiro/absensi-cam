@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub fn find_model_path(base_dirs: &[PathBuf], candidates: &[&str]) -> Option<PathBuf> {
     for dir in base_dirs {

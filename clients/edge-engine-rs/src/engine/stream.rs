@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::env;
@@ -8,14 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
-use crate::{core, hardware, server, sync, vision};
+use crate::{server, vision};
 use crate::core::{models::OutboxRecord, EdgeDb};
 use crate::hardware::{
     detect_rfid_device, ArduinoBridge, FramebufferDisplay, LinuxGpio, RfidTapEvent,
     SerialRfidReader, TftRleStreamer,
 };
 use crate::server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
-use crate::sync::SyncWorker;
 use crate::vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 
 use super::tracker::TrackedStudent;

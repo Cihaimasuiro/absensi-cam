@@ -516,7 +516,8 @@ fn read_free_disk_mb() -> i64 {
         use std::ffi::CString;
         use std::mem::MaybeUninit;
         let path = CString::new("/").unwrap();
-        let mut stat: MaybeUninit<libc::statvfs> = MaybeUninit::uninit();
+        // SAFETY: statvfs writes to valid C string path and uninit statvfs buffer.
+        // If 0 (success) is returned, buffer is fully populated by kernel.
         unsafe {
             if libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 {
                 let s = stat.assume_init();

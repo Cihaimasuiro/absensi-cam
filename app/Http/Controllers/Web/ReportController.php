@@ -20,24 +20,28 @@ class ReportController extends Controller
         $endUtc = \Carbon\Carbon::parse($end)->endOfDay()->setTimezone('UTC');
 
         $offset = now()->offsetHours;
-        $offsetSql = $offset >= 0 ? "+{$offset}" : $offset;
+        $offsetSql = $offset >= 0 ? "+{$offset}" : (string)$offset;
+        $driver = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+        $dateExpr = $driver === 'sqlite'
+            ? "DATE(datetime(captured_at, '{$offsetSql} hours'))"
+            : "DATE(DATE_ADD(captured_at, INTERVAL {$offset} HOUR))";
 
         $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name', 'device:id,name'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->when($groupId, fn ($q) =>
                 $q->whereHas('student', fn ($q) => $q->where('classroom_id', $groupId))
             )
-            ->selectRaw('
+            ->selectRaw("
                 student_id,
                 MAX(device_id) as device_id,
-                DATE(DATE_ADD(captured_at, INTERVAL ' . $offset . ' HOUR)) as log_date,
+                {$dateExpr} as log_date,
                 MIN(captured_at) as first_in,
                 MAX(captured_at) as last_out,
                 COUNT(id) as total_logs,
                 MAX(is_corrected) as is_corrected,
                 MAX(id) as id,
-                (SELECT id FROM attendance_logs al2 WHERE al2.student_id = attendance_logs.student_id AND al2.captured_at = MIN(attendance_logs.captured_at) LIMIT 1) as first_log_id
-            ')
+                (SELECT al2.id FROM attendance_logs al2 WHERE al2.student_id = attendance_logs.student_id ORDER BY al2.captured_at ASC LIMIT 1) as first_log_id
+            ")
             ->groupBy('student_id', 'log_date')
             ->orderBy('log_date', 'desc')
             ->orderBy('first_in', 'asc')

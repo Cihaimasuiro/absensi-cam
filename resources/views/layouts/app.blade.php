@@ -193,23 +193,25 @@
 </main>
 
 {{-- Global confirm dialog --}}
-<dialog x-ref="globalConfirmModal"
-        @click="$event.target === $refs.globalConfirmModal && $refs.globalConfirmModal.close()"
+<dialog id="globalConfirmModal" x-ref="globalConfirmModal"
+        @click="($event.target.id === 'globalConfirmModal' || $event.target === $refs.globalConfirmModal) && ($refs.globalConfirmModal?.close() || $el.close())"
         class="w-[min(400px,92vw)] m-auto">
     <div class="modal-head">
         <h2 class="modal-title">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning"></i> Konfirmasi
         </h2>
-        <button type="button" @click="$refs.globalConfirmModal.close()" aria-label="Tutup" class="btn-icon">
+        <button type="button" @click="$refs.globalConfirmModal?.close() || $el.closest('dialog')?.close()"
+                onclick="document.getElementById('globalConfirmModal')?.close()" aria-label="Tutup" class="btn-icon">
             <i data-lucide="x" class="w-4 h-4"></i>
         </button>
     </div>
     <div class="modal-body">
-        <p class="text-[13px] text-ink m-0 leading-relaxed" x-text="confirmMessage"></p>
+        <p id="globalConfirmMessage" class="text-[13px] text-ink m-0 leading-relaxed" x-text="confirmMessage"></p>
     </div>
     <div class="modal-foot">
-        <button type="button" @click="$refs.globalConfirmModal.close()" class="btn btn-secondary">Batal</button>
-        <button type="button" @click="executeConfirm()" class="btn btn-primary">Ya, Lanjutkan</button>
+        <button type="button" @click="$refs.globalConfirmModal?.close() || $el.closest('dialog')?.close()"
+                onclick="document.getElementById('globalConfirmModal')?.close()" class="btn btn-secondary">Batal</button>
+        <button type="button" @click="executeConfirm()" onclick="window.executeGlobalConfirm && window.executeGlobalConfirm()" class="btn btn-primary">Ya, Lanjutkan</button>
     </div>
 </dialog>
 

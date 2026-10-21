@@ -66,13 +66,14 @@ class DeviceController extends Controller
         $lastCode = \Illuminate\Support\Facades\DB::table('devices')
             ->select('device_code')
             ->get()
-            ->map(fn($row) => (int) str_replace('dev-', '', $row->device_code))
+            ->map(function ($row) {
+                return preg_match('/dev-(\d+)/', $row->device_code ?? '', $m) ? (int) $m[1] : 0;
+            })
             ->max();
 
         $deviceCode = 'dev-' . str_pad(($lastCode ?? 0) + 1, 4, '0', STR_PAD_LEFT);
 
         $device = Device::create([
-            'id' => \Illuminate\Support\Str::uuid(),
             'name' => $validated['name'],
             'device_code' => $deviceCode,
             'building_id' => $validated['building_id'],
@@ -87,11 +88,13 @@ class DeviceController extends Controller
             ->causedBy(auth()->user())
             ->log('Device created and token generated');
 
+        $serverUrl = $request->getSchemeAndHttpHost();
+        $embedKey = env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
         $envContent = <<<ENV
-SMART_ABSENSI_URL=http://{$request->getHost()}:8000
+SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}
 SMART_ABSENSI_DEVICE_ID={$deviceCode}
-ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
+ENROLLMENT_EMBED_KEY={$embedKey}
 ENV;
 
         return back()
@@ -127,11 +130,13 @@ ENV;
             ->causedBy(auth()->user())
             ->log('Device token reset');
 
+        $serverUrl = $request->getSchemeAndHttpHost();
+        $embedKey = env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
         $envContent = <<<ENV
-SMART_ABSENSI_URL={$request->getSchemeAndHttpHost()}
+SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}
 SMART_ABSENSI_DEVICE_ID={$device->device_code}
-ENROLLMENT_EMBED_KEY=t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=
+ENROLLMENT_EMBED_KEY={$embedKey}
 ENV;
 
         return back()
@@ -144,6 +149,7 @@ ENV;
     public function destroy(Device $device)
     {
         $name = $device->name;
+        $device->tokens()->delete();
         $device->delete();
 
         activity('device')

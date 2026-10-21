@@ -3,13 +3,13 @@
 
 @section('header-actions')
     @role('super_admin|admin')
-        <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-secondary btn-sm">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+        <a href="{{ route('reports.export.csv', request()->all()) }}" class="btn btn-secondary btn-sm btn-export-csv">
+            <i data-lucide="file-down" class="w-3.5 h-3.5"></i> CSV
         </a>
-        <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-secondary btn-sm">
+        <a href="{{ route('reports.export.dtr.xlsx', request()->all()) }}" class="btn btn-secondary btn-sm btn-export-xlsx">
             <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> XLSX
         </a>
-        <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-secondary btn-sm">
+        <a href="{{ route('reports.export.dtr.pdf', request()->all()) }}" class="btn btn-secondary btn-sm btn-export-pdf">
             <i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF
         </a>
     @endrole
@@ -95,15 +95,17 @@
                             </td>
                             <td class="text-center font-mono text-ink-muted">{{ $log->total_logs }}×</td>
                             @role('super_admin|admin')
-                                <td class="text-right">
-                                    <div class="flex items-center justify-end gap-sm">
-                                        <button type="button" class="btn-link"
+                                <td class="text-right whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button type="button" class="btn btn-secondary btn-sm"
                                                 data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}"
                                                 @click="openCorrectionModal">
-                                            Koreksi
+                                            <i data-lucide="edit-2" class="w-3 h-3"></i> Koreksi
                                         </button>
-                                        <button type="button" class="btn-link"
-                                                @click="fetchLogs('{{ $log->student_id }}', '{{ $log->log_date }}')">
+                                        <button type="button" class="btn btn-secondary btn-sm"
+                                                data-student-id="{{ $log->student_id }}"
+                                                data-date="{{ $log->log_date }}"
+                                                @click="fetchLogs">
                                             <i data-lucide="list" class="w-3 h-3"></i> Log
                                         </button>
                                     </div>

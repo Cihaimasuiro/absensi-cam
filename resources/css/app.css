@@ -194,6 +194,37 @@ nav[aria-label="Pagination"] a { font-size: var(--text-caption) !important; }
   }
   .btn-secondary:hover, .btn-utility:hover { background: var(--color-canvas-soft); color: var(--color-ink); }
 
+  /* Format-specific export button styles */
+  .btn-export-csv {
+    color: #ca8a04 !important;
+    border-color: rgba(202, 138, 4, 0.35);
+  }
+  .btn-export-csv:hover {
+    background: #fefce8;
+    color: #a16207 !important;
+    border-color: rgba(202, 138, 4, 0.6);
+  }
+
+  .btn-export-xlsx {
+    color: #16a34a !important;
+    border-color: rgba(22, 163, 74, 0.35);
+  }
+  .btn-export-xlsx:hover {
+    background: #f0fdf4;
+    color: #15803d !important;
+    border-color: rgba(22, 163, 74, 0.6);
+  }
+
+  .btn-export-pdf {
+    color: #dc2626 !important;
+    border-color: rgba(220, 38, 38, 0.35);
+  }
+  .btn-export-pdf:hover {
+    background: #fef2f2;
+    color: #b91c1c !important;
+    border-color: rgba(220, 38, 38, 0.6);
+  }
+
   .btn-danger {
     background: var(--color-danger);
     color: #ffffff;

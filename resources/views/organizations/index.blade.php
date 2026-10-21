@@ -2,8 +2,13 @@
 @section('title', 'Manajemen Organisasi')
 
 @section('header-actions')
-    <button type="button" @click="$refs.createModal.showModal()" class="btn btn-primary">
-        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah Organisasi
+    <button type="button"
+            id="btnCreateSchool"
+            data-modal-id="createSchoolModal"
+            @click="openModalByData"
+            onclick="window.openModal('createSchoolModal')"
+            class="btn btn-primary btn-sm">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah
     </button>
 @endsection
 
@@ -28,19 +33,19 @@
                             <td class="font-mono text-ink-muted">{{ $school->code }}</td>
                             <td class="font-medium text-ink">{{ $school->name }}</td>
                             <td class="text-right whitespace-nowrap">
-                                <div class="flex items-center justify-end gap-sm">
-                                    <button data-school="{{ json_encode($school) }}" @click="openEditSchool"
-                                            class="btn-link" aria-label="Edit organisasi {{ $school->name }}">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button type="button" data-school="{{ json_encode($school) }}" @click="openEditSchool"
+                                            class="btn btn-secondary btn-sm" aria-label="Edit organisasi {{ $school->name }}">
                                         <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                     </button>
                                     <form action="{{ route('schools.destroy', $school) }}" method="POST" class="inline"
                                           @submit="confirmSubmit" data-confirm="Hapus organisasi {{ $school->name }}?">
                                         @csrf @method('DELETE')
-                                        <button type="submit" class="btn-danger-link" aria-label="Hapus organisasi {{ $school->name }}">
+                                        <button type="submit" class="btn btn-danger-outline btn-sm" aria-label="Hapus organisasi {{ $school->name }}">
                                             <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                                         </button>
                                     </form>
-                                    <button @click="toggleRow('classrooms-{{ $school->id }}')"
+                                    <button type="button" @click="toggleRow('classrooms-{{ $school->id }}')"
                                             class="btn btn-secondary btn-sm" aria-label="Tampilkan daftar kelas">
                                         <i data-lucide="chevron-down" class="w-3 h-3"
                                            :class="{ 'rotate-180': openRows.includes('classrooms-{{ $school->id }}') }"></i>
@@ -92,8 +97,10 @@
                                                     <td class="font-mono">{{ substr($classroom->start_time, 0, 5) }}</td>
                                                     <td class="font-mono">{{ $classroom->late_tolerance_minutes ?? 'Off' }}</td>
                                                     <td class="text-right">
-                                                        <button data-classroom="{{ json_encode($classroom) }}"
-                                                                @click="openEditClassroom" class="btn-link">Edit</button>
+                                                        <button type="button" data-classroom="{{ json_encode($classroom) }}"
+                                                                @click="openEditClassroom" class="btn btn-secondary btn-sm">
+                                                            <i data-lucide="edit" class="w-3 h-3"></i> Edit
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             @empty
@@ -125,7 +132,7 @@
     </section>
 
     {{-- ───────────────────────── Create organization ────────────────────── --}}
-    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()"
+    <dialog id="createSchoolModal" x-ref="createModal" @click="$event.target === $el && $el.close()"
             class="w-[min(420px,92vw)] m-auto">
         <div class="modal-head">
             <h2 class="modal-title"><i data-lucide="plus" class="w-4 h-4 text-primary"></i> Tambah Organisasi</h2>

@@ -2,14 +2,29 @@
 @section('title', $isRoster ? 'Data Anggota' : 'Pendaftaran Wajah')
 
 @section('header-actions')
-    <button type="button" @click="$refs.createModal.showModal()" class="btn btn-secondary btn-sm">
-        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Tambah Anggota
+    <button type="button"
+            id="btnBulkEnrollMember"
+            data-modal-id="bulkEnrollMemberModal"
+            @click="openModalByData"
+            onclick="window.openModal('bulkEnrollMemberModal')"
+            class="btn btn-secondary btn-sm">
+        <i data-lucide="scan-face" class="w-3.5 h-3.5"></i> Daftarkan Massal
     </button>
-    <button type="button" @click="$refs.importModal.showModal()" class="btn btn-secondary btn-sm">
+    <button type="button"
+            id="btnImportMember"
+            data-modal-id="importMemberModal"
+            @click="openModalByData"
+            onclick="window.openModal('importMemberModal')"
+            class="btn btn-secondary btn-sm">
         <i data-lucide="upload" class="w-3.5 h-3.5"></i> Impor
     </button>
-    <button type="button" @click="$refs.bulkEnrollModal.showModal()" class="btn btn-primary btn-sm">
-        <i data-lucide="scan-face" class="w-3.5 h-3.5"></i> Daftarkan Massal
+    <button type="button"
+            id="btnCreateMember"
+            data-modal-id="createMemberModal"
+            @click="openModalByData"
+            onclick="window.openModal('createMemberModal')"
+            class="btn btn-primary btn-sm">
+        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Tambah
     </button>
 @endsection
 
@@ -84,7 +99,7 @@
                                 </span>
                             </td>
                             <td class="text-right">
-                                <a href="{{ route('students.index', ['classroom_id' => $room->id]) }}" class="btn-link">
+                                <a href="{{ route('students.index', ['classroom_id' => $room->id]) }}" class="btn btn-secondary btn-sm">
                                     Buka <i data-lucide="chevron-right" class="w-3 h-3"></i>
                                 </a>
                             </td>
@@ -112,7 +127,7 @@
                                 <span class="badge badge-muted">{{ $unassignedEnrolled ?? 0 }}/{{ $unassignedCount }}</span>
                             </td>
                             <td class="text-right">
-                                <a href="{{ route('students.index', ['classroom_id' => 'unassigned']) }}" class="btn-link">
+                                <a href="{{ route('students.index', ['classroom_id' => 'unassigned']) }}" class="btn btn-secondary btn-sm">
                                     Buka <i data-lucide="chevron-right" class="w-3 h-3"></i>
                                 </a>
                             </td>
@@ -227,19 +242,19 @@
                                 @endif
                             </td>
                             <td class="text-right whitespace-nowrap">
-                                <div class="flex items-center justify-end gap-sm">
-                                    <button type="button" @click="openEnroll({{ $student->toJson() }})" class="btn-link">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button type="button" data-student="{{ json_encode($student) }}" @click="openEnroll" class="btn btn-secondary btn-sm">
                                         <i data-lucide="scan-face" class="w-3 h-3"></i>
                                         {{ $student->face_template ? 'Kelola Wajah' : 'Daftarkan' }}
                                     </button>
-                                    <button type="button" @click="openEdit({{ $student->toJson() }})" class="btn-link">
+                                    <button type="button" data-student="{{ json_encode($student) }}" @click="openEdit" class="btn btn-secondary btn-sm">
                                         <i data-lucide="edit" class="w-3 h-3"></i> Edit
                                     </button>
                                     <form method="POST" action="{{ route('students.destroy', $student) }}" class="inline"
                                           @submit="confirmSubmit"
                                           data-confirm="Hapus {{ $student->name }} beserta seluruh riwayat absensi dan data wajahnya?">
                                         @csrf @method('DELETE')
-                                        <button type="submit" class="btn-danger-link">
+                                        <button type="submit" class="btn btn-danger-outline btn-sm">
                                             <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                                         </button>
                                     </form>
@@ -270,7 +285,7 @@
     @endif
 
     {{-- ═══════════════════════════ Create member ═══════════════════════════ --}}
-    <dialog x-ref="createModal" @click="$event.target === $refs.createModal && $refs.createModal.close()"
+    <dialog id="createMemberModal" x-ref="createModal" @click="$event.target === $el && $el.close()"
             class="w-[min(560px,94vw)] m-auto">
         <div class="modal-head">
             <h2 class="modal-title"><i data-lucide="user-plus" class="w-4 h-4 text-primary"></i> Tambah Anggota</h2>
@@ -442,7 +457,7 @@
     </dialog>
 
     {{-- ═══════════════════════════ Import members ══════════════════════════ --}}
-    <dialog x-ref="importModal" @click="$event.target === $refs.importModal && $refs.importModal.close()"
+    <dialog id="importMemberModal" x-ref="importModal" @click="$event.target === $el && $el.close()"
             class="w-[min(480px,94vw)] m-auto">
         <div class="modal-head">
             <h2 class="modal-title"><i data-lucide="upload" class="w-4 h-4 text-primary"></i> Impor Anggota</h2>
@@ -476,7 +491,7 @@
     </dialog>
 
     {{-- ═══════════════════════════ Bulk enroll ═════════════════════════════ --}}
-    <dialog x-ref="bulkEnrollModal" @click="$event.target === $refs.bulkEnrollModal && $refs.bulkEnrollModal.close()"
+    <dialog id="bulkEnrollMemberModal" x-ref="bulkEnrollModal" @click="$event.target === $el && $el.close()"
             class="w-[min(480px,94vw)] m-auto">
         <div class="modal-head">
             <h2 class="modal-title"><i data-lucide="scan-face" class="w-4 h-4 text-primary"></i> Daftarkan Wajah Massal</h2>

@@ -133,12 +133,15 @@ pub mod linux {
     const _: () = assert!(std::mem::size_of::<V4l2Format>() == 208, "V4l2Format must be 208 bytes on 64-bit");
     const _: () = assert!(std::mem::size_of::<V4l2Buffer>() == 88, "V4l2Buffer must be 88 bytes on 64-bit");
 
-    /// Wrapped ioctl helper that handles EINTR retries and encapsulates FFI safety
+    /// Wrapped ioctl helper that handles EINTR retries.
+    ///
+    /// # Safety
+    /// Caller must guarantee that `fd` is an open, valid file descriptor and `arg` points
+    /// to valid, correctly sized/aligned memory suitable for the given ioctl `request`.
     #[inline]
-    fn xioctl<T>(fd: RawFd, request: libc::c_ulong, arg: &mut T) -> std::io::Result<i32> {
+    unsafe fn xioctl<T>(fd: RawFd, request: libc::c_ulong, arg: &mut T) -> std::io::Result<i32> {
         loop {
-            // SAFETY: Caller guarantees fd is a valid open file descriptor and arg points to a valid struct matching the V4L2 ioctl request specification.
-            let ret = unsafe { libc::ioctl(fd, request, arg as *mut T as *mut libc::c_void) };
+            let ret = libc::ioctl(fd, request, arg as *mut T as *mut libc::c_void);
             if ret == -1 {
                 let err = std::io::Error::last_os_error();
                 if err.raw_os_error() == Some(libc::EINTR) {
@@ -210,7 +213,7 @@ pub mod linux {
                 pix.field = V4L2_FIELD_ANY;
             }
 
-            let s_fmt_res = xioctl(self.fd, VIDIOC_S_FMT, &mut fmt);
+            let s_fmt_res = unsafe { xioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
             let mut configured_format = if s_fmt_res.is_ok() && fmt.pix().pixelformat == primary_fmt {
                 Some(primary_pixel)
             } else {
@@ -229,7 +232,7 @@ pub mod linux {
                     pix.pixelformat = fallback_fmt;
                     pix.field = V4L2_FIELD_ANY;
                 }
-                let alt_res = xioctl(self.fd, VIDIOC_S_FMT, &mut alt_fmt);
+                let alt_res = unsafe { xioctl(self.fd, VIDIOC_S_FMT, &mut alt_fmt) };
                 if alt_res.is_ok() && alt_fmt.pix().pixelformat == fallback_fmt {
                     fmt = alt_fmt;
                     configured_format = Some(fallback_pixel);
@@ -242,7 +245,7 @@ pub mod linux {
                     buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
                     ..Default::default()
                 };
-                if xioctl(self.fd, VIDIOC_G_FMT, &mut get_fmt).is_ok() {
+                if unsafe { xioctl(self.fd, VIDIOC_G_FMT, &mut get_fmt) }.is_ok() {
                     fmt = get_fmt;
                     let fourcc = fmt.pix().pixelformat;
                     if fourcc == V4L2_PIX_FMT_MJPEG {
@@ -281,7 +284,7 @@ pub mod linux {
                 ..Default::default()
             };
 
-            if let Err(e) = xioctl(self.fd, VIDIOC_REQBUFS, &mut req) {
+            if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_REQBUFS, &mut req) } {
                 bail!("VIDIOC_REQBUFS failed: {}", e);
             }
 
@@ -298,7 +301,7 @@ pub mod linux {
                     ..Default::default()
                 };
 
-                if let Err(e) = xioctl(self.fd, VIDIOC_QUERYBUF, &mut buf) {
+                if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_QUERYBUF, &mut buf) } {
                     bail!("VIDIOC_QUERYBUF failed for buffer {}: {}", i, e);
                 }
 
@@ -324,14 +327,14 @@ pub mod linux {
                 });
 
                 // Enqueue buffer
-                if let Err(e) = xioctl(self.fd, VIDIOC_QBUF, &mut buf) {
+                if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_QBUF, &mut buf) } {
                     bail!("VIDIOC_QBUF initial enqueue failed for buffer {}: {}", i, e);
                 }
             }
 
             // 4. Start streaming
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            if let Err(e) = xioctl(self.fd, VIDIOC_STREAMON, &mut stream_type) {
+            if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_STREAMON, &mut stream_type) } {
                 bail!("VIDIOC_STREAMON failed: {}", e);
             }
 
@@ -368,7 +371,7 @@ pub mod linux {
                 ..Default::default()
             };
 
-            if let Err(err) = xioctl(self.fd, VIDIOC_DQBUF, &mut buf) {
+            if let Err(err) = unsafe { xioctl(self.fd, VIDIOC_DQBUF, &mut buf) } {
                 if err.raw_os_error() == Some(libc::EAGAIN) {
                     return Ok(None);
                 }
@@ -392,7 +395,7 @@ pub mod linux {
             };
 
             // Re-queue buffer AFTER caller finishes processing/copying frame data!
-            if let Err(e) = xioctl(self.fd, VIDIOC_QBUF, &mut buf) {
+            if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_QBUF, &mut buf) } {
                 warn!("VIDIOC_QBUF re-queue failed: {}", e);
             }
 
@@ -403,7 +406,7 @@ pub mod linux {
     impl Drop for Camera {
         fn drop(&mut self) {
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            let _ = xioctl(self.fd, VIDIOC_STREAMOFF, &mut stream_type);
+            let _ = unsafe { xioctl(self.fd, VIDIOC_STREAMOFF, &mut stream_type) };
             // SAFETY: munmap unmaps all successfully mapped buffers, and libc::close releases the camera fd.
             unsafe {
                 for buf in &self.buffers {

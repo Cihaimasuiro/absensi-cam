@@ -12,6 +12,7 @@ use crate::core::models::{OutboxRecord, TemplateRecord};
 pub struct EdgeDb {
     pub db: Database,
     pub conn: Connection,
+    pub allow_plaintext: std::sync::atomic::AtomicBool,
 }
 
 impl EdgeDb {
@@ -32,9 +33,29 @@ impl EdgeDb {
         )
         .await?;
 
-        let edge_db = Self { db, conn };
+        let allow_plaintext_env = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let edge_db = Self {
+            db,
+            conn,
+            allow_plaintext: std::sync::atomic::AtomicBool::new(allow_plaintext_env),
+        };
         edge_db.migrate().await?;
         Ok(edge_db)
+    }
+
+    /// Memeriksa apakah plaintext template diizinkan pada instance database ini.
+    #[inline]
+    pub fn is_plaintext_allowed(&self) -> bool {
+        self.allow_plaintext.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Menyetel izin plaintext template pada instance database ini (misal untuk testing tanpa shared state).
+    #[inline]
+    pub fn set_plaintext_allowed(&self, allowed: bool) {
+        self.allow_plaintext.store(allowed, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Skema tabel SQLite identik dengan Python edge-engine database.py
@@ -78,7 +99,7 @@ impl EdgeDb {
             .await?;
 
         // Auto-migrate legacy unencrypted templates (2048 bytes) to prevent boot crash loop on upgraded devices
-        if !is_plaintext_allowed() {
+        if !self.is_plaintext_allowed() {
             let mut rows = self
                 .conn
                 .query("SELECT COUNT(*) FROM templates WHERE length(embedding) = 2048", ())
@@ -90,10 +111,17 @@ impl EdgeDb {
             };
             if legacy_count > 0 {
                 tracing::warn!(
-                    "[MIGRASI UPGRADE] Terdeteksi {} template lama (2048-byte plaintext). Menghapus template usang dan me-reset sync cursor 'last_sync' agar server Laravel mengirim ulang data terenkripsi AES-256-GCM secara otomatis.",
+                    "[MIGRASI UPGRADE] Terdeteksi {} template lama (2048-byte plaintext). Memindahkan ke karantina dan me-reset sync cursor 'last_sync' agar server Laravel mengirim ulang data terenkripsi AES-256-GCM secara otomatis.",
                     legacy_count
                 );
                 let tx = self.conn.transaction().await?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO quarantined_templates (student_id, reason, version) \
+                     SELECT student_id, 'legacy_2048_plaintext', COALESCE(version, '1') \
+                     FROM templates WHERE length(embedding) = 2048",
+                    (),
+                )
+                .await?;
                 tx.execute("DELETE FROM templates WHERE length(embedding) = 2048", ()).await?;
                 tx.execute("DELETE FROM metadata WHERE key = 'last_sync'", ()).await?;
                 tx.commit().await?;
@@ -346,7 +374,7 @@ impl EdgeDb {
                 continue;
             }
 
-            let allow_plaintext = is_plaintext_allowed();
+            let allow_plaintext = self.is_plaintext_allowed();
 
             let embedding_raw = t
                 .get("embedding_enc")
@@ -470,7 +498,7 @@ impl EdgeDb {
         let mut total_in_db = 0usize;
         let mut failed_decrypt = 0usize;
 
-        let allow_plaintext = is_plaintext_allowed();
+        let allow_plaintext = self.is_plaintext_allowed();
 
         while let Some(row) = rows.next().await? {
             total_in_db += 1;
@@ -548,13 +576,10 @@ impl EdgeDb {
         model_version: &str,
     ) -> Result<Vec<u8>> {
         if encrypted_blob.len() != 2076 {
-            if encrypted_blob.len() == 2048 {
-                if is_plaintext_allowed() {
-                    return Ok(encrypted_blob.to_vec());
-                }
-                anyhow::bail!("Unencrypted 2048-byte template rejected in production mode. Set ALLOW_PLAINTEXT_EMBEDDINGS=1 for development override.");
-            }
-            anyhow::bail!("Invalid encrypted blob length: {}", encrypted_blob.len());
+            anyhow::bail!(
+                "Invalid encrypted blob length: expected 2076 (12-byte nonce + 2048-byte ciphertext + 16-byte tag), got {}",
+                encrypted_blob.len()
+            );
         }
 
         let cipher = Aes256Gcm::new_from_slice(key)
@@ -573,36 +598,6 @@ impl EdgeDb {
             .decrypt(nonce, payload)
             .map_err(|e| anyhow::anyhow!("AES-GCM decryption failed for student {}: {:?}", student_id, e))
     }
-}
-
-static ALLOW_OVERRIDE: std::sync::atomic::AtomicI8 = std::sync::atomic::AtomicI8::new(-1);
-
-/// Set override for plaintext embeddings allowed state (primarily for unit testing)
-#[cfg(test)]
-pub fn set_plaintext_allowed_for_test(allowed: Option<bool>) {
-    let val = match allowed {
-        Some(true) => 1,
-        Some(false) => 0,
-        None => -1,
-    };
-    ALLOW_OVERRIDE.store(val, std::sync::atomic::Ordering::SeqCst);
-}
-
-/// Helper untuk memeriksa apakah plaintext template diizinkan.
-/// Default: FALSE (baik di debug maupun release untuk keamanan konsisten).
-/// Diaktifkan HANYA jika variabel lingkungan ALLOW_PLAINTEXT_EMBEDDINGS disetel ke "1" atau "true",
-/// atau dioverride melalui set_plaintext_allowed_for_test dalam pengujian.
-pub fn is_plaintext_allowed() -> bool {
-    let ov = ALLOW_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst);
-    if ov == 1 {
-        return true;
-    }
-    if ov == 0 {
-        return false;
-    }
-    std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -755,8 +750,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_templates_quarantines_plaintext_2048_in_production() {
-        set_plaintext_allowed_for_test(Some(false));
         let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+        db.set_plaintext_allowed(false);
 
         use base64::Engine;
         let plaintext_blob = vec![0.1f32.to_bits() as u8; 2048];
@@ -780,14 +775,12 @@ mod tests {
         let mut rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
         let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(count, 0, "Tabel templates utama tidak boleh menyimpan plaintext saat produksi");
-
-        set_plaintext_allowed_for_test(None);
     }
 
     #[tokio::test]
     async fn test_save_templates_accepts_plaintext_2048_with_override() {
-        set_plaintext_allowed_for_test(Some(true));
         let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+        db.set_plaintext_allowed(true);
 
         use base64::Engine;
         let plaintext_blob = vec![0.1f32.to_bits() as u8; 2048];
@@ -806,14 +799,12 @@ mod tests {
         let mut rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
         let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(count, 1, "Template plaintext harus tersimpan saat override aktif");
-
-        set_plaintext_allowed_for_test(None);
     }
 
     #[tokio::test]
     async fn test_legacy_2048_migration_clears_db_and_cursor() {
-        set_plaintext_allowed_for_test(Some(false));
         let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+        db.set_plaintext_allowed(false);
 
         // Simulasikan DB lama yang sudah menyimpan baris plaintext 2048 byte dan cursor 9999
         let fake_2048 = vec![0u8; 2048];
@@ -829,10 +820,14 @@ mod tests {
         // Jalankan migrate() seperti saat boot engine versi baru
         db.migrate().await.expect("migrate harus berhasil");
 
-        // Verifikasi templates 2048 byte dibersihkan
+        // Verifikasi templates 2048 byte dibersihkan dari templates aktif
         let mut tmpl_rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
         let tmpl_count: i64 = tmpl_rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(tmpl_count, 0, "Template plaintext lama harus dihapus otomatis saat migrasi");
+
+        // Verifikasi template legacy dicatat di karantina
+        let quarantined = db.get_quarantined_templates_count().await.unwrap();
+        assert_eq!(quarantined, 1, "Template plaintext lama harus dicatat dalam tabel karantina");
 
         // Verifikasi cursor di-reset
         let mut cursor_rows = db.conn.query("SELECT COUNT(*) FROM metadata WHERE key = 'last_sync'", ()).await.unwrap();
@@ -842,8 +837,6 @@ mod tests {
         // Verifikasi load_templates mengembalikan Ok(kosong) dan TIDAK crash-loop
         let loaded = db.load_templates(None, "v1.0").await.expect("load_templates tidak boleh crash setelah migrasi");
         assert!(loaded.is_empty(), "Daftar template harus kosong siap menerima sinkronisasi baru");
-
-        set_plaintext_allowed_for_test(None);
     }
 }
 

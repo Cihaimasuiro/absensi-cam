@@ -43,6 +43,8 @@ pub struct HeartbeatPayload {
     pub templates_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub templates_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quarantined_templates_count: Option<usize>,
 }
 
 #[derive(Debug, Clone)]

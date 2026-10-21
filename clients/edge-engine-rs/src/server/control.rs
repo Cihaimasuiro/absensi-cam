@@ -204,6 +204,7 @@ pub struct ControlInfoResponse {
     pub uptime_sec: u64,
     pub template_count: i64,
     pub outbox_count: i64,
+    pub quarantined_count: i64,
     pub camera_device: String,
     pub camera_resolution: String,
     pub is_streaming: bool,
@@ -638,7 +639,7 @@ pub async fn info_handler(
             .into_response();
     }
 
-    let (templates, outbox) = query_db_counts(&state.config.db_path).await;
+    let (templates, outbox, quarantined) = query_db_counts(&state.config.db_path).await;
     let settings = load_settings(&state.config.settings_path);
     let mem = read_memory_info();
     let disk = read_disk_info();
@@ -660,6 +661,7 @@ pub async fn info_handler(
         uptime_sec: state.config.start_time.elapsed().as_secs(),
         template_count: templates,
         outbox_count: outbox,
+        quarantined_count: quarantined,
         camera_device: settings.camera.source,
         camera_resolution: settings.camera.resolution,
         is_streaming: state.app_state.frame_hub.has_viewers(),
@@ -1630,8 +1632,8 @@ fn read_interface_ip(iface: &str) -> String {
             let rc = libc::ioctl(sock, libc::SIOCGIFADDR, &mut ifr);
             libc::close(sock);
             if rc == 0 {
-                let addr = ifr.ifr_ifru.ifru_addr;
-                let octets = addr.sin_addr.s_addr.to_ne_bytes();
+                let sin = &*(&ifr.ifr_ifru.ifru_addr as *const libc::sockaddr as *const libc::sockaddr_in);
+                let octets = sin.sin_addr.s_addr.to_ne_bytes();
                 return format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3]);
             }
         }
@@ -1791,15 +1793,16 @@ fn get_hostname() -> String {
     "smart-absensi-gate".to_string()
 }
 
-async fn query_db_counts(db_path: &str) -> (i64, i64) {
+async fn query_db_counts(db_path: &str) -> (i64, i64, i64) {
     if !Path::new(db_path).exists() {
-        return (0, 0);
+        return (0, 0, 0);
     }
 
     if let Ok(db) = libsql::Builder::new_local(db_path).build().await {
         if let Ok(conn) = db.connect() {
             let mut templates_cnt = 0i64;
             let mut outbox_cnt = 0i64;
+            let mut quarantined_cnt = 0i64;
 
             if let Ok(mut rows) = conn.query("SELECT COUNT(*) FROM templates", ()).await {
                 if let Ok(Some(row)) = rows.next().await {
@@ -1817,10 +1820,18 @@ async fn query_db_counts(db_path: &str) -> (i64, i64) {
                 }
             }
 
-            return (templates_cnt, outbox_cnt);
+            if let Ok(mut rows) = conn.query("SELECT COUNT(*) FROM quarantined_templates", ()).await {
+                if let Ok(Some(row)) = rows.next().await {
+                    if let Ok(cnt) = row.get::<i64>(0) {
+                        quarantined_cnt = cnt;
+                    }
+                }
+            }
+
+            return (templates_cnt, outbox_cnt, quarantined_cnt);
         }
     }
-    (0, 0)
+    (0, 0, 0)
 }
 
 // ── Router Registration ──────────────────────────────────────────────────────

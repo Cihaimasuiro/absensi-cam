@@ -1,0 +1,77 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'clients/edge-engine-rs/**'
+      - '.github/workflows/rust-ci.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'clients/edge-engine-rs/**'
+      - '.github/workflows/rust-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-lint:
+    name: Test & Lint (Ubuntu x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libudev-dev libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/edge-engine-rs -> target
+
+      - name: Run Clippy
+        working-directory: clients/edge-engine-rs
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run Tests
+        working-directory: clients/edge-engine-rs
+        run: cargo test --lib -- --nocapture
+
+  cross-check:
+    name: Cross-Check (Linux aarch64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config gcc-aarch64-linux-gnu
+
+      - name: Install Rust target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/edge-engine-rs -> target
+
+      - name: Check aarch64 target
+        working-directory: clients/edge-engine-rs
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo check --target aarch64-unknown-linux-gnu

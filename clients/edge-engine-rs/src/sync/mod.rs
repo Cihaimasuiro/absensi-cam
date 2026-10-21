@@ -363,6 +363,8 @@ impl SyncWorker {
             }
         };
 
+        let quarantined_cnt = self.db.get_quarantined_templates_count().await.ok();
+
         let payload = HeartbeatPayload {
             fw_version: self.fw_version.clone(),
             model_version: self.model_version.clone(),
@@ -375,6 +377,7 @@ impl SyncWorker {
             ip_address: get_local_ip_to(&self.api_url),
             templates_count: tmpl_count,
             templates_hash: tmpl_hash,
+            quarantined_templates_count: quarantined_cnt,
         };
 
         let url = format!("{}/api/v1/devices/heartbeat", self.api_url);

@@ -422,6 +422,7 @@ pub mod linux {
     /// - For YUYV: converts to RGB once, passes raw RGB directly to AI worker (0% JPEG decoding overhead),
     ///   and encodes JPEG on-demand (only when stream viewers are connected, paced to ~15 FPS to cut CPU load by 50%).
     ///   When idle, only encodes 1 frame every 2s for snapshot preview.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_capture_thread_decoupled<F, A, V, O>(
         device_path: String,
         width: u32,
@@ -642,11 +643,9 @@ pub mod linux {
                                             has_overlay = true;
                                         }
 
-                                        if has_overlay {
-                                            if encode_rgb_to_jpeg_into(rgb_img.as_raw(), iw, ih, 75, &mut jpeg_buf).is_ok() {
-                                                on_frame(&jpeg_buf);
-                                                return;
-                                            }
+                                        if has_overlay && encode_rgb_to_jpeg_into(rgb_img.as_raw(), iw, ih, 75, &mut jpeg_buf).is_ok() {
+                                            on_frame(&jpeg_buf);
+                                            return;
                                         }
                                     }
                                 }

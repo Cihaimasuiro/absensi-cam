@@ -186,6 +186,32 @@ class DevicePairingTest extends TestCase
         ]);
     }
 
+    public function test_heartbeat_records_quarantined_templates_count(): void
+    {
+        $device = Device::factory()->create(['status' => 'online', 'quarantined_templates_count' => 0]);
+        Sanctum::actingAs($device, ['device']);
+
+        $response = $this->postJson('/api/v1/devices/heartbeat', [
+            'fw_version'                  => '1.0.0',
+            'model_version'               => '3d9f1f77896fb3d1',
+            'cpu_temp'                    => 52.4,
+            'ram_free_mb'                 => 400,
+            'disk_free_mb'                => 5000,
+            'fps'                         => 30.5,
+            'outbox_len'                  => 3,
+            'serial_ok'                   => true,
+            'ip_address'                  => '192.168.10.50',
+            'quarantined_templates_count' => 4,
+        ]);
+
+        $response->assertStatus(200)->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('devices', [
+            'id'                          => $device->id,
+            'quarantined_templates_count' => 4,
+        ]);
+    }
+
     public function test_unauthenticated_heartbeat_is_rejected(): void
     {
         $response = $this->postJson('/api/v1/devices/heartbeat', [

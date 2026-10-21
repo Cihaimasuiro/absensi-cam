@@ -1453,8 +1453,13 @@ fn read_disk_info() -> DiskInfo {
         if ok {
             // SAFETY: statvfs returned 0 (success), meaning stat is fully populated.
             let s = unsafe { stat.assume_init() };
+            // Note: statvfs fields (f_frsize, f_blocks, f_bavail) are u32 on 32-bit architectures (e.g. armv7),
+            // so u64 casts are required for cross-platform portability.
+            #[allow(clippy::unnecessary_cast)]
             let frsize = s.f_frsize as u64;
+            #[allow(clippy::unnecessary_cast)]
             let total_mb = ((s.f_blocks as u64) * frsize / (1024 * 1024)) as i64;
+            #[allow(clippy::unnecessary_cast)]
             let free_mb = ((s.f_bavail as u64) * frsize / (1024 * 1024)) as i64;
             let used_mb = (total_mb - free_mb).max(0);
             let usage_pct = if total_mb > 0 {

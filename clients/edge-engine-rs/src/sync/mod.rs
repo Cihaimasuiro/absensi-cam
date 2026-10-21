@@ -520,6 +520,9 @@ fn read_free_disk_mb() -> i64 {
         unsafe {
             if libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 {
                 let s = stat.assume_init();
+                // Note: statvfs fields (f_bavail, f_frsize) are u32 on 32-bit architectures (e.g. armv7),
+                // so u64 casts are required for cross-platform portability.
+                #[allow(clippy::unnecessary_cast)]
                 let free_bytes = (s.f_bavail as u64) * (s.f_frsize as u64);
                 return (free_bytes / (1024 * 1024)) as i64;
             }

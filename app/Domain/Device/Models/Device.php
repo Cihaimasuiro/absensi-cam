@@ -27,15 +27,17 @@ class Device extends Authenticatable
         'last_heartbeat_at',
         'last_cpu_temp',
         'last_outbox_len',
+        'quarantined_templates_count',
         'status',
         'liveness_enabled',
     ];
 
     protected $casts = [
-        'last_heartbeat_at' => 'datetime',
-        'last_cpu_temp'     => 'float',
-        'last_outbox_len'   => 'integer',
-        'liveness_enabled'  => 'boolean',
+        'last_heartbeat_at'           => 'datetime',
+        'last_cpu_temp'               => 'float',
+        'last_outbox_len'             => 'integer',
+        'quarantined_templates_count' => 'integer',
+        'liveness_enabled'            => 'boolean',
     ];
 
     protected $hidden = ['token_hash'];

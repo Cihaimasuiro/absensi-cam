@@ -52,7 +52,8 @@ impl EdgeDb {
         self.allow_plaintext.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Menyetel izin plaintext template pada instance database ini (misal untuk testing tanpa shared state).
+    /// Menyetel izin plaintext template pada instance database ini (hanya untuk pengujian unit test).
+    #[cfg(test)]
     #[inline]
     pub fn set_plaintext_allowed(&self, allowed: bool) {
         self.allow_plaintext.store(allowed, std::sync::atomic::Ordering::Relaxed);

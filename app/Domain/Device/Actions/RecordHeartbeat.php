@@ -16,7 +16,7 @@ class RecordHeartbeat
     {
         $ip = $this->resolveDeviceIp($data['ip_address'] ?? null, $device->ip_address);
 
-        $device->update([
+        $updateData = [
             'fw_version'        => $data['fw_version'],
             'model_version'     => $data['model_version'],
             'last_cpu_temp'     => $data['cpu_temp'],
@@ -24,7 +24,13 @@ class RecordHeartbeat
             'last_heartbeat_at' => now(),
             'ip_address'        => $ip,
             'status'            => 'online',
-        ]);
+        ];
+
+        if (array_key_exists('quarantined_templates_count', $data) && $data['quarantined_templates_count'] !== null) {
+            $updateData['quarantined_templates_count'] = (int) $data['quarantined_templates_count'];
+        }
+
+        $device->update($updateData);
     }
 
     private function resolveDeviceIp(?string $reportedIp, ?string $fallbackIp): ?string

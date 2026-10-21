@@ -1,4 +1,4 @@
-# Model Provenance & Commercial Compliance Plan
+# Model licensing and commercial compliance
 
 The Edge Engine relies on ONNX models for detection, recognition, and liveness. Many popular open-source models, such as InsightFace, are licensed under **CC BY-NC-SA 4.0** (Non-Commercial) or depend on code licensed under **AGPL-3.0**. 
 

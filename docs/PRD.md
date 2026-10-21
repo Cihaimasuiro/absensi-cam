@@ -1,5 +1,7 @@
-# PRD — Sistem Absensi "Smart Absensi"
-## Product Requirement Document (PRD) — Monorepo
+# Smart Absensi product requirements
+
+> Product requirement document for the monorepo. Covers hardware, software, data model,
+> security, and delivery milestones.
 
 > **Versi**: 2.5.0
 > **Tanggal**: 2026-10-13

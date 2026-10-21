@@ -73,8 +73,8 @@
      - Workspace installation command when requested: `& "C:\Users\LENOVO\.claude\plugins\cache\ecc\ecc\2.2.3\install.ps1" --profile minimal --target antigravity`.
 
 10. **Active Runtime Skills & MCP Inventory:**
-    - **Accessible MCP Servers (126 Tools Total)**:
-      - `rea` (Reverse Engineering Assistant): 103 tools (binary analysis, decompiler, ADB inspection, Electron, and Web runtime).
+    - **Accessible MCP Servers (193 Tools Total)**:
+      - `rea` (Reverse Engineering Assistant): 170 tools (binary analysis, decompiler, ADB inspection, Electron, and Web runtime). Registered in the DSH profile as `mcp-rea`; tools appear as `mcp__rea__<tool>`.
       - `notion-mcp-server`: 23 tools (Notion API for pages, databases, blocks, and comments).
     - **Installed Skills Registry**:
       - **Active Session Runtime**: 36 registered skills (20 prompt-loaded + 16 trimmed for context budget including `ponytail`, `security-audit`, `performance-optimization`).

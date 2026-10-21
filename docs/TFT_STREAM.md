@@ -1,4 +1,6 @@
-# Plan: Preview/Gambar Orange Pi → Arduino Uno → TFT MAR2406 (protokol v3)
+# TFT display stream protocol
+
+> Camera preview and static images from the Orange Pi to an Arduino Uno driving a MAR2406 TFT.
 
 ## 0. Tujuan dan ekspektasi (jangan dilanggar)
 - **Mode A, Live preview kamera:** 160×120 RGB332 (1 byte/piksel) dengan *ordered dithering*. Ditampilkan 1× di tengah layar atau di-upscale 2× oleh Uno ke layar penuh. Target ≥ 3 FPS (stretch 5 FPS). **Ini bukan kualitas HDMI**, hanya panduan memosisikan wajah.

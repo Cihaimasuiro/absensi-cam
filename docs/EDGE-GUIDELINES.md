@@ -1,6 +1,6 @@
-# AGENTS2.md
+# Edge engine engineering guidelines
 
-> This document is the mandatory engineering guideline for AI coding agents and human developers working on **Edge Engine** components of this project:
+> Engineering guidelines for the **Edge Engine** components of this project:
 >
 > 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular package (`src/core`, `src/vision`, `src/server`, `src/sync`, `src/hardware`, `src/main.rs`).
 > 2. **Reference / Tooling Prototype (`clients/edge-engine` & `packages/face_core`)**: Python components used for enrollment backend workers and offline benchmarking.

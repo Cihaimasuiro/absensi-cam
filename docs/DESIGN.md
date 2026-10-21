@@ -248,6 +248,10 @@ components:
 
 ---
 
+# Smart Absensi design system
+
+> Design tokens for the web interface — colour, typography, spacing, and component styling.
+> The values here are implemented in `resources/css/app.css`.
 
 ## Overview
 

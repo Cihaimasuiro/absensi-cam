@@ -29,8 +29,14 @@ if %errorlevel% equ 0 (
     powershell -NoProfile -Command "(Get-FileHash target\aarch64-unknown-linux-gnu\release\engine-cli -Algorithm SHA256).Hash.ToLower() + '  smart-absensi-sync' | Out-File -Encoding ascii target\aarch64-unknown-linux-gnu\release\SHA256SUMS"
     type target\aarch64-unknown-linux-gnu\release\SHA256SUMS
     echo.
+    echo === Packaging ONNX Runtime for aarch64 ===
+    if exist "%SCRIPT_DIR%package-onnxruntime.ps1" (
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%package-onnxruntime.ps1" -Arch aarch64
+    )
+    echo.
     echo === Build Success! ===
     echo Binary: target\aarch64-unknown-linux-gnu\release\engine-cli
+    echo ONNX Runtime: dist\onnxruntime\aarch64\libonnxruntime.so
     goto :eof
 )
 

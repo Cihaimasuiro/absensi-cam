@@ -8,7 +8,9 @@
 //! - `hardware`: RFID serial readers, Arduino bridge, GPIO, framebuffer display
 
 pub mod core;
+pub mod engine;
 pub mod hardware;
 pub mod server;
 pub mod sync;
 pub mod vision;
+

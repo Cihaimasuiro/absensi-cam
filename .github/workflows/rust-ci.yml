@@ -49,6 +49,11 @@ jobs:
         working-directory: clients/edge-engine-rs
         run: cargo test --lib --bins -- --nocapture
 
+      - name: Verify ONNX Runtime Packaging
+        working-directory: clients/edge-engine-rs
+        run: ./scripts/package-onnxruntime.sh --arch x86_64
+
+
   cross-check:
     name: Cross-Check (Linux aarch64)
     runs-on: ubuntu-latest

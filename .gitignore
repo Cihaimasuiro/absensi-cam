@@ -87,7 +87,9 @@ project_gap_analysis.md
 7. Rust Cargo Build Outputs & Edge Engine Local State
 # ========================================
 target/
+clients/edge-engine-rs/dist/
 clients/edge-engine-rs/*.db
 clients/edge-engine-rs/*.argon2
 clients/edge-engine-rs/setup_code.txt
 local_edge.db
+

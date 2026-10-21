@@ -48,6 +48,14 @@ if [ -f "${OUTPUT_BIN}" ]; then
     echo "To deploy to Orange Pi:"
     echo "  scp ${OUTPUT_BIN} edge@\${BOARD_IP}:/tmp/smart-absensi-sync"
     echo "  ssh edge@\${BOARD_IP} 'sudo install -m 755 /tmp/smart-absensi-sync /usr/local/bin/smart-absensi-sync'"
+    echo ""
+    echo "=== Packaging ONNX Runtime for aarch64 ==="
+    if [ -f "${SCRIPT_DIR}/package-onnxruntime.sh" ]; then
+        "${SCRIPT_DIR}/package-onnxruntime.sh" --arch aarch64 || true
+        echo "To deploy libonnxruntime.so to Orange Pi:"
+        echo "  scp ${ROOT_DIR}/dist/onnxruntime/aarch64/libonnxruntime.so* edge@\${BOARD_IP}:/tmp/"
+        echo "  ssh edge@\${BOARD_IP} 'sudo install -m 755 /tmp/libonnxruntime.so* /usr/local/lib/ && sudo ldconfig'"
+    fi
 else
     echo "ERROR: Output binary not found at ${OUTPUT_BIN}" >&2
     exit 1

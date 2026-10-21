@@ -14,8 +14,51 @@ class RoleSeeder extends Seeder
      */
     public function run(): void
     {
-        Role::firstOrCreate(['name' => 'super_admin']);
-        Role::firstOrCreate(['name' => 'admin']);
-        Role::firstOrCreate(['name' => 'user']);
+        // Reset cached roles and permissions
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        $permissions = [
+            'student.view',
+            'student.photo.view',
+            'student.create',
+            'student.update',
+            'student.delete',
+            'student.enroll',
+            'enrollment.bypass-duplicate',
+            'device.view',
+            'device.manage',
+            'school.manage',
+            'report.view',
+            'report.export',
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        }
+
+        $superAdmin = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
+        $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $user = Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+
+        $superAdmin->syncPermissions(Permission::all());
+
+        $admin->syncPermissions([
+            'student.view',
+            'student.photo.view',
+            'student.create',
+            'student.update',
+            'student.delete',
+            'student.enroll',
+            'device.view',
+            'device.manage',
+            'school.manage',
+            'report.view',
+            'report.export',
+        ]);
+
+        $user->syncPermissions([
+            'student.view',
+            'report.view',
+        ]);
     }
 }

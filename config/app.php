@@ -132,5 +132,7 @@ return [
     'python_bin' => env('PYTHON_BIN', 'python'),
     
     'model_version' => env('MODEL_VERSION', '3d9f1f77896fb3d1'),
+    
+    'attendance_retention_days' => (int) env('ATTENDANCE_RETENTION_DAYS', 0),
 
 ];

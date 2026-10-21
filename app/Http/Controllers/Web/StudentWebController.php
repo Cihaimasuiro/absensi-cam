@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Domain\Enrollment\Actions\EnrollFace;
+use App\Domain\Student\Queries\StudentRosterQuery;
 use App\Domain\Student\Models\Student;
 use App\Domain\School\Models\Classroom;
 use App\Domain\School\Models\School;
@@ -9,9 +11,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\Student\StoreStudentRequest;
 use App\Http\Requests\Web\Student\UpdateStudentRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class StudentWebController extends Controller
 {
+    public function __construct(
+        protected EnrollFace $enrollFace,
+        protected StudentRosterQuery $rosterQuery,
+    ) {}
+
     public function index(Request $request)
     {
         $isRoster = $request->has('classroom_id') 
@@ -54,22 +62,7 @@ class StudentWebController extends Controller
             $activeClassroom = Classroom::with(['school:id,name', 'building:id,name'])->find($request->classroom_id);
         }
 
-        $students = Student::with(['classroom:id,name', 'school:id,name', 'faceTemplate:id,student_id,photo_path,created_at,updated_at'])
-            ->when($request->search, fn ($q) =>
-                $q->where(fn ($q) =>
-                    $q->where('name', 'like', '%'.$request->search.'%')
-                      ->orWhere('code', 'like', '%'.$request->search.'%')
-                ))
-            ->when($request->filter === 'enrolled',     fn ($q) => $q->whereHas('faceTemplate'))
-            ->when($request->filter === 'non-enrolled', fn ($q) => $q->whereDoesntHave('faceTemplate'))
-            ->when($request->filter === 'inactive',     fn ($q) => $q->where('is_active', false))
-            ->when($request->filter !== 'inactive',     fn ($q) => $q->where('is_active', true))
-            ->when($request->classroom_id === 'unassigned', fn ($q) => $q->whereNull('classroom_id'))
-            ->when($request->classroom_id && $request->classroom_id !== 'unassigned', fn ($q) => $q->where('classroom_id', $request->classroom_id))
-            ->select(['id', 'code', 'name', 'email', 'phone', 'role', 'classroom_id', 'school_id', 'is_active', 'created_at'])
-            ->orderBy('name')
-            ->paginate(50)
-            ->withQueryString();
+        $students = $this->rosterQuery->paginate($request);
 
         return view('members.index', [
             'isRoster'        => true,
@@ -168,8 +161,9 @@ class StudentWebController extends Controller
                 $messages[] = '...dan kesalahan lainnya.';
             }
             return redirect()->route('students.index')->with('error', 'Validasi gagal: ' . implode(' | ', $messages));
-        } catch (\Exception $e) {
-            return redirect()->route('students.index')->with('error', 'Gagal mengimpor data: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Student import error: ' . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('students.index')->with('error', 'Gagal mengimpor data. Format file tidak sesuai atau terjadi kesalahan sistem.');
         }
     }
 
@@ -179,13 +173,13 @@ class StudentWebController extends Controller
         $allowDuplicate = false;
         if ($request->boolean('allow_duplicate')) {
             $user = $request->user();
-            if ($user && $user->hasRole('super_admin')) {
+            if ($user && $user->can('enrollment.bypass-duplicate')) {
                 $allowDuplicate = true;
             }
         }
 
         try {
-            (new \App\Domain\Enrollment\Actions\EnrollFace)->execute(
+            $this->enrollFace->execute(
                 $student,
                 $request->file('photo'),
                 $allowDuplicate
@@ -205,6 +199,8 @@ class StudentWebController extends Controller
 
     public function photo(Student $student)
     {
+        $this->authorize('viewPhoto', $student);
+
         $template = $student->faceTemplate;
         if (! $template || ! $template->photo_path || ! \Illuminate\Support\Facades\Storage::disk('local')->exists($template->photo_path)) {
             abort(404, 'Foto wajah tidak ditemukan');
@@ -300,7 +296,7 @@ class StudentWebController extends Controller
                             true
                         );
 
-                        (new \App\Domain\Enrollment\Actions\EnrollFace)->execute($student, $uploadedFile);
+                        $this->enrollFace->execute($student, $uploadedFile);
                         $successCount++;
                     } else {
                         $skippedCount++;
@@ -319,8 +315,9 @@ class StudentWebController extends Controller
             } else {
                 return redirect()->route('students.index')->with('error', 'Gagal membuka berkas ZIP.');
             }
-        } catch (\Exception $e) {
-            return redirect()->route('students.index')->with('error', 'Gagal memproses ZIP: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Bulk enroll ZIP extraction failed: ' . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route('students.index')->with('error', 'Gagal memproses berkas ZIP. Pastikan file valid.');
         } finally {
             if (isset($extractPath) && \Illuminate\Support\Facades\File::exists($extractPath)) {
                 \Illuminate\Support\Facades\File::deleteDirectory($extractPath);

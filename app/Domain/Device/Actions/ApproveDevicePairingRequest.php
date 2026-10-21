@@ -46,7 +46,10 @@ class ApproveDevicePairingRequest
             $device->update(['token_hash' => hash('sha256', $plainToken)]);
 
             // Prepare credentials payload for polling edge client
-            $embedKey = env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
+            $embedKey = config('app.enrollment_embed_key');
+            if (empty($embedKey)) {
+                throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in app config.');
+            }
             $serverUrl = config('app.url') ?: 'http://127.0.0.1:8000';
 
             $payload = [

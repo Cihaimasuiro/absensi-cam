@@ -827,7 +827,7 @@ pub async fn run_device_initiated_pairing(
             if poll_body.status == "approved" {
                 let token = poll_body.token.context("Token tidak ada dalam respons pairing")?;
                 let device_code = poll_body.device_code.context("Device code tidak ada dalam respons pairing")?;
-                let embed_key = poll_body.embed_key.unwrap_or_else(|| "t7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=".to_string());
+                let embed_key = poll_body.embed_key.context("Kunci enkripsi (embed_key) tidak ada dalam respons pairing")?;
                 let url = poll_body.url.unwrap_or_else(|| clean_url.to_string());
 
                 let creds = PairedCredentials {

@@ -83,4 +83,28 @@ class FaceTemplateCrudTest extends TestCase
 
         Storage::disk('local')->assertMissing($path);
     }
+
+    public function test_unprivileged_user_cannot_view_student_face_photo(): void
+    {
+        Storage::fake('local');
+
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'user']);
+        $regularUser = User::factory()->create();
+        $regularUser->assignRole('user');
+
+        $student = Student::factory()->create();
+        $path = "faces/{$student->id}.jpg";
+        Storage::disk('local')->put($path, 'fake_image_content');
+
+        FaceTemplate::create([
+            'student_id' => $student->id,
+            'embedding_enc' => 'enc123',
+            'model_version' => '3d9f1f77896fb3d1',
+            'embedding_hash' => 'hash123',
+            'photo_path' => $path,
+        ]);
+
+        $response = $this->actingAs($regularUser)->get(route('students.photo', $student));
+        $response->assertForbidden();
+    }
 }

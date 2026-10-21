@@ -89,7 +89,7 @@ class DeviceController extends Controller
             ->log('Device created and token generated');
 
         $serverUrl = $request->getSchemeAndHttpHost();
-        $embedKey = env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
+        $embedKey = config('app.enrollment_embed_key', '');
         $envContent = <<<ENV
 SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}
@@ -131,7 +131,7 @@ ENV;
             ->log('Device token reset');
 
         $serverUrl = $request->getSchemeAndHttpHost();
-        $embedKey = env('ENROLLMENT_EMBED_KEY', 't7rXp59ZkE+L9Y6qP3R8FmNcK5WxYJ2HhDbjPvC4RnE=');
+        $embedKey = config('app.enrollment_embed_key', '');
         $envContent = <<<ENV
 SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}

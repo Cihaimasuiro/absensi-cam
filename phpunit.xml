@@ -21,6 +21,7 @@
         <env name="APP_ENV" value="testing"/>
         <env name="PAIRING_ALLOW_HTTP" value="true"/>
         <env name="APP_KEY" value="base64:XQ/z2o5iVp/GvXhYtY0N8a8Q8W1R/aVlXmY3B9V6T9s="/>
+        <env name="ENROLLMENT_EMBED_KEY" value="base64:dGVzdC1zZWNyZXQta2V5LTMyLWJ5dGVzLWxlbmd0aCE="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

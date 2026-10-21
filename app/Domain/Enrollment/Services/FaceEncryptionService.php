@@ -14,17 +14,28 @@ class FaceEncryptionService
      *
      * @throws \RuntimeException If encryption fails or key is invalid
      */
-    public function encrypt(string $rawEmbedding, string $studentId, string $modelVersion): string
+    private function getDecodedKey(): string
     {
         $keyBase64 = config('app.enrollment_embed_key');
-        if (!$keyBase64) {
+        if (empty($keyBase64)) {
             throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
         }
-        
-        $key = base64_decode($keyBase64);
-        if (strlen($key) !== 32) {
+
+        if (str_starts_with($keyBase64, 'base64:')) {
+            $keyBase64 = substr($keyBase64, 7);
+        }
+
+        $key = base64_decode($keyBase64, true);
+        if ($key === false || strlen($key) !== 32) {
             throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
         }
+
+        return $key;
+    }
+
+    public function encrypt(string $rawEmbedding, string $studentId, string $modelVersion): string
+    {
+        $key = $this->getDecodedKey();
 
         $nonce = random_bytes(12);
         $aad = $studentId . '_' . $modelVersion;
@@ -60,15 +71,7 @@ class FaceEncryptionService
      */
     public function decrypt(string $encryptedBlob, string $studentId, string $modelVersion): string
     {
-        $keyBase64 = config('app.enrollment_embed_key');
-        if (!$keyBase64) {
-            throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not set');
-        }
-
-        $key = base64_decode($keyBase64);
-        if (strlen($key) !== 32) {
-            throw new \RuntimeException('ENROLLMENT_EMBED_KEY must be exactly 32 bytes when decoded');
-        }
+        $key = $this->getDecodedKey();
 
         if (strlen($encryptedBlob) < 28) {
             throw new \RuntimeException('Encrypted blob is too short');

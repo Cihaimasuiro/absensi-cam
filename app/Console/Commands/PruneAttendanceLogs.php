@@ -25,7 +25,7 @@ class PruneAttendanceLogs extends Command
 
     public function handle(): int
     {
-        $days = (int) ($this->option('days') ?? env('ATTENDANCE_RETENTION_DAYS', 0));
+        $days = (int) ($this->option('days') ?? config('app.attendance_retention_days', 0));
 
         if ($days <= 0) {
             $this->info('Retention disabled (days=0). Skipping.');

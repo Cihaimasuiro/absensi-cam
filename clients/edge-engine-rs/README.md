@@ -49,8 +49,8 @@ clients/edge-engine-rs/
 The engine uses `ort` with `load-dynamic`, avoiding static compilation bloat and allowing the same binary to load hardware-optimized ONNX Runtime shared libraries at runtime.
 
 ### Required Shared Library
-- **Target Version:** `1.18.1` (`api-24`)
-- **Library Name:** `libonnxruntime.so` (or `libonnxruntime.so.1.18.1`)
+- **Target Version:** `1.24.4` (`api-24`)
+- **Library Name:** `libonnxruntime.so` (or `libonnxruntime.so.1.24.4`)
 
 ### Search Paths
 The runtime searches for `libonnxruntime.so` in the following order:
@@ -88,7 +88,7 @@ sudo ./scripts/package-onnxruntime.sh --install
 ```
 
 Output assets are placed into `dist/onnxruntime/<arch>/`:
-- `libonnxruntime.so.1.18.1`
+- `libonnxruntime.so.1.24.4`
 - `libonnxruntime.so` (symlink / copy)
 - `SHA256SUMS`
 
@@ -117,15 +117,15 @@ cargo build --release --bin engine-cli
 1. **Copy binary and ONNX Runtime library:**
    ```bash
    scp target/aarch64-unknown-linux-gnu/release/engine-cli edge@${BOARD_IP}:/tmp/smart-absensi-sync
-   scp dist/onnxruntime/aarch64/libonnxruntime.so.1.18.1 edge@${BOARD_IP}:/tmp/
+   scp dist/onnxruntime/aarch64/libonnxruntime.so.1.24.4 edge@${BOARD_IP}:/tmp/
    ```
 
 2. **Install on target:**
    ```bash
    ssh edge@${BOARD_IP}
    sudo install -m 755 /tmp/smart-absensi-sync /usr/local/bin/smart-absensi-sync
-   sudo install -m 755 /tmp/libonnxruntime.so.1.18.1 /usr/local/lib/libonnxruntime.so.1.18.1
-   sudo ln -sf /usr/local/lib/libonnxruntime.so.1.18.1 /usr/local/lib/libonnxruntime.so
+   sudo install -m 755 /tmp/libonnxruntime.so.1.24.4 /usr/local/lib/libonnxruntime.so.1.24.4
+   sudo ln -sf /usr/local/lib/libonnxruntime.so.1.24.4 /usr/local/lib/libonnxruntime.so
    sudo ldconfig
    ```
 

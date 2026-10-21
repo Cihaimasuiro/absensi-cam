@@ -49,9 +49,11 @@ jobs:
         working-directory: clients/edge-engine-rs
         run: cargo test --lib --bins -- --nocapture
 
-      - name: Verify ONNX Runtime Packaging
+      - name: Verify ONNX Runtime Packaging & Smoke Test
         working-directory: clients/edge-engine-rs
-        run: bash ./scripts/package-onnxruntime.sh --arch x86_64
+        run: |
+          bash ./scripts/package-onnxruntime.sh --arch x86_64
+          ORT_DYLIB_PATH="$(pwd)/dist/onnxruntime/x86_64/libonnxruntime.so" cargo test --test pipeline_test -- --nocapture
 
 
   cross-check:

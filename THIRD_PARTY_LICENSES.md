@@ -11,7 +11,7 @@ The production edge engine is written in native Rust. It compiles to an efficien
 | Component / Crate | Purpose | License | Source |
 | :--- | :--- | :--- | :--- |
 | `ort` (v2.0.0-rc.13) | ONNX Runtime Rust bindings for AI inference (`load-dynamic`, loads `libonnxruntime.so` / `onnxruntime.dll`) | MIT / Apache 2.0 | https://github.com/pykeio/ort |
-| `Microsoft ONNX Runtime` (v1.18.1) | Dynamic C/C++ inference runtime engine (`libonnxruntime.so` / `onnxruntime.dll`) | MIT License | https://github.com/microsoft/onnxruntime |
+| `Microsoft ONNX Runtime` (v1.24.4) | Dynamic C/C++ inference runtime engine (`libonnxruntime.so` / `onnxruntime.dll`) | MIT License | https://github.com/microsoft/onnxruntime |
 | `tokio` (v1.53.2) | Asynchronous runtime | MIT | https://tokio.rs |
 | `axum` (v0.7.9) | High-performance HTTP server for MJPEG stream, SSE overlays & Control Panel | MIT | https://github.com/tokio-rs/axum |
 | `libsql` (v0.6.0) / `libsql-sys` (v0.8.0) | SQLite WAL database engine with native rusqlite bindings for local outbox & template cache | MIT | https://github.com/tursodatabase/libsql |

@@ -2,8 +2,8 @@
 .SYNOPSIS
     Packages official Microsoft ONNX Runtime shared libraries for x86_64 and aarch64.
 .DESCRIPTION
-    Downloads official release tarballs matching ort = "=2.0.0-rc.13" (v1.18.1),
-    verifies SHA256 hashes, extracts libonnxruntime.so.1.18.1, and packages them into dist/onnxruntime/.
+    Downloads official release tarballs matching ort = "=2.0.0-rc.13" (v1.24.4),
+    verifies SHA256 hashes, extracts libonnxruntime.so.1.24.4, and packages them into dist/onnxruntime/.
 .PARAMETER Arch
     Target architecture: 'x86_64', 'aarch64', or 'all' (default).
 .PARAMETER OutputDir
@@ -19,10 +19,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$OrtVersion = "1.18.1"
+$OrtVersion = "1.24.4"
 $Hashes = @{
-    'x86_64'  = 'a0994512ec1e1debc00c18bfc7a5f16249f6ebd6a6128ff2034464cc380ea211'
-    'aarch64' = 'c1dcd8ab29e8d227d886b6ee415c08aea893956acf98f0758a42a84f27c02851'
+    'x86_64'  = '3a211fbea252c1e66290658f1b735b772056149f28321e71c308942cdb54b747'
+    'aarch64' = '866109a9248d057671a039b9d725be4bd86888e3754140e6701ec621be9d4d7e'
 }
 
 $TarballNames = @{

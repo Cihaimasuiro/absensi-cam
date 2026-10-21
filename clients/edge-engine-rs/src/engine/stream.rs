@@ -748,7 +748,7 @@ pub async fn run_stream(
 
                                                  if !is_confirmed {
                                                      println!(
-                                                         "â³ [VERIFIKASI] {} ({}/{} frame) | Kemiripan: {:.1}% | Margin: {:+.2} (prob: {:.2})",
+                                                         "⏳ [VERIFIKASI] {} ({}/{} frame) | Kemiripan: {:.1}% | Margin: {:+.2} (prob: {:.2})",
                                                          name, count, confirm_frames_ai, score * 100.0, logit_margin, liveness_prob
                                                      );
                                                  } else {

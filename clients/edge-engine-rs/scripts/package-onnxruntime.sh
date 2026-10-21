@@ -6,12 +6,12 @@ set -euo pipefail
 #
 # Packages official Microsoft ONNX Runtime shared libraries (`libonnxruntime.so`)
 # for `x86_64` and `aarch64` architectures, matching the `ort` v2.0.0-rc.13
-# C-API requirement (ONNX Runtime v1.18.1 / api-24).
+# C-API requirement (ONNX Runtime v1.24.4 / api-24).
 # ==============================================================================
 
-ORT_VERSION="1.18.1"
-X64_SHA256="a0994512ec1e1debc00c18bfc7a5f16249f6ebd6a6128ff2034464cc380ea211"
-AARCH64_SHA256="c1dcd8ab29e8d227d886b6ee415c08aea893956acf98f0758a42a84f27c02851"
+ORT_VERSION="1.24.4"
+X64_SHA256="3a211fbea252c1e66290658f1b735b772056149f28321e71c308942cdb54b747"
+AARCH64_SHA256="866109a9248d057671a039b9d725be4bd86888e3754140e6701ec621be9d4d7e"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"

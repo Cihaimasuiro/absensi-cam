@@ -52,8 +52,8 @@
    ```bash
    cargo zigbuild --target aarch64-unknown-linux-gnu.2.28 --release -p engine-cli
    ```
-2. Dynamic ONNX Runtime binding: The binary expects `libonnxruntime.so` on the device (configured via `ORT_DYLIB_PATH` or `/opt/smart-absensi/edge-engine/libonnxruntime.so.1.18.1`).
-   - Run `clients/edge-engine-rs/scripts/package-onnxruntime.sh --arch aarch64` to download, verify (`SHA256: c1dcd8ab29e8d227d886b6ee415c08aea893956acf98f0758a42a84f27c02851`), and prepare deployment artifacts.
+2. Dynamic ONNX Runtime binding: The binary expects `libonnxruntime.so` on the device (configured via `ORT_DYLIB_PATH` or `/opt/smart-absensi/edge-engine/libonnxruntime.so.1.24.4`).
+   - Run `clients/edge-engine-rs/scripts/package-onnxruntime.sh --arch aarch64` to download, verify (`SHA256: 866109a9248d057671a039b9d725be4bd86888e3754140e6701ec621be9d4d7e`), and prepare deployment artifacts.
 
 ## 0.6 Read-Only RootFS & Flash Wear Prevention Hardening
 1. **Volatile Logs & Temporary Buffers in RAM (`tmpfs`)**:

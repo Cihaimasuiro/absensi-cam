@@ -31,13 +31,13 @@ jobs:
           sudo apt-get install -y pkg-config libudev-dev libssl-dev
 
       - name: Install Rust toolchain (1.91.0)
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (1.91.0)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: "1.91.0"
           components: clippy
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           workspaces: clients/edge-engine-rs -> target
 
@@ -62,13 +62,13 @@ jobs:
           sudo apt-get install -y pkg-config gcc-aarch64-linux-gnu
 
       - name: Install Rust target (1.91.0)
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (1.91.0)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: "1.91.0"
           targets: aarch64-unknown-linux-gnu
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
+        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2.7.7
         with:
           workspaces: clients/edge-engine-rs -> target
 

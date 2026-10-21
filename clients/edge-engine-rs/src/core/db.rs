@@ -314,32 +314,33 @@ impl EdgeDb {
                 continue;
             }
 
-            let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false);
+            let allow_plaintext = is_plaintext_allowed();
 
-            let embedding_raw = match t.get("embedding_enc").and_then(|v| v.as_str()) {
-                Some(enc) => enc,
-                None => {
-                    if let Some(b64) = t.get("embedding_b64").and_then(|v| v.as_str()) {
-                        if allow_plaintext {
-                            tracing::warn!("Sinkronisasi student {}: Memakai fallback embedding_b64 plaintext (ALLOW_PLAINTEXT_EMBEDDINGS aktif).", student_id);
-                            b64
-                        } else {
-                            tracing::error!("Sinkronisasi student {}: DITOLAK. Fallback embedding_b64 tanpa enkripsi dilarang di produksi.", student_id);
-                            continue;
-                        }
-                    } else {
-                        tracing::warn!("Sinkronisasi student {}: Field embedding tidak ditemukan.", student_id);
-                        continue;
-                    }
-                }
-            };
+            let embedding_raw = t
+                .get("embedding_enc")
+                .or_else(|| t.get("embedding_b64"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
             use base64::Engine;
             let embedding_bytes = base64::engine::general_purpose::STANDARD
                 .decode(embedding_raw)
                 .unwrap_or_default();
+
+            match embedding_bytes.len() {
+                2076 => {} // Valid AES-256-GCM ciphertext dari Laravel
+                2048 if allow_plaintext => {
+                    tracing::warn!("Sinkronisasi student {}: Memuat template plaintext 2048-byte (ALLOW_PLAINTEXT_EMBEDDINGS aktif).", student_id);
+                }
+                2048 => {
+                    tracing::error!("Sinkronisasi student {}: DITOLAK. Template plaintext (2048 bytes) dilarang di produksi.", student_id);
+                    continue;
+                }
+                n => {
+                    tracing::warn!("Sinkronisasi student {}: Ukuran blob tidak valid (len={}). Dilewati.", student_id, n);
+                    continue;
+                }
+            }
 
             let name = t.get("name").and_then(|v| v.as_str()).unwrap_or("Anggota");
             let version = t
@@ -403,15 +404,16 @@ impl EdgeDb {
             .await?;
 
         let mut templates = Vec::new();
+        let mut total_in_db = 0usize;
+        let mut failed_decrypt = 0usize;
+
+        let allow_plaintext = is_plaintext_allowed();
 
         while let Some(row) = rows.next().await? {
+            total_in_db += 1;
             let student_id: String = row.get(0)?;
             let name: String = row.get(1).unwrap_or_else(|_| "Siswa".to_string());
             let blob: Vec<u8> = row.get(2)?;
-
-            let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false);
 
             let raw_embedding = if blob.len() == 2076 {
                 if let Some(key) = embed_key {
@@ -419,11 +421,13 @@ impl EdgeDb {
                         Ok(decrypted) => decrypted,
                         Err(e) => {
                             tracing::warn!("Gagal mendekripsi template student {}: {:#}", student_id, e);
+                            failed_decrypt += 1;
                             continue;
                         }
                     }
                 } else {
                     tracing::warn!("Embedding student {} terenkripsi tapi embed_key tidak disediakan", student_id);
+                    failed_decrypt += 1;
                     continue;
                 }
             } else if blob.len() == 2048 {
@@ -432,10 +436,12 @@ impl EdgeDb {
                     blob
                 } else {
                     tracing::error!("KEAMANAN DITOLAK: Template student {} disimpan tanpa enkripsi (len=2048). Enkripsi AES-256-GCM wajib aktif di produksi.", student_id);
+                    failed_decrypt += 1;
                     continue;
                 }
             } else {
                 tracing::warn!("Ukuran blob template student {} tidak valid (len={})", student_id, blob.len());
+                failed_decrypt += 1;
                 continue;
             };
 
@@ -461,6 +467,13 @@ impl EdgeDb {
             });
         }
 
+        if total_in_db > 0 && templates.is_empty() {
+            anyhow::bail!(
+                "Database lokal memiliki {} template tersimpan, tetapi TIDAK ADA SATUPUN yang berhasil dimuat/didekripsi ({} gagal). Periksa ENROLLMENT_EMBED_KEY dan MODEL_VERSION.",
+                total_in_db, failed_decrypt
+            );
+        }
+
         Ok(templates)
     }
 
@@ -473,10 +486,7 @@ impl EdgeDb {
     ) -> Result<Vec<u8>> {
         if encrypted_blob.len() != 2076 {
             if encrypted_blob.len() == 2048 {
-                let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
-                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                    .unwrap_or(false);
-                if allow_plaintext {
+                if is_plaintext_allowed() {
                     return Ok(encrypted_blob.to_vec());
                 }
                 anyhow::bail!("Unencrypted 2048-byte template rejected in production mode. Set ALLOW_PLAINTEXT_EMBEDDINGS=1 for development override.");
@@ -595,6 +605,81 @@ mod tests {
         let decrypted = EdgeDb::decrypt_embedding(&key, &blob, student_id, model_version)
             .expect("Harus berhasil mendekripsi ciphertext dari Python");
         assert_eq!(decrypted, expected_plaintext);
+    }
+
+    #[tokio::test]
+    async fn test_sync_templates_accepts_laravel_embedding_b64_shape() {
+        use aes_gcm::aead::{AeadCore, OsRng};
+        use base64::Engine;
+
+        let db = EdgeDb::init(":memory:").await.expect("In-memory DB harus berhasil");
+        let key = Aes256Gcm::generate_key(OsRng);
+        let student_id = "std-laravel-101";
+        let model_version = "v1.0-yunet";
+        let raw_embedding = vec![0.5f32.to_bits() as u8; 2048];
+
+        let cipher = Aes256Gcm::new(&key);
+        let nonce = Aes256Gcm::generate_nonce(OsRng);
+        let aad = format!("{}_{}", student_id, model_version);
+        let payload = Payload {
+            msg: &raw_embedding,
+            aad: aad.as_bytes(),
+        };
+
+        let ciphertext_and_tag = cipher.encrypt(Nonce::from_slice(&nonce), payload).unwrap();
+        let mut encrypted_blob = Vec::with_capacity(2076);
+        encrypted_blob.extend_from_slice(&nonce);
+        encrypted_blob.extend_from_slice(&ciphertext_and_tag);
+        assert_eq!(encrypted_blob.len(), 2076);
+
+        let enc_b64 = base64::engine::general_purpose::STANDARD.encode(&encrypted_blob);
+
+        // Simulasi respon JSON persis dari Laravel TemplateController.php:73
+        let laravel_response_item = serde_json::json!({
+            "student_id": student_id,
+            "name": "Siti Rahma",
+            "embedding_b64": enc_b64,
+            "model_version": model_version,
+            "version_cursor": "1001",
+            "op": "upsert",
+            "updated_at": "2026-10-21T12:00:00Z"
+        });
+
+        let sync_payload = vec![laravel_response_item];
+        db.save_templates(&sync_payload, Some(1001)).await.expect("Sinkronisasi harus berhasil menerima embedding_b64 dari Laravel");
+
+        // Verifikasi load_templates berhasil memuat dan mendekripsi
+        let loaded = db.load_templates(Some(&key), model_version).await.expect("load_templates harus berhasil");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].student_id, student_id);
+        assert_eq!(loaded[0].name, "Siti Rahma");
+
+        // Verifikasi load_templates GAGAL TOTAL jika key salah (mencegah silent boot ke reject everyone)
+        let wrong_key = vec![0u8; 32];
+        let load_err = db.load_templates(Some(&wrong_key), model_version).await;
+        assert!(load_err.is_err(), "Harus error jika database berisi template tapi gagal didekripsi karena key salah");
+    }
+}
+
+/// Helper untuk memeriksa apakah plaintext template diizinkan
+#[inline]
+pub fn is_plaintext_allowed() -> bool {
+    #[cfg(debug_assertions)]
+    {
+        true
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        static ALLOWED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            if let Ok(v) = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS") {
+                if v == "1" || v.eq_ignore_ascii_case("true") {
+                    ALLOWED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        });
+        ALLOWED.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 

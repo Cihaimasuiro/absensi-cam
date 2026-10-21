@@ -672,31 +672,43 @@ pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Resul
         creds.model_version.as_deref().unwrap_or("v1.0-yunet")
     );
 
+    // Remove any stale tmp file from a previous crash so permissions/inode are not reused
+    let _ = std::fs::remove_file(&tmp_path);
+
     #[cfg(unix)]
     {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
         let mut file = std::fs::OpenOptions::new()
             .write(true)
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .mode(0o600)
             .open(&tmp_path)
-            .with_context(|| format!("Gagal membuat file konfigurasi sementara dengan mode 0600 {:?}", tmp_path))?;
+            .with_context(|| format!("Gagal membuat file konfigurasi baru dengan mode 0600 {:?}", tmp_path))?;
         file.write_all(content.as_bytes())
             .with_context(|| format!("Gagal menulis data ke file konfigurasi sementara {:?}", tmp_path))?;
+        file.sync_all()
+            .with_context(|| format!("Gagal flush sync_all ke disk untuk {:?}", tmp_path))?;
     }
 
     #[cfg(not(unix))]
     {
-        std::fs::write(&tmp_path, &content)
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp_path)
             .with_context(|| format!("Gagal menulis file konfigurasi sementara {:?}", tmp_path))?;
+        file.write_all(content.as_bytes())
+            .with_context(|| format!("Gagal menulis data ke file konfigurasi sementara {:?}", tmp_path))?;
+        let _ = file.sync_all();
     }
 
     std::fs::rename(&tmp_path, env_path)
         .with_context(|| format!("Gagal memindahkan file konfigurasi ke {:?}", env_path))?;
 
-    info!("Konfigurasi tersimpan secara atomik ke {:?} (permission 0600)", env_path);
+    info!("Konfigurasi tersimpan secara atomik ke {:?} (permission 0600, power-cut synced)", env_path);
     Ok(())
 }
 

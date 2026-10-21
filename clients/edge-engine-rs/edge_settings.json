@@ -4,13 +4,13 @@
     "device_name": "Hallo1"
   },
   "camera": {
-    "source": "/dev/video0",
+    "source": "[]",
     "resolution": "640x480",
     "fps_cap": 15,
     "mirror_preview": false
   },
   "network": {
-    "interface": "eth0",
+    "interface": "wlan0",
     "mode": "dhcp",
     "wifi_ssid": "",
     "wifi_password": null,

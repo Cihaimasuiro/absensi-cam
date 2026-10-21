@@ -1,0 +1,10 @@
+{
+  "interface": "wlan0",
+  "mode": "dhcp",
+  "wifi_ssid": "",
+  "wifi_password": null,
+  "static_ip": "",
+  "subnet": "255.255.255.0",
+  "gateway": "",
+  "dns": "1.1.1.1"
+}

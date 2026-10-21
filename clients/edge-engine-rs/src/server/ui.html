@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Absensi - Gate Engine</title>
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('theme_preference') || 'dark';
+        const isDark = saved === 'system'
+          ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          : saved === 'dark';
+        if (!isDark) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch(e) {}
+    })();
+  </script>
   <style>
     /* Reset & Base System Typography */
     *, *::before, *::after {
@@ -17,6 +30,7 @@
       --bg: #0b0b0d;
       --surface: #131316;
       --surface-elevated: #1a1a1e;
+      --input-bg: #0d0d10;
       --border: #242429;
       --border-focus: #ffffff;
       --text: #eaeaea;
@@ -26,6 +40,26 @@
       --accent-black: #000000;
       --danger: #ef4444;
       --success: #10b981;
+      --select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      --warning-text: #f59e0b;
+    }
+
+    [data-theme="light"] {
+      --bg: #f4f4f5;
+      --surface: #ffffff;
+      --surface-elevated: #f4f4f5;
+      --input-bg: #ffffff;
+      --border: #d4d4d8;
+      --border-focus: #18181b;
+      --text: #18181b;
+      --text-muted: #52525b;
+      --text-faint: #71717a;
+      --accent-white: #18181b;
+      --accent-black: #ffffff;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --select-arrow: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      --warning-text: #b45309;
     }
 
     body {
@@ -97,14 +131,14 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     }
     .btn-square:hover {
-      border-color: #55555c;
-      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--text-faint);
+      background: rgba(125, 125, 125, 0.08);
     }
     .btn-square:active {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(125, 125, 125, 0.16);
     }
 
     .btn-square-primary {
@@ -113,8 +147,9 @@
       border: 1px solid var(--accent-white);
     }
     .btn-square-primary:hover {
-      background: #e2e2e6;
-      border-color: #e2e2e6;
+      opacity: 0.88;
+      background: var(--accent-white);
+      border-color: var(--accent-white);
       color: var(--accent-black);
     }
 
@@ -198,24 +233,23 @@
 
     .modal-dialog {
       width: 100%;
-      max-width: 580px;
-      height: 85vh;
-      max-height: 720px;
+      max-width: 960px;
+      height: min(720px, 88vh);
       background: var(--surface);
       border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7);
     }
 
     /* Modal Header */
     .modal-header {
-      padding: 20px 24px 16px 24px;
+      padding: 16px 22px 14px 22px;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
       display: flex;
-      align-items: flex-start;
-      gap: 14px;
+      align-items: center;
+      gap: 12px;
       flex-shrink: 0;
     }
 
@@ -224,7 +258,7 @@
     }
 
     .modal-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       color: var(--text);
       line-height: 1.2;
@@ -234,7 +268,7 @@
       font-size: 10px;
       color: var(--text-muted);
       letter-spacing: 0.12em;
-      margin-top: 4px;
+      margin-top: 3px;
       text-transform: uppercase;
     }
 
@@ -242,7 +276,7 @@
     .modal-body {
       flex: 1;
       overflow-y: auto;
-      padding: 16px 24px 28px 24px;
+      padding: 16px 20px 20px 20px;
       scrollbar-width: thin;
       scrollbar-color: #38383e var(--surface);
     }
@@ -256,58 +290,71 @@
       background: #38383e;
     }
 
-    /* Section Styling */
+    /* Settings 2-Column Grid Layout */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .settings-col {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    @media (max-width: 768px) {
+      .settings-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+    }
+
+    /* Section Card Styling - Artcraft Box Aesthetic */
     .settings-section {
-      margin-top: 28px;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--border);
-    }
-    .settings-section:first-child {
-      margin-top: 8px;
-    }
-    .settings-section:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 13px 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
     }
 
     .section-label {
-      font-family: ui-monospace, monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 10px;
-      letter-spacing: 0.15em;
+      font-weight: 700;
+      letter-spacing: 0.12em;
       color: var(--text-muted);
       text-transform: uppercase;
-      margin-bottom: 14px;
       display: block;
+      margin-bottom: 2px;
     }
 
     /* Row Form Layout */
     .setting-row {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      margin-bottom: 16px;
-    }
-    .setting-row:last-child {
-      margin-bottom: 0;
+      gap: 4px;
     }
 
     .row-main {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 12px;
     }
 
     .row-label {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       color: var(--text);
+      line-height: 1.3;
     }
 
     .row-help {
-      font-size: 11px;
-      color: var(--text-faint);
-      line-height: 1.4;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.35;
     }
 
     /* Form Controls */
@@ -315,15 +362,16 @@
     input[type="password"],
     input[type="number"],
     select {
-      background: #0d0d10;
+      background: var(--input-bg);
       border: 1px solid var(--border);
       color: var(--text);
-      font-size: 12px;
-      padding: 7px 10px;
+      font-size: 11.5px;
+      height: 29px;
+      padding: 4px 8px;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, background-color 0.15s, color 0.15s;
       width: 100%;
-      max-width: 240px;
+      max-width: 210px;
     }
     input[type="text"]:focus,
     input[type="password"]:focus,
@@ -331,35 +379,48 @@
     select:focus {
       border-color: var(--border-focus);
     }
+    input[type="text"]::placeholder,
+    input[type="password"]::placeholder,
+    input[type="number"]::placeholder {
+      color: var(--text-faint);
+    }
 
     select {
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-image: var(--select-arrow);
       background-repeat: no-repeat;
       background-position: right 8px center;
-      background-size: 12px;
-      padding-right: 28px;
+      background-size: 11px;
+      padding-right: 26px;
+    }
+
+    select option {
+      background: var(--surface);
+      color: var(--text);
+      padding: 5px 8px;
     }
 
     /* Square Checkbox */
     .checkbox-label {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
+      gap: 9px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
+      color: var(--text);
+      user-select: none;
     }
     .checkbox-custom {
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
       border: 1px solid var(--border);
-      background: #0d0d10;
+      background: var(--input-bg);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.15s, background-color 0.15s;
     }
     input[type="checkbox"] {
       display: none;
@@ -370,9 +431,9 @@
     }
     input[type="checkbox"]:checked + .checkbox-custom::after {
       content: "";
-      width: 4px;
-      height: 8px;
-      border: solid #000;
+      width: 3.5px;
+      height: 7px;
+      border: solid var(--surface);
       border-width: 0 2px 2px 0;
       transform: rotate(45deg);
       margin-bottom: 2px;
@@ -380,15 +441,15 @@
 
     /* Segmented Control (Appearance) */
     .segmented-control {
-      display: flex;
+      display: inline-flex;
       border: 1px solid var(--border);
-      background: #0d0d10;
+      background: var(--surface-elevated);
       width: fit-content;
     }
     .segment-btn {
-      padding: 6px 12px;
-      font-family: ui-monospace, monospace;
-      font-size: 10.5px;
+      padding: 5px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -398,6 +459,10 @@
       cursor: pointer;
       border-right: 1px solid var(--border);
       transition: background 0.15s, color 0.15s;
+    }
+    .segment-btn:hover {
+      color: var(--text);
+      background: rgba(125, 125, 125, 0.08);
     }
     .segment-btn:last-child {
       border-right: none;
@@ -409,7 +474,7 @@
 
     /* Modal Footer */
     .modal-footer {
-      padding: 16px 24px;
+      padding: 14px 22px;
       border-top: 1px solid var(--border);
       background: var(--surface);
       display: flex;
@@ -499,6 +564,11 @@
 
         init() {
           this.applyTheme(this.theme);
+          if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+              if (this.theme === 'system') this.applyTheme('system');
+            });
+          }
           this.checkAuthStatus();
           setInterval(() => {
             if (this.isAuthenticated) this.refreshFeed();
@@ -547,26 +617,40 @@
         },
 
         applyTheme(t) {
-          if (t === 'light') {
+          const isDark = t === 'system'
+            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+            : t === 'dark';
+
+          if (!isDark) {
+            document.documentElement.setAttribute('data-theme', 'light');
             document.documentElement.style.setProperty('--bg', '#f4f4f5');
             document.documentElement.style.setProperty('--surface', '#ffffff');
-            document.documentElement.style.setProperty('--surface-elevated', '#fafafa');
-            document.documentElement.style.setProperty('--border', '#e4e4e7');
+            document.documentElement.style.setProperty('--surface-elevated', '#f4f4f5');
+            document.documentElement.style.setProperty('--input-bg', '#ffffff');
+            document.documentElement.style.setProperty('--border', '#d4d4d8');
+            document.documentElement.style.setProperty('--border-focus', '#18181b');
             document.documentElement.style.setProperty('--text', '#18181b');
-            document.documentElement.style.setProperty('--text-muted', '#71717a');
-            document.documentElement.style.setProperty('--text-faint', '#a1a1aa');
+            document.documentElement.style.setProperty('--text-muted', '#52525b');
+            document.documentElement.style.setProperty('--text-faint', '#71717a');
             document.documentElement.style.setProperty('--accent-white', '#18181b');
             document.documentElement.style.setProperty('--accent-black', '#ffffff');
+            document.documentElement.style.setProperty('--select-arrow', "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e\")");
+            document.documentElement.style.setProperty('--warning-text', '#b45309');
           } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
             document.documentElement.style.setProperty('--bg', '#0b0b0d');
             document.documentElement.style.setProperty('--surface', '#131316');
             document.documentElement.style.setProperty('--surface-elevated', '#1a1a1e');
+            document.documentElement.style.setProperty('--input-bg', '#0d0d10');
             document.documentElement.style.setProperty('--border', '#242429');
+            document.documentElement.style.setProperty('--border-focus', '#ffffff');
             document.documentElement.style.setProperty('--text', '#eaeaea');
             document.documentElement.style.setProperty('--text-muted', '#8e8e93');
             document.documentElement.style.setProperty('--text-faint', '#55555c');
             document.documentElement.style.setProperty('--accent-white', '#ffffff');
             document.documentElement.style.setProperty('--accent-black', '#000000');
+            document.documentElement.style.setProperty('--select-arrow', "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='square' stroke-linejoin='miter'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e\")");
+            document.documentElement.style.setProperty('--warning-text', '#f59e0b');
           }
         },
 
@@ -981,19 +1065,19 @@
       
       <!-- Fixed Header -->
       <div class="modal-header">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top: 2px;">
-          <path d="M12 2L3 7v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7l-9-5z"/>
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none" style="flex-shrink: 0;">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M14 2.5L25.5 25.5H19.5L16 18H12L8.5 25.5H2.5L14 2.5zm0 6L17.5 15.5H10.5L14 8.5z" fill="#2563eb"/>
         </svg>
         <div class="modal-header-text">
           <div class="modal-title">Settings</div>
-          <div class="modal-subtitle font-mono" x-text="(info.device_code || 'SMART-ABSENSI') + ' // FW: V' + (info.firmware_version || '0.1.0')"></div>
+          <div class="modal-subtitle font-mono" x-text="(info.device_code || 'SMART-ABSENSI') + ' FIRMWARE VERSION: V' + (info.firmware_version || '0.1.0')"></div>
         </div>
       </div>
 
       <!-- Network Rollback Floating Alert Banner -->
       <template x-if="networkRollback.active">
         <div style="background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid #f59e0b; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-          <div style="color: #f59e0b;">
+          <div style="color: var(--warning-text, #f59e0b);">
             <strong>NETWORK STAGED:</strong> Confirm in <span class="font-mono font-bold" x-text="networkRollback.remaining"></span>s or settings will automatically revert.
           </div>
           <div style="display: flex; gap: 6px;">
@@ -1005,284 +1089,296 @@
 
       <!-- Independently Scrollable Body -->
       <div class="modal-body">
-
-        <!-- 1. GENERAL -->
-        <div class="settings-section">
-          <span class="section-label">General</span>
+        <div class="settings-grid">
           
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Language</label>
-              <select x-model="settings.general.language">
-                <option value="auto">Auto (System)</option>
-                <option value="id">Bahasa Indonesia</option>
-                <option value="en">English (US)</option>
-              </select>
-            </div>
-            <div class="row-help">Interface display language for the edge terminal and control panel.</div>
-          </div>
+          <!-- Column 1 (Left) -->
+          <div class="settings-col">
 
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Device Name</label>
-              <input type="text" x-model="settings.general.device_name" placeholder="Gate Terminal 01" />
-            </div>
-            <div class="row-help">Descriptive label shown in local logs, pairing requests, and network identifier.</div>
-          </div>
-        </div>
-
-        <!-- 2. CAMERA -->
-        <div class="settings-section">
-          <span class="section-label">Camera</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Source Device</label>
-              <select x-model="settings.camera.source">
-                <template x-for="dev in availableCameras" :key="dev">
-                  <option :value="dev" x-text="dev"></option>
-                </template>
-                <template x-if="availableCameras.length === 0">
-                  <option value="/dev/video0">/dev/video0 (Default V4L2)</option>
-                </template>
-              </select>
-            </div>
-            <div class="row-help">Active Linux V4L2 camera capture node.</div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Capture Resolution</label>
-              <select x-model="settings.camera.resolution">
-                <option value="640x480">640 x 480 (Recommended 4:3)</option>
-                <option value="1280x720">1280 x 720 (720p HD)</option>
-                <option value="1920x1080">1920 x 1080 (1080p FHD)</option>
-              </select>
-            </div>
-            <div class="row-help">Higher resolutions increase NPU/CPU processing latency per frame.</div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">FPS Cap</label>
-              <select x-model.number="settings.camera.fps_cap">
-                <option value="10">10 FPS (Low thermal profile)</option>
-                <option value="15">15 FPS (Standard optimal)</option>
-                <option value="20">20 FPS (High speed gate)</option>
-                <option value="30">30 FPS (Maximum)</option>
-              </select>
-            </div>
-            <div class="row-help">Throttles frame inference rate to prevent SoC thermal throttling.</div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="checkbox-label">
-                <input type="checkbox" x-model="settings.camera.mirror_preview" />
-                <span class="checkbox-custom"></span>
-                <span>Mirror live preview</span>
-              </label>
-            </div>
-            <div class="row-help">Flips the preview feed horizontally for natural user alignment.</div>
-          </div>
-        </div>
-
-        <!-- 3. NETWORK -->
-        <div class="settings-section">
-          <span class="section-label">Network</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Active Interface</label>
-              <select x-model="settings.network.interface">
-                <option value="eth0">Ethernet (eth0)</option>
-                <option value="wlan0">Wi-Fi (wlan0)</option>
-              </select>
-            </div>
-            <div class="row-help">Primary network connection interface.</div>
-          </div>
-
-          <template x-if="settings.network.interface === 'wlan0'">
-            <div>
+            <!-- 1. GENERAL -->
+            <div class="settings-section">
+              <span class="section-label">General</span>
+              
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Wi-Fi SSID</label>
-                  <input type="text" x-model="settings.network.wifi_ssid" placeholder="Office-WiFi" />
+                  <label class="row-label">Language</label>
+                  <select x-model="settings.general.language">
+                    <option value="auto">Auto (System)</option>
+                    <option value="id">Bahasa Indonesia</option>
+                    <option value="en">English (US)</option>
+                  </select>
+                </div>
+                <div class="row-help">Interface display language for the edge terminal and control panel.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Device Name</label>
+                  <input type="text" x-model="settings.general.device_name" placeholder="Gate Terminal 01" />
+                </div>
+                <div class="row-help">Descriptive label shown in local logs, pairing requests, and network identifier.</div>
+              </div>
+            </div>
+
+            <!-- 2. APPEARANCE -->
+            <div class="settings-section">
+              <span class="section-label">Appearance</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <span class="row-label">Theme Mode</span>
+                  <div class="segmented-control">
+                    <button type="button" class="segment-btn" :class="theme === 'system' ? 'active' : ''" @click="setTheme('system')">MATCH SYSTEM</button>
+                    <button type="button" class="segment-btn" :class="theme === 'dark' ? 'active' : ''" @click="setTheme('dark')">DARK</button>
+                    <button type="button" class="segment-btn" :class="theme === 'light' ? 'active' : ''" @click="setTheme('light')">LIGHT</button>
+                  </div>
+                </div>
+                <div class="row-help">Preferences are saved locally in browser storage.</div>
+              </div>
+            </div>
+
+            <!-- 3. CAMERA -->
+            <div class="settings-section">
+              <span class="section-label">Camera</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Source Device</label>
+                  <select x-model="settings.camera.source">
+                    <template x-for="dev in availableCameras" :key="dev">
+                      <option :value="dev" x-text="dev"></option>
+                    </template>
+                    <template x-if="availableCameras.length === 0">
+                      <option value="/dev/video0">/dev/video0 (Default V4L2)</option>
+                    </template>
+                  </select>
+                </div>
+                <div class="row-help">Active Linux V4L2 camera capture node.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Capture Resolution</label>
+                  <select x-model="settings.camera.resolution">
+                    <option value="640x480">640 x 480 (Recommended 4:3)</option>
+                    <option value="1280x720">1280 x 720 (720p HD)</option>
+                    <option value="1920x1080">1920 x 1080 (1080p FHD)</option>
+                  </select>
+                </div>
+                <div class="row-help">Higher resolutions increase NPU/CPU processing latency per frame.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">FPS Cap</label>
+                  <select x-model.number="settings.camera.fps_cap">
+                    <option value="10">10 FPS (Low thermal profile)</option>
+                    <option value="15">15 FPS (Standard optimal)</option>
+                    <option value="20">20 FPS (High speed gate)</option>
+                    <option value="30">30 FPS (Maximum)</option>
+                  </select>
+                </div>
+                <div class="row-help">Throttles frame inference rate to prevent SoC thermal throttling.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="checkbox-label">
+                    <input type="checkbox" x-model="settings.camera.mirror_preview" />
+                    <span class="checkbox-custom"></span>
+                    <span>Mirror live preview</span>
+                  </label>
+                </div>
+                <div class="row-help">Flips the preview feed horizontally for natural user alignment.</div>
+              </div>
+            </div>
+
+            <!-- 4. CENTRAL SERVER -->
+            <div class="settings-section">
+              <span class="section-label">Central Server</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Laravel API URL</label>
+                  <input type="text" x-model="settings.server.url" placeholder="http://192.168.10.66:8000" />
+                </div>
+                <div class="row-help">Base URL of the central Laravel attendance server.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <span class="row-label">Status</span>
+                  <span class="font-mono text-[11px]" :style="{ color: info.is_paired ? 'var(--success)' : 'var(--danger)' }" x-text="info.is_paired ? 'PAIRED & ACTIVE' : 'UNPAIRED'"></span>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 4px;">
+                <button type="button" class="btn-square" @click="testServerConnection()">TEST CONNECTION</button>
+                <button type="button" class="btn-square btn-square-danger" @click="confirmRepair()">RE-PAIR DEVICE</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Column 2 (Right) -->
+          <div class="settings-col">
+
+            <!-- 5. NETWORK -->
+            <div class="settings-section">
+              <span class="section-label">Network</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Active Interface</label>
+                  <select x-model="settings.network.interface">
+                    <option value="eth0">Ethernet (eth0)</option>
+                    <option value="wlan0">Wi-Fi (wlan0)</option>
+                  </select>
+                </div>
+                <div class="row-help">Primary network connection interface.</div>
+              </div>
+
+              <template x-if="settings.network.interface === 'wlan0'">
+                <div>
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label">Wi-Fi SSID</label>
+                      <input type="text" x-model="settings.network.wifi_ssid" placeholder="Office-WiFi" />
+                    </div>
+                  </div>
+                  <div class="setting-row" style="margin-top: 6px;">
+                    <div class="row-main">
+                      <label class="row-label">Wi-Fi Password</label>
+                      <input type="password" x-model="settings.network.wifi_password" placeholder="••••••••" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Addressing Mode</label>
+                  <select x-model="settings.network.mode">
+                    <option value="dhcp">DHCP (Automatic)</option>
+                    <option value="static">Static IP Configuration</option>
+                  </select>
+                </div>
+              </div>
+
+              <template x-if="settings.network.mode === 'static'">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label">IP Address</label>
+                      <input type="text" x-model="settings.network.static_ip" placeholder="192.168.1.100" />
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label">Subnet Mask</label>
+                      <input type="text" x-model="settings.network.subnet" placeholder="255.255.255.0" />
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label">Gateway</label>
+                      <input type="text" x-model="settings.network.gateway" placeholder="192.168.1.1" />
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label">DNS Server</label>
+                      <input type="text" x-model="settings.network.dns" placeholder="1.1.1.1" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <div class="row-help" style="margin-top: 4px; color: var(--warning-text, #f59e0b);">
+                Note: Applying network settings triggers a 60-second rollback watchdog.
+              </div>
+              <button type="button" class="btn-square btn-square-primary" style="margin-top: 6px;" @click="applyNetwork()">APPLY NETWORK SETTINGS</button>
+            </div>
+
+            <!-- 6. TIME & SYNCHRONIZATION -->
+            <div class="settings-section">
+              <span class="section-label">Time & Synchronization</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Timezone</label>
+                  <select x-model="settings.time.timezone">
+                    <option value="Asia/Jakarta">Asia/Jakarta (WIB, UTC+7)</option>
+                    <option value="Asia/Makassar">Asia/Makassar (WITA, UTC+8)</option>
+                    <option value="Asia/Jayapura">Asia/Jayapura (WIT, UTC+9)</option>
+                    <option value="UTC">UTC (Universal Time)</option>
+                  </select>
+                </div>
+                <div class="row-help">System timezone used for attendance timestamps and local display.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="checkbox-label">
+                    <input type="checkbox" x-model="settings.time.ntp_enabled" />
+                    <span class="checkbox-custom"></span>
+                    <span>Synchronize network clock via NTP</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Hardware RTC</label>
+                  <button type="button" class="btn-square" @click="syncRtc()">SYNC RTC</button>
+                </div>
+                <div class="row-help">Synchronizes the onboard DS3231 I2C real-time clock chip.</div>
+              </div>
+            </div>
+
+            <!-- 7. SECURITY & AUTHENTICATION -->
+            <div class="settings-section">
+              <span class="section-label">Security & Authentication</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="row-label">Current Password</label>
+                  <input type="password" x-model="pwdForm.current" placeholder="••••••••" />
                 </div>
               </div>
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Wi-Fi Password</label>
-                  <input type="password" x-model="settings.network.wifi_password" placeholder="••••••••" />
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Addressing Mode</label>
-              <select x-model="settings.network.mode">
-                <option value="dhcp">DHCP (Automatic)</option>
-                <option value="static">Static IP Configuration</option>
-              </select>
-            </div>
-          </div>
-
-          <template x-if="settings.network.mode === 'static'">
-            <div>
-              <div class="setting-row">
-                <div class="row-main">
-                  <label class="row-label">IP Address</label>
-                  <input type="text" x-model="settings.network.static_ip" placeholder="192.168.1.100" />
+                  <label class="row-label">New Password</label>
+                  <input type="password" x-model="pwdForm.new_pwd" placeholder="Min 8 characters" />
                 </div>
               </div>
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Subnet Mask</label>
-                  <input type="text" x-model="settings.network.subnet" placeholder="255.255.255.0" />
+                  <label class="row-label">Confirm Password</label>
+                  <input type="password" x-model="pwdForm.confirm_pwd" placeholder="••••••••" />
                 </div>
               </div>
-              <div class="setting-row">
-                <div class="row-main">
-                  <label class="row-label">Gateway</label>
-                  <input type="text" x-model="settings.network.gateway" placeholder="192.168.1.1" />
-                </div>
+
+              <button type="button" class="btn-square" style="margin-top: 6px;" @click="changePassword()">UPDATE PASSWORD</button>
+            </div>
+
+            <!-- 8. SYSTEM OPERATIONS -->
+            <div class="settings-section">
+              <span class="section-label">System Operations</span>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button type="button" class="btn-square" @click="restartEngine()">RESTART ENGINE</button>
+                <button type="button" class="btn-square" @click="restartSync()">RESTART SYNC</button>
+                <button type="button" class="btn-square" @click="backupConfig()">BACKUP CONFIG</button>
+                <button type="button" class="btn-square" @click="$refs.restoreFileInput.click()">RESTORE CONFIG</button>
+                <button type="button" class="btn-square" @click="downloadLogs()">DOWNLOAD LOGS</button>
+                <button type="button" class="btn-square" @click="checkUpdate()">CHECK UPDATE</button>
               </div>
-              <div class="setting-row">
-                <div class="row-main">
-                  <label class="row-label">DNS Server</label>
-                  <input type="text" x-model="settings.network.dns" placeholder="1.1.1.1" />
-                </div>
-              </div>
+              <input type="file" x-ref="restoreFileInput" accept=".json" style="display: none;" @change="handleConfigFileUpload($event)" />
             </div>
-          </template>
 
-          <div class="row-help" style="margin-top: 8px; color: #f59e0b;">
-            Note: Applying new network settings triggers a 60-second rollback watchdog. If not confirmed, settings automatically revert to prevent lockout.
           </div>
-          <button class="btn-square btn-square-primary" style="margin-top: 10px;" @click="applyNetwork()">APPLY NETWORK SETTINGS</button>
+
         </div>
-
-        <!-- 4. TIME -->
-        <div class="settings-section">
-          <span class="section-label">Time & Synchronization</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Timezone</label>
-              <select x-model="settings.time.timezone">
-                <option value="Asia/Jakarta">Asia/Jakarta (WIB, UTC+7)</option>
-                <option value="Asia/Makassar">Asia/Makassar (WITA, UTC+8)</option>
-                <option value="Asia/Jayapura">Asia/Jayapura (WIT, UTC+9)</option>
-                <option value="UTC">UTC (Coordinated Universal Time)</option>
-              </select>
-            </div>
-            <div class="row-help">System timezone used for attendance timestamps and local display.</div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="checkbox-label">
-                <input type="checkbox" x-model="settings.time.ntp_enabled" />
-                <span class="checkbox-custom"></span>
-                <span>Synchronize network clock via NTP</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Hardware RTC</label>
-              <button class="btn-square" @click="syncRtc()">SYNC RTC</button>
-            </div>
-            <div class="row-help">Synchronizes the onboard DS3231 I2C real-time clock chip.</div>
-          </div>
-        </div>
-
-        <!-- 5. SERVER -->
-        <div class="settings-section">
-          <span class="section-label">Central Server</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Laravel API URL</label>
-              <input type="text" x-model="settings.server.url" placeholder="http://192.168.10.66:8000" />
-            </div>
-            <div class="row-help">Base URL of the central Laravel attendance server.</div>
-          </div>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <span class="row-label">Status</span>
-              <span class="font-mono text-[11px]" :style="{ color: info.is_paired ? 'var(--success)' : 'var(--danger)' }" x-text="info.is_paired ? 'PAIRED & ACTIVE' : 'UNPAIRED'"></span>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 8px; margin-top: 12px;">
-            <button class="btn-square" @click="testServerConnection()">TEST CONNECTION</button>
-            <button class="btn-square btn-square-danger" @click="confirmRepair()">RE-PAIR DEVICE</button>
-          </div>
-        </div>
-
-        <!-- 6. SYSTEM -->
-        <div class="settings-section">
-          <span class="section-label">System Operations</span>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-            <button class="btn-square" @click="restartEngine()">RESTART ENGINE</button>
-            <button class="btn-square" @click="restartSync()">RESTART SYNC</button>
-            <button class="btn-square" @click="backupConfig()">BACKUP CONFIG</button>
-            <button class="btn-square" @click="$refs.restoreFileInput.click()">RESTORE CONFIG</button>
-            <button class="btn-square" @click="downloadLogs()">DOWNLOAD LOGS</button>
-            <button class="btn-square" @click="checkUpdate()">CHECK UPDATE</button>
-          </div>
-          <input type="file" x-ref="restoreFileInput" accept=".json" style="display: none;" @change="handleConfigFileUpload($event)" />
-        </div>
-
-        <!-- 7. SECURITY -->
-        <div class="settings-section">
-          <span class="section-label">Security & Authentication</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Current Password</label>
-              <input type="password" x-model="pwdForm.current" placeholder="••••••••" />
-            </div>
-          </div>
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">New Password</label>
-              <input type="password" x-model="pwdForm.new_pwd" placeholder="Min 8 characters" />
-            </div>
-          </div>
-          <div class="setting-row">
-            <div class="row-main">
-              <label class="row-label">Confirm New Password</label>
-              <input type="password" x-model="pwdForm.confirm_pwd" placeholder="••••••••" />
-            </div>
-          </div>
-
-          <button class="btn-square" style="margin-top: 10px;" @click="changePassword()">UPDATE PASSWORD</button>
-        </div>
-
-        <!-- 8. APPEARANCE -->
-        <div class="settings-section">
-          <span class="section-label">Appearance</span>
-
-          <div class="setting-row">
-            <div class="row-main">
-              <span class="row-label">Theme Mode</span>
-              <div class="segmented-control">
-                <button class="segment-btn" :class="theme === 'system' ? 'active' : ''" @click="setTheme('system')">MATCH SYSTEM</button>
-                <button class="segment-btn" :class="theme === 'dark' ? 'active' : ''" @click="setTheme('dark')">DARK</button>
-                <button class="segment-btn" :class="theme === 'light' ? 'active' : ''" @click="setTheme('light')">LIGHT</button>
-              </div>
-            </div>
-            <div class="row-help">Preferences are saved locally in browser storage.</div>
-          </div>
-        </div>
-
       </div>
 
       <!-- Fixed Footer -->

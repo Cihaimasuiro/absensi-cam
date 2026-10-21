@@ -66,9 +66,41 @@ impl EdgeDb {
                     time_source TEXT NOT NULL,
                     synced INTEGER DEFAULT 0
                 );
+
+                CREATE TABLE IF NOT EXISTS quarantined_templates (
+                    student_id TEXT PRIMARY KEY,
+                    reason TEXT NOT NULL,
+                    version TEXT,
+                    quarantined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
                 "#,
             )
             .await?;
+
+        // Auto-migrate legacy unencrypted templates (2048 bytes) to prevent boot crash loop on upgraded devices
+        if !is_plaintext_allowed() {
+            let mut rows = self
+                .conn
+                .query("SELECT COUNT(*) FROM templates WHERE length(embedding) = 2048", ())
+                .await?;
+            let legacy_count: i64 = if let Some(row) = rows.next().await? {
+                row.get(0).unwrap_or(0)
+            } else {
+                0
+            };
+            if legacy_count > 0 {
+                tracing::warn!(
+                    "[MIGRASI UPGRADE] Terdeteksi {} template lama (2048-byte plaintext). Menghapus template usang dan me-reset sync cursor 'last_sync' agar server Laravel mengirim ulang data terenkripsi AES-256-GCM secara otomatis.",
+                    legacy_count
+                );
+                let tx = self.conn.transaction().await?;
+                tx.execute("DELETE FROM templates WHERE length(embedding) = 2048", ()).await?;
+                tx.execute("DELETE FROM metadata WHERE key = 'last_sync'", ()).await?;
+                tx.commit().await?;
+                tracing::info!("[MIGRASI UPGRADE] Migrasi selesai. Database lokal siap menerima template terenkripsi dari server.");
+            }
+        }
+
         Ok(())
     }
 
@@ -327,26 +359,37 @@ impl EdgeDb {
                 .decode(embedding_raw)
                 .unwrap_or_default();
 
+            let version = t
+                .get("version_cursor")
+                .and_then(|v| v.as_str())
+                .unwrap_or("1");
+
             match embedding_bytes.len() {
                 2076 => {} // Valid AES-256-GCM ciphertext dari Laravel
                 2048 if allow_plaintext => {
                     tracing::warn!("Sinkronisasi student {}: Memuat template plaintext 2048-byte (ALLOW_PLAINTEXT_EMBEDDINGS aktif).", student_id);
                 }
                 2048 => {
-                    tracing::error!("Sinkronisasi student {}: DITOLAK. Template plaintext (2048 bytes) dilarang di produksi.", student_id);
+                    tracing::error!("Sinkronisasi student {}: DITOLAK. Template plaintext (2048 bytes) dilarang di produksi. Masuk karantina.", student_id);
+                    tx.execute(
+                        "INSERT OR REPLACE INTO quarantined_templates (student_id, reason, version) VALUES (?, 'plaintext_2048_rejected', ?)",
+                        (student_id, version),
+                    )
+                    .await?;
                     continue;
                 }
                 n => {
-                    tracing::warn!("Sinkronisasi student {}: Ukuran blob tidak valid (len={}). Dilewati.", student_id, n);
+                    tracing::warn!("Sinkronisasi student {}: Ukuran blob tidak valid (len={}). Masuk karantina.", student_id, n);
+                    tx.execute(
+                        "INSERT OR REPLACE INTO quarantined_templates (student_id, reason, version) VALUES (?, ?, ?)",
+                        (student_id, format!("invalid_length_{}", n), version),
+                    )
+                    .await?;
                     continue;
                 }
             }
 
             let name = t.get("name").and_then(|v| v.as_str()).unwrap_or("Anggota");
-            let version = t
-                .get("version_cursor")
-                .and_then(|v| v.as_str())
-                .unwrap_or("1");
             let updated_at = t
                 .get("updated_at")
                 .and_then(|v| v.as_str())
@@ -365,10 +408,30 @@ impl EdgeDb {
                 ),
             )
             .await?;
+
+            tx.execute(
+                "DELETE FROM quarantined_templates WHERE student_id = ?",
+                [student_id],
+            )
+            .await?;
         }
 
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Hitung jumlah template yang masuk karantina karena format tidak valid atau plaintext ditolak
+    pub async fn get_quarantined_templates_count(&self) -> Result<usize> {
+        let mut rows = self
+            .conn
+            .query("SELECT COUNT(*) FROM quarantined_templates", ())
+            .await?;
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            Ok(count as usize)
+        } else {
+            Ok(0)
+        }
     }
 
     /// Tambahkan absensi baru ke tabel outbox_attendance
@@ -510,6 +573,36 @@ impl EdgeDb {
             .decrypt(nonce, payload)
             .map_err(|e| anyhow::anyhow!("AES-GCM decryption failed for student {}: {:?}", student_id, e))
     }
+}
+
+static ALLOW_OVERRIDE: std::sync::atomic::AtomicI8 = std::sync::atomic::AtomicI8::new(-1);
+
+/// Set override for plaintext embeddings allowed state (primarily for unit testing)
+#[cfg(test)]
+pub fn set_plaintext_allowed_for_test(allowed: Option<bool>) {
+    let val = match allowed {
+        Some(true) => 1,
+        Some(false) => 0,
+        None => -1,
+    };
+    ALLOW_OVERRIDE.store(val, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Helper untuk memeriksa apakah plaintext template diizinkan.
+/// Default: FALSE (baik di debug maupun release untuk keamanan konsisten).
+/// Diaktifkan HANYA jika variabel lingkungan ALLOW_PLAINTEXT_EMBEDDINGS disetel ke "1" atau "true",
+/// atau dioverride melalui set_plaintext_allowed_for_test dalam pengujian.
+pub fn is_plaintext_allowed() -> bool {
+    let ov = ALLOW_OVERRIDE.load(std::sync::atomic::Ordering::SeqCst);
+    if ov == 1 {
+        return true;
+    }
+    if ov == 0 {
+        return false;
+    }
+    std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -659,27 +752,98 @@ mod tests {
         let load_err = db.load_templates(Some(&wrong_key), model_version).await;
         assert!(load_err.is_err(), "Harus error jika database berisi template tapi gagal didekripsi karena key salah");
     }
-}
 
-/// Helper untuk memeriksa apakah plaintext template diizinkan
-#[inline]
-pub fn is_plaintext_allowed() -> bool {
-    #[cfg(debug_assertions)]
-    {
-        true
+    #[tokio::test]
+    async fn test_save_templates_quarantines_plaintext_2048_in_production() {
+        set_plaintext_allowed_for_test(Some(false));
+        let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+
+        use base64::Engine;
+        let plaintext_blob = vec![0.1f32.to_bits() as u8; 2048];
+        let b64_plaintext = base64::engine::general_purpose::STANDARD.encode(&plaintext_blob);
+
+        let sync_payload = vec![serde_json::json!({
+            "student_id": "std-legacy-01",
+            "name": "Siswa Legacy",
+            "embedding_b64": b64_plaintext,
+            "version_cursor": "500",
+            "op": "upsert"
+        })];
+
+        // Harus berhasil eksekusi tanpa panic, dan menolak plaintext ke karantina
+        db.save_templates(&sync_payload, Some(500)).await.expect("save_templates harus sukses");
+
+        let quarantined = db.get_quarantined_templates_count().await.expect("query karantina gagal");
+        assert_eq!(quarantined, 1, "Template plaintext 2048 bytes harus masuk tabel karantina");
+
+        // Tabel templates utama harus kosong
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
+        let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(count, 0, "Tabel templates utama tidak boleh menyimpan plaintext saat produksi");
+
+        set_plaintext_allowed_for_test(None);
     }
-    #[cfg(not(debug_assertions))]
-    {
-        static ALLOWED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        static ONCE: std::sync::Once = std::sync::Once::new();
-        ONCE.call_once(|| {
-            if let Ok(v) = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS") {
-                if v == "1" || v.eq_ignore_ascii_case("true") {
-                    ALLOWED.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-            }
-        });
-        ALLOWED.load(std::sync::atomic::Ordering::Relaxed)
+
+    #[tokio::test]
+    async fn test_save_templates_accepts_plaintext_2048_with_override() {
+        set_plaintext_allowed_for_test(Some(true));
+        let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+
+        use base64::Engine;
+        let plaintext_blob = vec![0.1f32.to_bits() as u8; 2048];
+        let b64_plaintext = base64::engine::general_purpose::STANDARD.encode(&plaintext_blob);
+
+        let sync_payload = vec![serde_json::json!({
+            "student_id": "std-dev-01",
+            "name": "Siswa Dev",
+            "embedding_b64": b64_plaintext,
+            "version_cursor": "501",
+            "op": "upsert"
+        })];
+
+        db.save_templates(&sync_payload, Some(501)).await.expect("save_templates harus sukses");
+
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
+        let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(count, 1, "Template plaintext harus tersimpan saat override aktif");
+
+        set_plaintext_allowed_for_test(None);
+    }
+
+    #[tokio::test]
+    async fn test_legacy_2048_migration_clears_db_and_cursor() {
+        set_plaintext_allowed_for_test(Some(false));
+        let db = EdgeDb::init(":memory:").await.expect("DB memory init gagal");
+
+        // Simulasikan DB lama yang sudah menyimpan baris plaintext 2048 byte dan cursor 9999
+        let fake_2048 = vec![0u8; 2048];
+        db.conn.execute(
+            "INSERT INTO templates (id, student_id, name, embedding, version) VALUES (?, ?, ?, ?, ?)",
+            ("legacy-1", "legacy-1", "Old Student", fake_2048, "1"),
+        ).await.unwrap();
+        db.conn.execute(
+            "INSERT INTO metadata (key, value) VALUES ('last_sync', '9999')",
+            (),
+        ).await.unwrap();
+
+        // Jalankan migrate() seperti saat boot engine versi baru
+        db.migrate().await.expect("migrate harus berhasil");
+
+        // Verifikasi templates 2048 byte dibersihkan
+        let mut tmpl_rows = db.conn.query("SELECT COUNT(*) FROM templates", ()).await.unwrap();
+        let tmpl_count: i64 = tmpl_rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(tmpl_count, 0, "Template plaintext lama harus dihapus otomatis saat migrasi");
+
+        // Verifikasi cursor di-reset
+        let mut cursor_rows = db.conn.query("SELECT COUNT(*) FROM metadata WHERE key = 'last_sync'", ()).await.unwrap();
+        let cursor_count: i64 = cursor_rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(cursor_count, 0, "Cursor last_sync harus di-reset agar server mengirim ulang data");
+
+        // Verifikasi load_templates mengembalikan Ok(kosong) dan TIDAK crash-loop
+        let loaded = db.load_templates(None, "v1.0").await.expect("load_templates tidak boleh crash setelah migrasi");
+        assert!(loaded.is_empty(), "Daftar template harus kosong siap menerima sinkronisasi baru");
+
+        set_plaintext_allowed_for_test(None);
     }
 }
 

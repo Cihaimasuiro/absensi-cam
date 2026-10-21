@@ -49,10 +49,8 @@ pub fn check_storage_health() -> StorageDoctorReport {
                 if mnt_point == "/var/log" && fs_type == "tmpfs" {
                     report.log_is_tmpfs = true;
                 }
-                if mnt_point == "/" {
-                    if opts.split(',').any(|o| o == "ro") || fs_type == "overlay" {
-                        report.root_is_readonly_or_overlay = true;
-                    }
+                if mnt_point == "/" && (opts.split(',').any(|o| o == "ro") || fs_type == "overlay") {
+                    report.root_is_readonly_or_overlay = true;
                 }
                 if mnt_point == "/data" {
                     report.data_mounted = true;

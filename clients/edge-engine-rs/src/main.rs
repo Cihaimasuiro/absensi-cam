@@ -1188,7 +1188,7 @@ async fn run_stream(
         let mut last_tft_frame = Instant::now();
 
         vision::camera::linux::spawn_capture_thread_decoupled(
-            device,
+            device.clone(),
             width,
             height,
             running_clone,

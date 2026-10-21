@@ -1446,20 +1446,21 @@ fn read_disk_info() -> DiskInfo {
         let mount = if Path::new("/data").exists() { "/data" } else { "/" };
         let path = CString::new(mount).unwrap_or_else(|_| CString::new("/").unwrap());
         let mut stat: MaybeUninit<libc::statvfs> = MaybeUninit::uninit();
-        unsafe {
-            if libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 {
-                let s = stat.assume_init();
-                let frsize = s.f_frsize as u64;
-                let total_mb = ((s.f_blocks as u64) * frsize / (1024 * 1024)) as i64;
-                let free_mb = ((s.f_bavail as u64) * frsize / (1024 * 1024)) as i64;
-                let used_mb = (total_mb - free_mb).max(0);
-                let usage_pct = if total_mb > 0 {
-                    (used_mb as f64 / total_mb as f64 * 100.0 * 10.0).round() / 10.0
-                } else {
-                    0.0
-                };
-                return DiskInfo { total_mb, free_mb, used_mb, usage_pct };
-            }
+        // SAFETY: statvfs writes to valid path pointer and uninit statvfs buffer.
+        let ok = unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 };
+        if ok {
+            // SAFETY: statvfs returned 0 (success), meaning stat is fully populated.
+            let s = unsafe { stat.assume_init() };
+            let frsize = s.f_frsize as u64;
+            let total_mb = ((s.f_blocks as u64) * frsize / (1024 * 1024)) as i64;
+            let free_mb = ((s.f_bavail as u64) * frsize / (1024 * 1024)) as i64;
+            let used_mb = (total_mb - free_mb).max(0);
+            let usage_pct = if total_mb > 0 {
+                (used_mb as f64 / total_mb as f64 * 100.0 * 10.0).round() / 10.0
+            } else {
+                0.0
+            };
+            return DiskInfo { total_mb, free_mb, used_mb, usage_pct };
         }
     }
     DiskInfo { total_mb: 0, free_mb: 0, used_mb: 0, usage_pct: 0.0 }
@@ -1610,26 +1611,30 @@ fn read_interface_ip(iface: &str) -> String {
     {
         use std::ffi::CString;
         let Ok(name) = CString::new(iface) else { return "—".to_string() };
-        let mut ifr: libc::ifreq = unsafe { std::mem::zeroed() };
         let bytes = name.as_bytes_with_nul();
         if bytes.len() > 16 {
             return "—".to_string();
         }
-        for (i, b) in bytes.iter().enumerate() {
-            ifr.ifr_name[i] = *b as libc::c_char;
+
+        // SAFETY: Invokes socket(AF_INET, SOCK_DGRAM) and ioctl(SIOCGIFADDR) to query interface IP.
+        // File descriptor is closed before returning.
+        unsafe {
+            let mut ifr: libc::ifreq = std::mem::zeroed();
+            for (i, b) in bytes.iter().enumerate() {
+                ifr.ifr_name[i] = *b as libc::c_char;
+            }
+            let sock = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+            if sock < 0 {
+                return "—".to_string();
+            }
+            let rc = libc::ioctl(sock, libc::SIOCGIFADDR, &mut ifr);
+            libc::close(sock);
+            if rc == 0 {
+                let addr = ifr.ifr_ifru.ifru_addr;
+                let octets = addr.sin_addr.s_addr.to_ne_bytes();
+                return format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3]);
+            }
         }
-        let sock = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
-        if sock < 0 {
-            return "—".to_string();
-        }
-        let rc = unsafe { libc::ioctl(sock, libc::SIOCGIFADDR, &mut ifr) };
-        unsafe { libc::close(sock) };
-        if rc == 0 {
-            let addr = unsafe { ifr.ifr_ifru.ifru_addr };
-            let octets = unsafe { addr.sin_addr.s_addr.to_ne_bytes() };
-            return format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3]);
-        }
-        let _ = MaybeUninit::<u8>::uninit();
     }
     "—".to_string()
 }

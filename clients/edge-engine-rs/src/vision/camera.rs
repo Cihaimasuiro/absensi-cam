@@ -44,7 +44,7 @@ pub mod linux {
     // ── 64-bit V4L2 Struct Layouts ──────────────────────────────────────────────
 
     #[repr(C)]
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Default)]
     pub struct V4l2Requestbuffers {
         pub count: u32,
         pub buf_type: u32,
@@ -55,7 +55,7 @@ pub mod linux {
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Default)]
     pub struct V4l2PixFormat {
         pub width: u32,
         pub height: u32,
@@ -79,25 +79,37 @@ pub mod linux {
         pub raw: [u8; 200],
     }
 
+    impl Default for V4l2Format {
+        fn default() -> Self {
+            Self {
+                buf_type: 0,
+                _pad: 0,
+                raw: [0u8; 200],
+            }
+        }
+    }
+
     impl V4l2Format {
         pub fn pix(&self) -> &V4l2PixFormat {
+            // SAFETY: V4l2Format raw buffer has 200 bytes, which exceeds the 48 bytes of V4l2PixFormat.
             unsafe { &*(self.raw.as_ptr() as *const V4l2PixFormat) }
         }
 
         pub fn pix_mut(&mut self) -> &mut V4l2PixFormat {
+            // SAFETY: V4l2Format raw buffer has 200 bytes, which exceeds the 48 bytes of V4l2PixFormat.
             unsafe { &mut *(self.raw.as_mut_ptr() as *mut V4l2PixFormat) }
         }
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Default)]
     pub struct V4l2Timeval {
         pub tv_sec: i64,
         pub tv_usec: i64,
     }
 
     #[repr(C)]
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Default)]
     pub struct V4l2Buffer {
         pub index: u32,
         pub buf_type: u32,
@@ -120,6 +132,23 @@ pub mod linux {
     const _: () = assert!(std::mem::size_of::<V4l2Requestbuffers>() == 20, "V4l2Requestbuffers must be 20 bytes on 64-bit");
     const _: () = assert!(std::mem::size_of::<V4l2Format>() == 208, "V4l2Format must be 208 bytes on 64-bit");
     const _: () = assert!(std::mem::size_of::<V4l2Buffer>() == 88, "V4l2Buffer must be 88 bytes on 64-bit");
+
+    /// Wrapped ioctl helper that handles EINTR retries and encapsulates FFI safety
+    #[inline]
+    fn xioctl<T>(fd: RawFd, request: libc::c_ulong, arg: &mut T) -> std::io::Result<i32> {
+        loop {
+            // SAFETY: Caller guarantees fd is a valid open file descriptor and arg points to a valid struct matching the V4L2 ioctl request specification.
+            let ret = unsafe { libc::ioctl(fd, request, arg as *mut T as *mut libc::c_void) };
+            if ret == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                return Err(err);
+            }
+            return Ok(ret);
+        }
+    }
 
     struct MmapBuffer {
         ptr: *mut libc::c_void,
@@ -169,8 +198,10 @@ pub mod linux {
                 (V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_YUYV, PixelFormat::Mjpeg, PixelFormat::Yuyv)
             };
 
-            let mut fmt: V4l2Format = unsafe { std::mem::zeroed() };
-            fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            let mut fmt = V4l2Format {
+                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                ..Default::default()
+            };
             {
                 let pix = fmt.pix_mut();
                 pix.width = self.width;
@@ -179,16 +210,18 @@ pub mod linux {
                 pix.field = V4L2_FIELD_ANY;
             }
 
-            let s_fmt_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut fmt) };
-            let mut configured_format = if s_fmt_res >= 0 && fmt.pix().pixelformat == primary_fmt {
+            let s_fmt_res = xioctl(self.fd, VIDIOC_S_FMT, &mut fmt);
+            let mut configured_format = if s_fmt_res.is_ok() && fmt.pix().pixelformat == primary_fmt {
                 Some(primary_pixel)
             } else {
                 None
             };
 
             if configured_format.is_none() {
-                let mut alt_fmt: V4l2Format = unsafe { std::mem::zeroed() };
-                alt_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+                let mut alt_fmt = V4l2Format {
+                    buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                    ..Default::default()
+                };
                 {
                     let pix = alt_fmt.pix_mut();
                     pix.width = self.width;
@@ -196,8 +229,8 @@ pub mod linux {
                     pix.pixelformat = fallback_fmt;
                     pix.field = V4L2_FIELD_ANY;
                 }
-                let alt_res = unsafe { libc::ioctl(self.fd, VIDIOC_S_FMT, &mut alt_fmt) };
-                if alt_res >= 0 && alt_fmt.pix().pixelformat == fallback_fmt {
+                let alt_res = xioctl(self.fd, VIDIOC_S_FMT, &mut alt_fmt);
+                if alt_res.is_ok() && alt_fmt.pix().pixelformat == fallback_fmt {
                     fmt = alt_fmt;
                     configured_format = Some(fallback_pixel);
                 }
@@ -205,9 +238,11 @@ pub mod linux {
 
             // If neither was confirmed via S_FMT, query what the driver is actually using
             if configured_format.is_none() {
-                let mut get_fmt: V4l2Format = unsafe { std::mem::zeroed() };
-                get_fmt.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                if unsafe { libc::ioctl(self.fd, VIDIOC_G_FMT, &mut get_fmt) } >= 0 {
+                let mut get_fmt = V4l2Format {
+                    buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                    ..Default::default()
+                };
+                if xioctl(self.fd, VIDIOC_G_FMT, &mut get_fmt).is_ok() {
                     fmt = get_fmt;
                     let fourcc = fmt.pix().pixelformat;
                     if fourcc == V4L2_PIX_FMT_MJPEG {
@@ -239,13 +274,15 @@ pub mod linux {
             );
 
             // 2. Request 4 MMAP buffers
-            let mut req: V4l2Requestbuffers = unsafe { std::mem::zeroed() };
-            req.count = 4;
-            req.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            req.memory = V4L2_MEMORY_MMAP;
+            let mut req = V4l2Requestbuffers {
+                count: 4,
+                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                memory: V4L2_MEMORY_MMAP,
+                ..Default::default()
+            };
 
-            if unsafe { libc::ioctl(self.fd, VIDIOC_REQBUFS, &mut req) } < 0 {
-                bail!("VIDIOC_REQBUFS failed: {}", std::io::Error::last_os_error());
+            if let Err(e) = xioctl(self.fd, VIDIOC_REQBUFS, &mut req) {
+                bail!("VIDIOC_REQBUFS failed: {}", e);
             }
 
             if req.count < 2 {
@@ -254,15 +291,18 @@ pub mod linux {
 
             // 3. Query and mmap each buffer
             for i in 0..req.count {
-                let mut buf: V4l2Buffer = unsafe { std::mem::zeroed() };
-                buf.index = i;
-                buf.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                buf.memory = V4L2_MEMORY_MMAP;
+                let mut buf = V4l2Buffer {
+                    index: i,
+                    buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                    memory: V4L2_MEMORY_MMAP,
+                    ..Default::default()
+                };
 
-                if unsafe { libc::ioctl(self.fd, VIDIOC_QUERYBUF, &mut buf) } < 0 {
-                    bail!("VIDIOC_QUERYBUF failed for buffer {}: {}", i, std::io::Error::last_os_error());
+                if let Err(e) = xioctl(self.fd, VIDIOC_QUERYBUF, &mut buf) {
+                    bail!("VIDIOC_QUERYBUF failed for buffer {}: {}", i, e);
                 }
 
+                // SAFETY: Kernel validated buf.length and buf.m_offset in VIDIOC_QUERYBUF.
                 let ptr = unsafe {
                     libc::mmap(
                         ptr::null_mut(),
@@ -284,15 +324,15 @@ pub mod linux {
                 });
 
                 // Enqueue buffer
-                if unsafe { libc::ioctl(self.fd, VIDIOC_QBUF, &mut buf) } < 0 {
-                    bail!("VIDIOC_QBUF initial enqueue failed for buffer {}: {}", i, std::io::Error::last_os_error());
+                if let Err(e) = xioctl(self.fd, VIDIOC_QBUF, &mut buf) {
+                    bail!("VIDIOC_QBUF initial enqueue failed for buffer {}: {}", i, e);
                 }
             }
 
             // 4. Start streaming
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            if unsafe { libc::ioctl(self.fd, VIDIOC_STREAMON, &mut stream_type) } < 0 {
-                bail!("VIDIOC_STREAMON failed: {}", std::io::Error::last_os_error());
+            if let Err(e) = xioctl(self.fd, VIDIOC_STREAMON, &mut stream_type) {
+                bail!("VIDIOC_STREAMON failed: {}", e);
             }
 
             Ok(())
@@ -308,6 +348,7 @@ pub mod linux {
                 revents: 0,
             };
 
+            // SAFETY: Calling poll on valid open fd with valid pollfd struct.
             let poll_res = unsafe { libc::poll(&mut pfd, 1, timeout_ms) };
             if poll_res < 0 {
                 let err = std::io::Error::last_os_error();
@@ -321,12 +362,13 @@ pub mod linux {
                 return Ok(None);
             }
 
-            let mut buf: V4l2Buffer = unsafe { std::mem::zeroed() };
-            buf.buf_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            buf.memory = V4L2_MEMORY_MMAP;
+            let mut buf = V4l2Buffer {
+                buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
+                memory: V4L2_MEMORY_MMAP,
+                ..Default::default()
+            };
 
-            if unsafe { libc::ioctl(self.fd, VIDIOC_DQBUF, &mut buf) } < 0 {
-                let err = std::io::Error::last_os_error();
+            if let Err(err) = xioctl(self.fd, VIDIOC_DQBUF, &mut buf) {
                 if err.raw_os_error() == Some(libc::EAGAIN) {
                     return Ok(None);
                 }
@@ -342,6 +384,7 @@ pub mod linux {
                 warn!("Frame flagged with V4L2_BUF_FLAG_ERROR, skipping corrupted frame");
                 None
             } else {
+                // SAFETY: mmap_buf.ptr is valid and points to a mapped buffer of at least mmap_buf.len bytes.
                 let frame_slice = unsafe {
                     std::slice::from_raw_parts(mmap_buf.ptr as *const u8, bytes_used.min(mmap_buf.len))
                 };
@@ -349,8 +392,8 @@ pub mod linux {
             };
 
             // Re-queue buffer AFTER caller finishes processing/copying frame data!
-            if unsafe { libc::ioctl(self.fd, VIDIOC_QBUF, &mut buf) } < 0 {
-                warn!("VIDIOC_QBUF re-queue failed: {}", std::io::Error::last_os_error());
+            if let Err(e) = xioctl(self.fd, VIDIOC_QBUF, &mut buf) {
+                warn!("VIDIOC_QBUF re-queue failed: {}", e);
             }
 
             Ok(result)
@@ -360,8 +403,9 @@ pub mod linux {
     impl Drop for Camera {
         fn drop(&mut self) {
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            let _ = xioctl(self.fd, VIDIOC_STREAMOFF, &mut stream_type);
+            // SAFETY: munmap unmaps all successfully mapped buffers, and libc::close releases the camera fd.
             unsafe {
-                libc::ioctl(self.fd, VIDIOC_STREAMOFF, &mut stream_type);
                 for buf in &self.buffers {
                     libc::munmap(buf.ptr, buf.len);
                 }

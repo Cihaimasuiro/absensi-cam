@@ -5,14 +5,9 @@ namespace App\Domain\Enrollment\Services;
 class FaceEncryptionService
 {
     /**
-     * Encrypts the raw face embedding using AES-256-GCM.
+     * Resolves and base64-decodes the 32-byte AES-256-GCM key, stripping any 'base64:' prefix.
      *
-     * @param string $rawEmbedding The raw binary embedding (2048 bytes for ArcFace-512)
-     * @param string $studentId The student ID for Additional Authenticated Data (AAD)
-     * @param string $modelVersion The model version for AAD
-     * @return string The encrypted blob (nonce + ciphertext + tag)
-     *
-     * @throws \RuntimeException If encryption fails or key is invalid
+     * @throws \RuntimeException If the key is missing or not 32 bytes
      */
     private function getDecodedKey(): string
     {
@@ -33,6 +28,16 @@ class FaceEncryptionService
         return $key;
     }
 
+    /**
+     * Encrypts the raw face embedding using AES-256-GCM.
+     *
+     * @param string $rawEmbedding The raw binary embedding (2048 bytes for ArcFace-512)
+     * @param string $studentId The student ID for Additional Authenticated Data (AAD)
+     * @param string $modelVersion The model version for AAD
+     * @return string The encrypted blob (nonce + ciphertext + tag)
+     *
+     * @throws \RuntimeException If encryption fails or key is invalid
+     */
     public function encrypt(string $rawEmbedding, string $studentId, string $modelVersion): string
     {
         $key = $this->getDecodedKey();

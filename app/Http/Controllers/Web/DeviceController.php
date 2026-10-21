@@ -89,7 +89,10 @@ class DeviceController extends Controller
             ->log('Device created and token generated');
 
         $serverUrl = $request->getSchemeAndHttpHost();
-        $embedKey = config('app.enrollment_embed_key', '');
+        $embedKey = config('app.enrollment_embed_key');
+        if (empty($embedKey)) {
+            throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in app config.');
+        }
         $envContent = <<<ENV
 SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}
@@ -131,7 +134,10 @@ ENV;
             ->log('Device token reset');
 
         $serverUrl = $request->getSchemeAndHttpHost();
-        $embedKey = config('app.enrollment_embed_key', '');
+        $embedKey = config('app.enrollment_embed_key');
+        if (empty($embedKey)) {
+            throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in app config.');
+        }
         $envContent = <<<ENV
 SMART_ABSENSI_URL={$serverUrl}
 SMART_ABSENSI_TOKEN={$token}

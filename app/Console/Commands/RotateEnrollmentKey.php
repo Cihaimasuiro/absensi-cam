@@ -11,14 +11,16 @@ use Illuminate\Support\Facades\Log;
 class RotateEnrollmentKey extends Command
 {
     protected $signature = 'app:rotate-enrollment-key
+                            {--old-key= : The current/previous 32-byte base64 key if different from .env}
                             {--new-key= : Custom 32-byte base64-encoded key}
+                            {--show-key : Display the unmasked key in console output}
                             {--dry-run : Test decryption and re-encryption without persisting}';
 
     protected $description = 'Rotate the ENROLLMENT_EMBED_KEY and re-encrypt all existing biometric face templates';
 
     public function handle(): int
     {
-        $oldKeyRaw = config('app.enrollment_embed_key');
+        $oldKeyRaw = $this->option('old-key') ?: config('app.enrollment_embed_key');
         if (empty($oldKeyRaw)) {
             $envPath = base_path('.env');
             if (File::exists($envPath)) {
@@ -54,6 +56,19 @@ class RotateEnrollmentKey extends Command
 
         if ($this->option('new-key') && $oldKeyRaw === $newKeyBase64) {
             $this->warn('New key is identical to the current key. Aborting.');
+            return self::FAILURE;
+        }
+
+        // Pre-flight check file writability
+        $envPath = base_path('.env');
+        if (!File::exists($envPath) || !is_writable($envPath)) {
+            $this->error("Cannot write to .env file at {$envPath}. Aborting.");
+            return self::FAILURE;
+        }
+
+        $edgeEnvPath = base_path('clients/edge-engine-rs/.env');
+        if (File::exists($edgeEnvPath) && !is_writable($edgeEnvPath)) {
+            $this->error("Cannot write to edge engine .env at {$edgeEnvPath}. Aborting.");
             return self::FAILURE;
         }
 
@@ -99,35 +114,57 @@ class RotateEnrollmentKey extends Command
 
         if ($this->option('dry-run')) {
             $this->info("[dry-run] Successfully verified re-encryption for {$templates->count()} templates.");
-            $this->line("New key would be: {$newKeyBase64}");
+            $this->line("Key would be updated and masked in logs.");
             return self::SUCCESS;
         }
 
-        // Persist DB changes
-        DB::transaction(function () use ($templates, $reencrypted) {
-            foreach ($templates as $template) {
-                if (isset($reencrypted[$template->id])) {
-                    DB::table('face_templates')
-                        ->where('id', $template->id)
-                        ->update(['embedding_enc' => $reencrypted[$template->id]]);
+        // Backup existing .env files prior to write
+        $backupEnv = File::get($envPath);
+        $backupEdgeEnv = File::exists($edgeEnvPath) ? File::get($edgeEnvPath) : null;
+
+        try {
+            DB::transaction(function () use ($templates, $reencrypted, $envPath, $edgeEnvPath, $newKeyBase64) {
+                // 1. Persist DB changes
+                foreach ($templates as $template) {
+                    if (isset($reencrypted[$template->id])) {
+                        DB::table('face_templates')
+                            ->where('id', $template->id)
+                            ->update(['embedding_enc' => $reencrypted[$template->id]]);
+                    }
                 }
+
+                // 2. Write root .env atomically
+                $this->updateEnvFile($envPath, $newKeyBase64);
+
+                // 3. Write edge .env atomically if exists
+                if (File::exists($edgeEnvPath)) {
+                    $this->updateEnvFile($edgeEnvPath, $newKeyBase64);
+                }
+            });
+        } catch (\Throwable $e) {
+            // Restore backups on failure
+            File::put($envPath, $backupEnv);
+            if ($backupEdgeEnv !== null && File::exists($edgeEnvPath)) {
+                File::put($edgeEnvPath, $backupEdgeEnv);
             }
-        });
 
-        // Update root .env
-        $this->updateEnvFile(base_path('.env'), $newKeyBase64);
-
-        // Update edge engine .env if exists
-        $edgeEnvPath = base_path('clients/edge-engine-rs/.env');
-        if (File::exists($edgeEnvPath)) {
-            $this->updateEnvFile($edgeEnvPath, $newKeyBase64);
-            $this->info("Updated {$edgeEnvPath}");
+            $this->error('Failed to rotate key: ' . $e->getMessage());
+            Log::error('Key rotation rolled back: ' . $e->getMessage(), ['exception' => $e]);
+            return self::FAILURE;
         }
 
         $this->callSilent('config:clear');
 
+        $maskedKey = substr($newKeyBase64, 0, 4) . '...' . substr($newKeyBase64, -4);
         $this->info("Successfully rotated ENROLLMENT_EMBED_KEY and re-encrypted {$templates->count()} templates.");
-        $this->line("New ENROLLMENT_EMBED_KEY: <comment>{$newKeyBase64}</comment>");
+        
+        if ($this->option('show-key')) {
+            $this->line("New ENROLLMENT_EMBED_KEY: <comment>{$newKeyBase64}</comment>");
+        } else {
+            $this->line("New ENROLLMENT_EMBED_KEY: <comment>{$maskedKey}</comment> (written directly to .env)");
+        }
+
+        $this->warn('NOTE: Any paired edge devices must re-sync or re-pair to receive newly re-encrypted templates.');
 
         Log::info('ENROLLMENT_EMBED_KEY rotated successfully', [
             'reencrypted_count' => count($reencrypted),

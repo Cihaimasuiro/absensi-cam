@@ -51,7 +51,7 @@ jobs:
 
       - name: Verify ONNX Runtime Packaging
         working-directory: clients/edge-engine-rs
-        run: ./scripts/package-onnxruntime.sh --arch x86_64
+        run: bash ./scripts/package-onnxruntime.sh --arch x86_64
 
 
   cross-check:

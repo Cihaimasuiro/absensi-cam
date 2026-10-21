@@ -81,8 +81,7 @@ project_gap_analysis.md
 *.db-wal
 *.db-shm
 /.agents/
-.agents
-
+.agents/
 # ========================================
 7. Rust Cargo Build Outputs & Edge Engine Local State
 # ========================================

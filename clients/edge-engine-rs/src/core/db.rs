@@ -314,11 +314,27 @@ impl EdgeDb {
                 continue;
             }
 
-            let embedding_raw = t
-                .get("embedding_enc")
-                .or_else(|| t.get("embedding_b64"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+
+            let embedding_raw = match t.get("embedding_enc").and_then(|v| v.as_str()) {
+                Some(enc) => enc,
+                None => {
+                    if let Some(b64) = t.get("embedding_b64").and_then(|v| v.as_str()) {
+                        if allow_plaintext {
+                            tracing::warn!("Sinkronisasi student {}: Memakai fallback embedding_b64 plaintext (ALLOW_PLAINTEXT_EMBEDDINGS aktif).", student_id);
+                            b64
+                        } else {
+                            tracing::error!("Sinkronisasi student {}: DITOLAK. Fallback embedding_b64 tanpa enkripsi dilarang di produksi.", student_id);
+                            continue;
+                        }
+                    } else {
+                        tracing::warn!("Sinkronisasi student {}: Field embedding tidak ditemukan.", student_id);
+                        continue;
+                    }
+                }
+            };
 
             use base64::Engine;
             let embedding_bytes = base64::engine::general_purpose::STANDARD
@@ -393,6 +409,10 @@ impl EdgeDb {
             let name: String = row.get(1).unwrap_or_else(|_| "Siswa".to_string());
             let blob: Vec<u8> = row.get(2)?;
 
+            let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+
             let raw_embedding = if blob.len() == 2076 {
                 if let Some(key) = embed_key {
                     match Self::decrypt_embedding(key, &blob, &student_id, model_version) {
@@ -407,7 +427,13 @@ impl EdgeDb {
                     continue;
                 }
             } else if blob.len() == 2048 {
-                blob
+                if allow_plaintext {
+                    tracing::warn!("PERINGATAN: Memuat template student {} yang TIDAK terenkripsi (ALLOW_PLAINTEXT_EMBEDDINGS aktif).", student_id);
+                    blob
+                } else {
+                    tracing::error!("KEAMANAN DITOLAK: Template student {} disimpan tanpa enkripsi (len=2048). Enkripsi AES-256-GCM wajib aktif di produksi.", student_id);
+                    continue;
+                }
             } else {
                 tracing::warn!("Ukuran blob template student {} tidak valid (len={})", student_id, blob.len());
                 continue;
@@ -447,7 +473,13 @@ impl EdgeDb {
     ) -> Result<Vec<u8>> {
         if encrypted_blob.len() != 2076 {
             if encrypted_blob.len() == 2048 {
-                return Ok(encrypted_blob.to_vec());
+                let allow_plaintext = std::env::var("ALLOW_PLAINTEXT_EMBEDDINGS")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if allow_plaintext {
+                    return Ok(encrypted_blob.to_vec());
+                }
+                anyhow::bail!("Unencrypted 2048-byte template rejected in production mode. Set ALLOW_PLAINTEXT_EMBEDDINGS=1 for development override.");
             }
             anyhow::bail!("Invalid encrypted blob length: {}", encrypted_blob.len());
         }

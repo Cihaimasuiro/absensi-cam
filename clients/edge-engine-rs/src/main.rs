@@ -532,13 +532,21 @@ async fn run_stream(
         .unwrap_or_else(|| "3d9f1f77896fb3d1".to_string());
 
     let db = Arc::new(EdgeDb::init(&db_path).await?);
-    let initial_templates = db
-        .load_templates(embed_key_bytes.as_deref(), &model_version)
-        .await
-        .unwrap_or_default();
+    let initial_templates = match db.load_templates(embed_key_bytes.as_deref(), &model_version).await {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("[FATAL ERROR] Gagal memuat template wajah dari database ({:?}): {:#}", db_path, e);
+            eprintln!("[FATAL ERROR] Engine dihentikan untuk mencegah kegagalan pengenalan massal pada pintu gerbang.");
+            return Err(e);
+        }
+    };
     println!("[Database] Memuat {} template wajah aktif.", initial_templates.len());
-    if initial_templates.is_empty() && embed_key_bytes.is_none() {
-        println!("[Database] Catatan: ENROLLMENT_EMBED_KEY tidak terdeteksi. Template wajah terenkripsi tidak dapat dimuat.");
+    if initial_templates.is_empty() {
+        if embed_key_bytes.is_none() {
+            println!("[Database] Catatan: ENROLLMENT_EMBED_KEY tidak terdeteksi. Template wajah terenkripsi tidak dapat dimuat.");
+        } else {
+            println!("[Database] Informasi: Belum ada template wajah terdaftar di database lokal.");
+        }
     }
     let templates = Arc::new(std::sync::RwLock::new(Arc::new(initial_templates)));
 

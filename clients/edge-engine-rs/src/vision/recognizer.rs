@@ -78,7 +78,6 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
         "/opt/smart-absensi/edge-engine/miniforge3/envs",
         "/opt/smart-absensi/edge-engine/venv",
         "/opt/smart-absensi/edge-engine",
-        "/opt/facenox-bench",
         "/home/edge",
         "/usr/local/lib",
         "/usr/lib/aarch64-linux-gnu",

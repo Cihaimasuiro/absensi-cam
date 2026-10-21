@@ -438,7 +438,13 @@ impl SyncWorker {
         let (local_count, _) = self.db.get_templates_hash().await.unwrap_or((0, String::new()));
         if local_count > 5 {
             let valid_set: std::collections::HashSet<&str> = valid_ids.iter().map(|s| s.as_str()).collect();
-            let local_templates = self.db.load_templates(self.embed_key.as_deref(), &self.model_version).await.unwrap_or_default();
+            let local_templates = match self.db.load_templates(self.embed_key.as_deref(), &self.model_version).await {
+                Ok(t) => t,
+                Err(e) => {
+                    warn!("[SAFETY GUARD] Gagal membaca template lokal saat rekonsiliasi: {:#}. Rekonsiliasi dibatalkan untuk mencegah pembersihan data valid.", e);
+                    return Ok(());
+                }
+            };
             let delete_count = local_templates.iter().filter(|t| !valid_set.contains(t.student_id.as_str())).count();
 
             if (delete_count * 100) / local_count > 30 {
@@ -666,14 +672,25 @@ pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Resul
         creds.model_version.as_deref().unwrap_or("v1.0-yunet")
     );
 
-    std::fs::write(&tmp_path, &content)
-        .with_context(|| format!("Gagal menulis file konfigurasi sementara {:?}", tmp_path))?;
-
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o600);
-        let _ = std::fs::set_permissions(&tmp_path, perms);
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)
+            .with_context(|| format!("Gagal membuat file konfigurasi sementara dengan mode 0600 {:?}", tmp_path))?;
+        file.write_all(content.as_bytes())
+            .with_context(|| format!("Gagal menulis data ke file konfigurasi sementara {:?}", tmp_path))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(&tmp_path, &content)
+            .with_context(|| format!("Gagal menulis file konfigurasi sementara {:?}", tmp_path))?;
     }
 
     std::fs::rename(&tmp_path, env_path)

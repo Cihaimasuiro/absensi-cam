@@ -1604,11 +1604,11 @@ fn read_network_stats(preferred: &str) -> NetworkStats {
     NetworkStats { interface: iface, ip, mac, rx_bytes, tx_bytes }
 }
 
-fn read_interface_ip(iface: &str) -> String {
+fn read_interface_ip(_iface: &str) -> String {
     #[cfg(unix)]
     {
         use std::ffi::CString;
-        let Ok(name) = CString::new(iface) else { return "—".to_string() };
+        let Ok(name) = CString::new(_iface) else { return "—".to_string() };
         let mut ifr: libc::ifreq = unsafe { std::mem::zeroed() };
         let bytes = name.as_bytes_with_nul();
         if bytes.len() > 16 {

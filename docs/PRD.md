@@ -150,13 +150,12 @@ absensi-cam/
 ├── firmware/
 │   └── arduino-display/     # Arduino Uno + shield: render TFT (termasuk QR); display saja (tanpa LED/buzzer/tombol/RTC)
 ├── models/                  # File .onnx + checksum SHA-256 + MODEL_VERSION (YuNet, SFace, MiniFASNet)
-├── packages/
-│   ├── protocol/            # Skema JSON serial + dokumentasi interop
-│   └── face_core/           # (Deprecated) Pustaka Python referensi sebelumnya
 ├── hardware/                # Skema, KiCad (V2), desain casing
 ├── docs/
 │   ├── PRD.md               # Spesifikasi teknis produk monorepo
 │   ├── DESIGN.md            # Panduan desain token & UI/UX
+│   ├── ENCRYPTION.md        # Spesifikasi enkripsi AES-256-GCM interop
+│   ├── SERVER_FACE_EXTRACT.md # Panduan kompilasi & instalasi face-extract server
 │   └── AGENTS2.md           # Pedoman teknis AI & developer untuk Edge Engine (Rust/Python)
 ```
 
@@ -167,7 +166,6 @@ absensi-cam/
 | `clients/edge-engine-rs` (`face-extract`) | **Rust (Edition 2021)** | Ekstraksi embedding foto wajah server (CLI `face-extract`) berakurasi identik dengan edge | Server pusat (PC admin/VPS) |
 | `clients/edge-engine` | Python 3, OpenCV, ONNX Runtime, SQLite, FastAPI | Prototipe awal & perkakas evaluasi benchmark / tooling | PC Dev / Referensi |
 | `firmware/arduino-display` | C++ (Arduino) | Render TFT shield 8-bit paralel (termasuk QR); touch opsional | Arduino Uno |
-| `packages/protocol` | Markdown / JSON | Kontrak & panduan enkripsi antar-komponen | — |
 | `models/` | ONNX | Model + versi (YuNet, MiniFASNet, ArcFace/SFace) | Edge + server |
 
 > **Prinsip penting — konsistensi model.** Embedding dari model/versi berbeda **tidak kompatibel**. Setiap templet menyimpan `model_version`; edge menolak templet dengan versi berbeda dan meminta re-enrollment/re-embedding. Enrollment di server menggunakan model ONNX yang sama persis dengan yang dimuat oleh engine Rust di edge.

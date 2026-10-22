@@ -23,14 +23,28 @@ class FaceExtractor
         $modelsDir = config('app.face_models_dir', base_path('models'));
         $ortPath = config('app.ort_dylib_path');
 
+        if (!Process::isRecording() && !file_exists($bin)) {
+            throw new RuntimeException(
+                "Face extractor binary not found at '{$bin}'. " .
+                "Please compile the server extractor via 'cargo build --release --bin face-extract' or configure FACE_EXTRACT_BIN in .env."
+            );
+        }
+
+        if (!Process::isRecording() && !file_exists($imagePath)) {
+            throw new RuntimeException("Face extraction image file not found at '{$imagePath}'.");
+        }
+
         $command = [$bin];
         if (str_contains(basename($bin), 'smart-absensi-sync') || str_contains(basename($bin), 'engine-cli')) {
             $command[] = 'extract';
         }
         $command[] = '--image';
         $command[] = $imagePath;
-        $command[] = '--models-dir';
-        $command[] = $modelsDir;
+
+        if (!empty($modelsDir) && (Process::isRecording() || is_dir($modelsDir))) {
+            $command[] = '--models-dir';
+            $command[] = $modelsDir;
+        }
 
         if (!empty($ortPath)) {
             $command[] = '--ort-path';
@@ -40,6 +54,7 @@ class FaceExtractor
         $result = Process::path(base_path())
             ->timeout(120)
             ->run($command);
+
 
         if (!$result->successful()) {
             $errorOutput = trim($result->errorOutput());

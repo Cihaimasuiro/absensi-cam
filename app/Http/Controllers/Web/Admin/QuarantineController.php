@@ -5,14 +5,13 @@ namespace App\Http\Controllers\Web\Admin;
 use App\Domain\Device\Models\Device;
 use App\Domain\Enrollment\Models\BiometricQuarantine;
 use App\Domain\Enrollment\Models\FaceTemplate;
-use App\Domain\Enrollment\Services\BiometricDuplicateDetector;
 use App\Domain\Enrollment\Services\FaceEncryptionService;
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateFaceEmbedding;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class QuarantineController extends Controller
 {
@@ -55,65 +54,99 @@ class QuarantineController extends Controller
     {
         $this->authorize('quarantine.view');
 
-        $templates = FaceTemplate::with('student')->get();
         $quarantinedCount = 0;
         $healthyCount = 0;
+        $integrityReasons = ['decryption_failed', 'empty_ciphertext', 'invalid_embedding_length'];
 
-        foreach ($templates as $template) {
-            $isCorrupted = false;
-            $reason = '';
-            $details = '';
+        FaceTemplate::query()
+            ->select(['id', 'student_id', 'embedding_enc', 'model_version'])
+            ->chunkById(250, function ($templates) use (&$quarantinedCount, &$healthyCount, $encryptionService, $integrityReasons) {
+                $corruptedItems = [];
+                $healthyStudentIds = [];
 
-            if (empty($template->embedding_enc)) {
-                $isCorrupted = true;
-                $reason = 'empty_ciphertext';
-                $details = 'Template memiliki embedding_enc kosong di database.';
-            } else {
-                try {
-                    $raw = $encryptionService->decrypt(
-                        base64_decode($template->embedding_enc),
-                        (string) $template->student_id,
-                        (string) ($template->model_version ?: config('app.model_version'))
-                    );
+                foreach ($templates as $template) {
+                    $isCorrupted = false;
+                    $reason = '';
+                    $details = '';
 
-                    if (strlen($raw) !== 2048) {
+                    if (empty($template->embedding_enc)) {
                         $isCorrupted = true;
-                        $reason = 'invalid_embedding_length';
-                        $details = 'Ukuran vektor bukan 2048 bytes (terdeteksi: ' . strlen($raw) . ' bytes).';
-                    }
-                } catch (\Throwable $e) {
-                    $isCorrupted = true;
-                    $reason = 'decryption_failed';
-                    $details = 'Gagal didekripsi dengan kunci aktif: ' . $e->getMessage();
-                }
-            }
+                        $reason = 'empty_ciphertext';
+                        $details = 'Template memiliki embedding_enc kosong di database.';
+                    } else {
+                        try {
+                            $raw = $encryptionService->decrypt(
+                                base64_decode($template->embedding_enc),
+                                (string) $template->student_id,
+                                (string) ($template->model_version ?: config('app.model_version'))
+                            );
 
-            if ($isCorrupted) {
-                BiometricQuarantine::firstOrCreate(
-                    [
-                        'student_id' => $template->student_id,
-                        'status'     => 'quarantined',
-                    ],
-                    [
-                        'reason'        => $reason,
-                        'error_details' => $details,
-                        'quarantined_at'=> now(),
-                    ]
-                );
-                $quarantinedCount++;
-            } else {
-                // If previously marked as quarantined, mark it resolved
-                BiometricQuarantine::where('student_id', $template->student_id)
-                    ->where('status', 'quarantined')
-                    ->update([
-                        'status'           => 'resolved',
-                        'resolved_at'      => now(),
-                        'resolved_by'      => auth()->id(),
-                        'resolution_notes' => 'Otomatis terselesaikan melalui scan integritas biometrik.',
-                    ]);
-                $healthyCount++;
-            }
-        }
+                            if (strlen($raw) !== 2048) {
+                                $isCorrupted = true;
+                                $reason = 'invalid_embedding_length';
+                                $details = 'Ukuran vektor bukan 2048 bytes (terdeteksi: ' . strlen($raw) . ' bytes).';
+                            }
+                        } catch (\Throwable $e) {
+                            $isCorrupted = true;
+                            $reason = 'decryption_failed';
+                            $details = 'Gagal didekripsi dengan kunci aktif: ' . $e->getMessage();
+                        }
+                    }
+
+                    if ($isCorrupted) {
+                        $corruptedItems[] = [
+                            'student_id'    => $template->student_id,
+                            'reason'        => $reason,
+                            'error_details' => $details,
+                        ];
+                    } else {
+                        $healthyStudentIds[] = $template->student_id;
+                    }
+                }
+
+                // Batch process corrupted items: insert if not already active in quarantine
+                if (!empty($corruptedItems)) {
+                    $chunkCorruptedIds = array_column($corruptedItems, 'student_id');
+                    $alreadyQuarantined = BiometricQuarantine::whereIn('student_id', $chunkCorruptedIds)
+                        ->where('status', 'quarantined')
+                        ->pluck('student_id')
+                        ->toArray();
+
+                    $toInsert = [];
+                    foreach ($corruptedItems as $item) {
+                        if (!in_array($item['student_id'], $alreadyQuarantined)) {
+                            $toInsert[] = [
+                                'student_id'     => $item['student_id'],
+                                'reason'         => $item['reason'],
+                                'error_details'  => $item['error_details'],
+                                'status'         => 'quarantined',
+                                'quarantined_at' => now(),
+                                'created_at'     => now(),
+                                'updated_at'     => now(),
+                            ];
+                        }
+                    }
+
+                    if (!empty($toInsert)) {
+                        BiometricQuarantine::insert($toInsert);
+                    }
+                    $quarantinedCount += count($corruptedItems);
+                }
+
+                // Batch resolve healthy items (ONLY if previously quarantined due to integrity failure)
+                if (!empty($healthyStudentIds)) {
+                    BiometricQuarantine::whereIn('student_id', $healthyStudentIds)
+                        ->where('status', 'quarantined')
+                        ->whereIn('reason', $integrityReasons)
+                        ->update([
+                            'status'           => 'resolved',
+                            'resolved_at'      => now(),
+                            'resolved_by'      => auth()->id(),
+                            'resolution_notes' => 'Otomatis terselesaikan melalui scan integritas biometrik.',
+                        ]);
+                    $healthyCount += count($healthyStudentIds);
+                }
+            });
 
         activity('quarantine')
             ->causedBy(auth()->user())
@@ -124,11 +157,8 @@ class QuarantineController extends Controller
             ->with('success', "Pemeriksaan selesai: {$healthyCount} template sehat, {$quarantinedCount} template dikarantina.");
     }
 
-    public function reEnroll(
-        BiometricQuarantine $quarantine,
-        FaceEncryptionService $encryptionService,
-        BiometricDuplicateDetector $duplicateDetector
-    ) {
+    public function reEnroll(BiometricQuarantine $quarantine)
+    {
         $this->authorize('quarantine.view');
 
         $student = $quarantine->student;
@@ -143,81 +173,44 @@ class QuarantineController extends Controller
             return back()->with('error', "Foto anggota {$student->name} tidak ditemukan di server ({$photoPath}). Silakan unggah foto baru melalui menu Anggota.");
         }
 
-        $fullPhotoPath = Storage::disk('local')->path($photoPath);
-        $pythonBin = config('app.python_bin', 'python');
-        $script = base_path('packages/face_core/extract.py');
-        $detectorModel = base_path('packages/models/detector.onnx');
-        $recognizerModel = base_path('packages/models/recognizer.onnx');
+        // Copy file to tmp for queued processing (mimics EnrollFace action)
+        $ext = pathinfo($photoPath, PATHINFO_EXTENSION) ?: 'jpg';
+        $tmpFilename = "reenroll_{$student->id}_" . Str::uuid() . ".{$ext}";
+        Storage::disk('local')->copy($photoPath, "tmp/{$tmpFilename}");
+        $tmpPath = Storage::disk('local')->path("tmp/{$tmpFilename}");
 
-        $result = Process::path(base_path())
-            ->timeout(60)
-            ->env(['PYTHONPATH' => base_path('packages')])
-            ->run([$pythonBin, $script, $detectorModel, $recognizerModel, $fullPhotoPath]);
+        // Dispatch background job on enrollments queue
+        GenerateFaceEmbedding::dispatch(
+            (string) $student->id,
+            $tmpPath,
+            $photoPath,
+            true,
+            config('app.model_version'),
+            false
+        )->onQueue('enrollments');
 
-        if (!$result->successful()) {
-            return back()->with('error', 'Ekstraksi wajah gagal: ' . $result->errorOutput());
-        }
-
-        $output = json_decode($result->output(), true);
-        if (!$output || empty($output['success']) || empty($output['embedding_b64'])) {
-            return back()->with('error', 'Hasil ekstraksi wajah tidak valid.');
-        }
-
-        $rawEmbedding = base64_decode($output['embedding_b64']);
-        if (strlen($rawEmbedding) !== 2048) {
-            return back()->with('error', 'Ukuran vektor embedding tidak valid (bukan 2048 bytes).');
-        }
-
-        // Check duplicates
-        $duplicate = $duplicateDetector->detect($rawEmbedding, (string) $student->id);
-        if ($duplicate !== null) {
-            $sim = round($duplicate['similarity'], 4);
-            return back()->with('error', "Gagal re-enroll: Wajah terdeteksi mirip dengan {$duplicate['student']?->name} (kemiripan: {$sim}).");
-        }
-
-        $modelVersion = config('app.model_version');
-        $encryptedBlob = $encryptionService->encrypt($rawEmbedding, (string) $student->id, $modelVersion);
-        $hash = hash('sha256', $rawEmbedding);
-
-        DB::transaction(function () use ($student, $encryptedBlob, $hash, $modelVersion, $photoPath, $quarantine) {
-            $nextCursor = ((int) DB::table('face_templates')->max('version_cursor')) + 1;
-
-            FaceTemplate::updateOrCreate(
-                ['student_id' => $student->id],
-                [
-                    'embedding_enc'  => base64_encode($encryptedBlob),
-                    'embedding_hash' => $hash,
-                    'model_version'  => $modelVersion,
-                    'photo_path'     => $photoPath,
-                    'version_cursor' => $nextCursor,
-                    'deleted_at'     => null,
-                ]
-            );
-
-            $quarantine->update([
-                'status'           => 'resolved',
-                'resolved_at'      => now(),
-                'resolved_by'      => auth()->id(),
-                'resolution_notes' => 'Berhasil diekstrak dan dienkripsi ulang dari foto tersimpan.',
-            ]);
-
-            Cache::forever('templates_hash_epoch', ((int) Cache::get('templates_hash_epoch', 1)) + 1);
-        });
+        $quarantine->update([
+            'resolution_notes' => 'Tugas re-enrollment telah dimasukkan ke antrean pemrosesan (enrollments queue).',
+        ]);
 
         activity('quarantine')
             ->performedOn($student)
             ->causedBy(auth()->user())
-            ->log("Student {$student->name} biometric template re-enrolled from quarantine");
+            ->log("Dispatched background re-enrollment for student {$student->name}");
 
         return redirect()->route('admin.quarantine.index')
-            ->with('success', "Template wajah {$student->name} berhasil di-reenroll dan dikeluarkan dari karantina.");
+            ->with('success', "Proses ekstraksi ulang wajah untuk {$student->name} telah dimasukkan ke antrean latar belakang (enrollments queue).");
     }
 
     public function resolve(Request $request, BiometricQuarantine $quarantine)
     {
         $this->authorize('quarantine.view');
 
-        $notes = $request->input('notes', 'Ditandai selesai secara manual oleh administrator.');
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $notes = $validated['notes'] ?? 'Ditandai selesai secara manual oleh administrator.';
 
         $quarantine->update([
             'status'           => 'resolved',

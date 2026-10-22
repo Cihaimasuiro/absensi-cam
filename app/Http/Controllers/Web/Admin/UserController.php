@@ -62,6 +62,10 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user)
     {
+        if ($user->hasRole('super_admin') && !$request->user()?->hasRole('super_admin')) {
+            abort(403, 'Hanya super admin yang dapat mengubah akun super admin.');
+        }
+
         $data = $request->validated();
 
         $updateData = [
@@ -93,6 +97,10 @@ class UserController extends Controller
         if ($user->id === auth()->id()) {
             return redirect()->route('admin.users.index')
                 ->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
+        }
+
+        if ($user->hasRole('super_admin') && !auth()->user()?->hasRole('super_admin')) {
+            abort(403, 'Hanya super admin yang dapat menghapus akun super admin.');
         }
 
         $name = $user->name;

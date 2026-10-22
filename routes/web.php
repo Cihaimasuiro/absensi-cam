@@ -74,7 +74,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // Admin Console
-    Route::prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('admin')->name('admin.')->middleware('role:super_admin|admin')->group(function () {
         // User CRUD + role assignment
         Route::resource('users', \App\Http\Controllers\Web\Admin\UserController::class)->except(['create', 'show', 'edit']);
 

@@ -118,6 +118,14 @@ class GenerateFaceEmbedding implements ShouldQueue
                 } else {
                     FaceTemplate::create(array_merge(['student_id' => $this->studentId], $data));
                 }
+
+                \App\Domain\Enrollment\Models\BiometricQuarantine::where('student_id', $this->studentId)
+                    ->where('status', 'quarantined')
+                    ->update([
+                        'status'           => 'resolved',
+                        'resolved_at'      => now(),
+                        'resolution_notes' => 'Otomatis terselesaikan melalui ekstraksi dan enkripsi ulang foto.',
+                    ]);
             });
 
             Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);

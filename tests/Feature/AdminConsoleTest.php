@@ -7,12 +7,15 @@ use App\Domain\Enrollment\Models\FaceTemplate;
 use App\Domain\Student\Models\Consent;
 use App\Domain\Student\Models\Student;
 use App\Domain\User\Models\User;
+use App\Jobs\GenerateFaceEmbedding;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class AdminConsoleTest extends TestCase
@@ -86,12 +89,64 @@ class AdminConsoleTest extends TestCase
         $this->assertDatabaseMissing('users', ['id' => $staff->id]);
     }
 
-    public function test_regular_user_cannot_access_user_management(): void
+    public function test_privilege_escalation_is_prevented(): void
+    {
+        // Create an admin user who is granted user.manage permission directly
+        $adminUser = User::factory()->create([
+            'name'     => 'Admin Manager',
+            'email'    => 'admin.mgr@example.com',
+            'password' => Hash::make('password123'),
+        ]);
+        $adminUser->assignRole('admin');
+        $adminUser->givePermissionTo('user.manage');
+
+        $this->actingAs($adminUser);
+
+        // 1. Cannot create user with super_admin role
+        $createAttempt = $this->post(route('admin.users.store'), [
+            'name'     => 'Hacker',
+            'email'    => 'hacker@example.com',
+            'password' => 'secret12345',
+            'role'     => 'super_admin',
+        ]);
+        $createAttempt->assertSessionHasErrors('role');
+        $this->assertDatabaseMissing('users', ['email' => 'hacker@example.com']);
+
+        // 2. Cannot escalate existing user to super_admin
+        $otherUser = User::factory()->create(['email' => 'victim@example.com']);
+        $otherUser->assignRole('user');
+
+        $updateAttempt = $this->put(route('admin.users.update', $otherUser), [
+            'name'  => 'Victim',
+            'email' => 'victim@example.com',
+            'role'  => 'super_admin',
+        ]);
+        $updateAttempt->assertSessionHasErrors('role');
+        $otherUser->refresh();
+        $this->assertFalse($otherUser->hasRole('super_admin'));
+
+        // 3. Cannot modify an existing super_admin
+        $tamperAttempt = $this->put(route('admin.users.update', $this->superAdmin), [
+            'name'  => 'Compromised Super Admin',
+            'email' => 'superadmin@example.com',
+            'role'  => 'admin',
+        ]);
+        $tamperAttempt->assertForbidden();
+
+        // 4. Cannot delete an existing super_admin
+        $deleteAttempt = $this->delete(route('admin.users.destroy', $this->superAdmin));
+        $deleteAttempt->assertForbidden();
+    }
+
+    public function test_regular_user_cannot_access_user_management_or_admin_routes(): void
     {
         $this->actingAs($this->regularUser);
 
-        $response = $this->get(route('admin.users.index'));
-        $response->assertForbidden();
+        // Blocked by route group middleware role:super_admin|admin
+        $this->get(route('admin.users.index'))->assertForbidden();
+        $this->get(route('admin.audit.index'))->assertForbidden();
+        $this->get(route('admin.quarantine.index'))->assertForbidden();
+        $this->get(route('admin.consents.index'))->assertForbidden();
     }
 
     public function test_audit_log_viewer_and_export(): void
@@ -115,28 +170,54 @@ class AdminConsoleTest extends TestCase
         $export->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 
-    public function test_quarantine_scan_detects_corrupted_templates(): void
+    public function test_quarantine_scan_detects_corrupted_templates_and_preserves_unrelated_flags(): void
     {
         $this->actingAs($this->superAdmin);
 
-        $student = Student::factory()->create();
+        $student1 = Student::factory()->create();
         FaceTemplate::create([
-            'student_id'     => $student->id,
+            'student_id'     => $student1->id,
             'embedding_enc'  => base64_encode('invalid_ciphertext'),
             'model_version'  => '3d9f1f77896fb3d1',
-            'embedding_hash' => 'hash',
+            'embedding_hash' => 'hash1',
+        ]);
+
+        // Student 2 has valid template but has an unrelated quarantine flag (e.g. duplicate_face_detected)
+        $student2 = Student::factory()->create();
+        $validBlob = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class)->encrypt(
+            str_repeat('A', 2048),
+            (string) $student2->id,
+            '3d9f1f77896fb3d1'
+        );
+        FaceTemplate::create([
+            'student_id'     => $student2->id,
+            'embedding_enc'  => base64_encode($validBlob),
+            'model_version'  => '3d9f1f77896fb3d1',
+            'embedding_hash' => 'hash2',
+        ]);
+
+        $unrelatedQuarantine = BiometricQuarantine::create([
+            'student_id'     => $student2->id,
+            'reason'         => 'duplicate_face_detected',
+            'status'         => 'quarantined',
+            'quarantined_at' => now(),
         ]);
 
         $scanResponse = $this->post(route('admin.quarantine.scan'));
         $scanResponse->assertRedirect(route('admin.quarantine.index'));
 
+        // Student 1 must be quarantined
         $this->assertDatabaseHas('biometric_quarantines', [
-            'student_id' => $student->id,
+            'student_id' => $student1->id,
             'status'     => 'quarantined',
         ]);
+
+        // Student 2's duplicate quarantine must NOT be auto-resolved by scan
+        $unrelatedQuarantine->refresh();
+        $this->assertEquals('quarantined', $unrelatedQuarantine->status);
     }
 
-    public function test_quarantine_re_enroll_resolves_quarantine(): void
+    public function test_quarantine_re_enroll_dispatches_background_job(): void
     {
         $this->actingAs($this->superAdmin);
 
@@ -159,6 +240,16 @@ class AdminConsoleTest extends TestCase
             'photo_path'     => 'faces/student_q.jpg',
         ]);
 
+        Queue::fake([GenerateFaceEmbedding::class]);
+
+        $response = $this->post(route('admin.quarantine.re-enroll', $quarantine));
+        $response->assertRedirect(route('admin.quarantine.index'));
+
+        Queue::assertPushedOn('enrollments', GenerateFaceEmbedding::class, function ($job) use ($student) {
+            return $job->studentId === (string) $student->id;
+        });
+
+        // Test that when GenerateFaceEmbedding handle runs, it resolves the quarantine
         Process::fake([
             '*' => Process::result(json_encode([
                 'success'       => true,
@@ -166,11 +257,44 @@ class AdminConsoleTest extends TestCase
             ])),
         ]);
 
-        $response = $this->post(route('admin.quarantine.re-enroll', $quarantine));
-        $response->assertRedirect(route('admin.quarantine.index'));
+        $tmpPath = Storage::disk('local')->path('tmp/test_q.jpg');
+        @mkdir(dirname($tmpPath), 0777, true);
+        file_put_contents($tmpPath, 'test-photo');
+
+        $job = new GenerateFaceEmbedding(
+            (string) $student->id,
+            $tmpPath,
+            'faces/student_q.jpg',
+            false,
+            '3d9f1f77896fb3d1',
+            true
+        );
+        $job->handle();
 
         $quarantine->refresh();
         $this->assertEquals('resolved', $quarantine->status);
+    }
+
+    public function test_quarantine_resolve_validates_notes_length(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        $student = Student::factory()->create();
+        $quarantine = BiometricQuarantine::create([
+            'student_id'     => $student->id,
+            'reason'         => 'manual_review',
+            'status'         => 'quarantined',
+            'quarantined_at' => now(),
+        ]);
+
+        $longNotes = str_repeat('A', 501);
+        $response = $this->post(route('admin.quarantine.resolve', $quarantine), [
+            'notes' => $longNotes,
+        ]);
+        $response->assertSessionHasErrors('notes');
+
+        $quarantine->refresh();
+        $this->assertEquals('quarantined', $quarantine->status);
     }
 
     public function test_consent_management_grant_withdraw_and_export(): void

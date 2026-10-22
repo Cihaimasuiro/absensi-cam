@@ -6,6 +6,7 @@ use App\Domain\Student\Models\Consent;
 use App\Domain\Student\Models\Student;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ConsentController extends Controller
@@ -96,13 +97,17 @@ class ConsentController extends Controller
             return back()->with('error', 'Persetujuan biometrik ini sudah ditarik sebelumnya.');
         }
 
-        $consent->update(['withdrawn_at' => now()]);
-        $student = $consent->student;
+        $student = null;
 
-        // Cascade soft delete to face template to send tombstone to edge terminals (UU PDP No. 27/2022)
-        if ($student && $student->faceTemplate && !$student->faceTemplate->trashed()) {
-            $student->faceTemplate->delete();
-        }
+        DB::transaction(function () use ($consent, &$student) {
+            $consent->update(['withdrawn_at' => now()]);
+            $student = $consent->student;
+
+            // Cascade soft delete to face template to send tombstone to edge terminals (UU PDP No. 27/2022)
+            if ($student && $student->faceTemplate && !$student->faceTemplate->trashed()) {
+                $student->faceTemplate->delete();
+            }
+        });
 
         activity('consent')
             ->performedOn($consent)

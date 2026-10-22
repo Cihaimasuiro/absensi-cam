@@ -259,10 +259,14 @@ class AdminConsoleTest extends TestCase
 
         // Test that when GenerateFaceEmbedding handle runs, it resolves the quarantine and records actor
         Process::fake([
-            '*' => Process::result(json_encode([
-                'success'       => true,
-                'embedding_b64' => base64_encode(str_repeat('Q', 2048)),
-            ])),
+            '*' => function ($process) {
+                $this->assertContains('--image', $process->command);
+                $this->assertContains('--models-dir', $process->command);
+                return Process::result(json_encode([
+                    'success'       => true,
+                    'embedding_b64' => base64_encode(str_repeat('Q', 2048)),
+                ]));
+            },
         ]);
 
         $tmpPath = Storage::disk('local')->path('tmp/test_q.jpg');
@@ -389,10 +393,14 @@ class AdminConsoleTest extends TestCase
         ]);
 
         Process::fake([
-            '*' => Process::result(json_encode([
-                'success'       => true,
-                'embedding_b64' => base64_encode(str_repeat('Q', 2048)),
-            ])),
+            '*' => function ($process) {
+                $this->assertContains('--image', $process->command);
+                $this->assertContains('--models-dir', $process->command);
+                return Process::result(json_encode([
+                    'success'       => true,
+                    'embedding_b64' => base64_encode(str_repeat('Q', 2048)),
+                ]));
+            },
         ]);
 
         $tmpPath = Storage::disk('local')->path('tmp/target_q.jpg');
@@ -435,9 +443,13 @@ class AdminConsoleTest extends TestCase
         @mkdir(dirname($tmpPath), 0777, true);
         file_put_contents($tmpPath, 'test-photo');
 
-        // Simulate Python failure on attempt 1
+        // Simulate extraction failure on attempt 1
         Process::fake([
-            '*' => Process::result('', 'Temporary process timeout', 1),
+            '*' => function ($process) {
+                $this->assertContains('--image', $process->command);
+                $this->assertContains('--models-dir', $process->command);
+                return Process::result('', 'Temporary process timeout', 1);
+            },
         ]);
 
         $job = new GenerateFaceEmbedding(

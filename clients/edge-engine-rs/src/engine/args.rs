@@ -140,17 +140,5 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         dry_run: bool,
     },
-
-    /// Extract 512-d face embedding from a photo (server enrollment parity)
-    Extract {
-        #[arg(long)]
-        image: std::path::PathBuf,
-
-        #[arg(long)]
-        models_dir: Option<String>,
-
-        #[arg(long)]
-        ort_path: Option<String>,
-    },
 }
 

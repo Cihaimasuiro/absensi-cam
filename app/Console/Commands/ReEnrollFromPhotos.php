@@ -9,7 +9,6 @@ use App\Domain\Enrollment\Services\FaceExtractor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 
 class ReEnrollFromPhotos extends Command

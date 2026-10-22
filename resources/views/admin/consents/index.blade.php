@@ -6,14 +6,18 @@
         <a href="{{ route('admin.consents.export', request()->query()) }}" class="btn btn-secondary text-xs">
             <i data-lucide="download" class="w-3.5 h-3.5"></i> Ekspor CSV
         </a>
-        <button type="button" @click="consentModal = true" class="btn btn-primary text-xs">
+        <button type="button"
+                data-modal-id="consentModal"
+                @click="openModalByData"
+                onclick="window.openModal('consentModal')"
+                class="btn btn-primary text-xs">
             <i data-lucide="file-plus" class="w-3.5 h-3.5"></i> Catat Persetujuan
         </button>
     </div>
 @endsection
 
 @section('content')
-<div x-data="{ consentModal: false }" class="space-y-sm">
+<div class="space-y-sm">
     {{-- Compliance Summary --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-xs">
         <div class="card p-xs flex items-center justify-between">
@@ -148,19 +152,24 @@
         @endif
     </div>
 
-    {{-- Record Consent Modal --}}
-    <div x-show="consentModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-sm bg-ink/40">
-        <div @click.away="consentModal = false" class="card w-full max-w-md p-md space-y-sm bg-canvas">
-            <div class="flex items-center justify-between border-b border-hairline pb-xs">
-                <h3 class="text-sm font-semibold text-ink">Catat Persetujuan Biometrik</h3>
-                <button type="button" @click="consentModal = false" class="text-ink-muted hover:text-ink text-sm">&times;</button>
-            </div>
+    {{-- ───────────────────────── Record Consent Modal ───────────────────────── --}}
+    <dialog id="consentModal" x-ref="consentModal" @click="$event.target === $el && $el.close()"
+            class="w-[min(480px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title">
+                <i data-lucide="file-plus" class="w-4 h-4 text-primary"></i> Catat Persetujuan Biometrik
+            </h2>
+            <button type="button" @click="$refs.consentModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
 
-            <form action="{{ route('admin.consents.store') }}" method="POST" class="space-y-xs">
-                @csrf
+        <form action="{{ route('admin.consents.store') }}" method="POST">
+            @csrf
+            <div class="modal-body flex flex-col gap-sm">
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Pilih Anggota</label>
-                    <select name="student_id" required class="form-select text-xs w-full">
+                    <label for="consent_student_id" class="form-label">Pilih Anggota <span class="req">*</span></label>
+                    <select id="consent_student_id" name="student_id" required class="form-select text-xs w-full">
                         <option value="">Pilih anggota tanpa persetujuan aktif...</option>
                         @foreach($studentsWithoutConsent as $s)
                             <option value="{{ $s->id }}">{{ $s->name }} ({{ $s->code }})</option>
@@ -169,31 +178,37 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Nama Wali / Orang Tua <span class="text-ink-muted text-[11px]">(opsional)</span></label>
-                    <input type="text" name="guardian_name" class="form-input text-xs w-full" placeholder="Contoh: Bpk. Hariyadi">
+                    <label for="consent_guardian_name" class="form-label">
+                        Nama Wali / Orang Tua <span class="text-ink-muted text-[11px] font-normal">(opsional)</span>
+                    </label>
+                    <input type="text" id="consent_guardian_name" name="guardian_name" class="form-input text-xs w-full" placeholder="Contoh: Bpk. Hariyadi">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Hubungan Wali <span class="text-ink-muted text-[11px]">(opsional)</span></label>
-                    <input type="text" name="guardian_relation" class="form-input text-xs w-full" placeholder="Ayah / Ibu / Wali">
+                    <label for="consent_guardian_relation" class="form-label">
+                        Hubungan Wali <span class="text-ink-muted text-[11px] font-normal">(opsional)</span>
+                    </label>
+                    <input type="text" id="consent_guardian_relation" name="guardian_relation" class="form-input text-xs w-full" placeholder="Ayah / Ibu / Wali">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Versi Dokumen Kebijakan</label>
-                    <input type="text" name="text_version" value="v1.0" required class="form-input text-xs w-full font-mono">
+                    <label for="consent_text_version" class="form-label">Versi Dokumen Kebijakan <span class="req">*</span></label>
+                    <input type="text" id="consent_text_version" name="text_version" value="v1.0" required class="form-input text-xs w-full font-mono">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Catatan Tambahan <span class="text-ink-muted text-[11px]">(opsional)</span></label>
-                    <textarea name="notes" rows="2" class="form-input text-xs w-full" placeholder="Ditandatangani formulir fisik no. ..."></textarea>
+                    <label for="consent_notes" class="form-label">
+                        Catatan Tambahan <span class="text-ink-muted text-[11px] font-normal">(opsional)</span>
+                    </label>
+                    <textarea id="consent_notes" name="notes" rows="2" class="form-input text-xs w-full" placeholder="Ditandatangani formulir fisik no. ..."></textarea>
                 </div>
+            </div>
 
-                <div class="flex justify-end gap-xs pt-xs border-t border-hairline">
-                    <button type="button" @click="consentModal = false" class="btn btn-secondary text-xs">Batal</button>
-                    <button type="submit" class="btn btn-primary text-xs">Simpan Persetujuan</button>
-                </div>
-            </form>
-        </div>
-    </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.consentModal.close()" class="btn btn-secondary text-xs">Batal</button>
+                <button type="submit" class="btn btn-primary text-xs">Simpan Persetujuan</button>
+            </div>
+        </form>
+    </dialog>
 </div>
 @endsection

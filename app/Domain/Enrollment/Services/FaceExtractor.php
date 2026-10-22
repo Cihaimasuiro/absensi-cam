@@ -16,12 +16,16 @@ class FaceExtractor
      */
     public function extract(string $imagePath): string
     {
-        $bin = config(
-            'app.face_extract_bin',
-            base_path('clients/edge-engine-rs/target/release/face-extract' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : ''))
-        );
-        $modelsDir = config('app.face_models_dir', base_path('models'));
-        $ortPath = config('app.ort_dylib_path');
+        $bin = config('app.face_extract_bin');
+        if (empty($bin)) {
+            $bin = base_path('clients/edge-engine-rs/target/release/face-extract' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : ''));
+        }
+        $modelsDir = config('app.face_models_dir') ?: base_path('models');
+        $ortPath = config('app.ort_dylib_path') ?: null;
+
+        if (!Process::isRecording() && !file_exists($imagePath)) {
+            throw new RuntimeException("Face extraction image file not found at '{$imagePath}'.");
+        }
 
         if (!Process::isRecording() && !file_exists($bin)) {
             throw new RuntimeException(
@@ -30,16 +34,7 @@ class FaceExtractor
             );
         }
 
-        if (!Process::isRecording() && !file_exists($imagePath)) {
-            throw new RuntimeException("Face extraction image file not found at '{$imagePath}'.");
-        }
-
-        $command = [$bin];
-        if (str_contains(basename($bin), 'smart-absensi-sync') || str_contains(basename($bin), 'engine-cli')) {
-            $command[] = 'extract';
-        }
-        $command[] = '--image';
-        $command[] = $imagePath;
+        $command = [$bin, '--image', $imagePath];
 
         if (!empty($modelsDir) && (Process::isRecording() || is_dir($modelsDir))) {
             $command[] = '--models-dir';

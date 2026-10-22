@@ -11,7 +11,7 @@
 @endsection
 
 @section('content')
-<div x-data="{ resolveModal: false, selectedItem: null, resolveNotes: '' }" class="space-y-sm">
+<div x-data="quarantineData" class="space-y-sm">
     {{-- Summary KPIs --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-xs">
         <div class="card p-xs flex items-center justify-between">
@@ -111,7 +111,8 @@
                                     </form>
 
                                     <button type="button"
-                                            @click="selectedItem = {{ json_encode(['id' => $item->id, 'student' => $item->student?->name]) }}; resolveModal = true"
+                                            data-item="{{ json_encode(['id' => $item->id, 'student' => $item->student?->name]) }}"
+                                            @click="openResolve"
                                             class="btn btn-secondary text-xs py-0.5 px-2">
                                         Selesaikan
                                     </button>
@@ -139,34 +140,37 @@
         @endif
     </div>
 
-    {{-- Resolve Modal --}}
-    <div x-show="resolveModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-sm bg-ink/40">
-        <div @click.away="resolveModal = false" class="card w-full max-w-md p-md space-y-sm bg-canvas">
-            <div class="flex items-center justify-between border-b border-hairline pb-xs">
-                <h3 class="text-sm font-semibold text-ink">
-                    Selesaikan Status Karantina
-                </h3>
-                <button type="button" @click="resolveModal = false" class="text-ink-muted hover:text-ink text-sm">&times;</button>
-            </div>
+    {{-- ───────────────────────── Resolve Modal ───────────────────────── --}}
+    <dialog id="resolveModal" x-ref="resolveModal" @click="$event.target === $el && $el.close()"
+            class="w-[min(460px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-primary"></i> Selesaikan Status Karantina
+            </h2>
+            <button type="button" @click="$refs.resolveModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
 
-            <form :action="'/admin/quarantine/' + (selectedItem ? selectedItem.id : '') + '/resolve'" method="POST" class="space-y-xs">
-                @csrf
+        <form id="resolveForm" x-ref="resolveForm" method="POST" action="">
+            @csrf
+            <div class="modal-body flex flex-col gap-sm">
                 <p class="text-xs text-ink-muted">
-                    Tandai template untuk <span class="font-medium text-ink" x-text="selectedItem?.student"></span> sebagai selesai / telah ditinjau manual.
+                    Tandai template untuk <span id="resolveStudentName" class="font-medium text-ink"></span> sebagai selesai / telah ditinjau manual.
                 </p>
 
                 <div>
-                    <label class="block text-xs font-medium text-ink mb-1">Catatan Resolusi</label>
-                    <textarea name="notes" rows="3" required class="form-input text-xs w-full"
+                    <label for="resolve_notes" class="form-label">Catatan Resolusi <span class="req">*</span></label>
+                    <textarea id="resolve_notes" name="notes" rows="3" required class="form-input text-xs w-full"
                               placeholder="Contoh: Telah diverifikasi fisik dengan kartu identitas."></textarea>
                 </div>
+            </div>
 
-                <div class="flex justify-end gap-xs pt-xs border-t border-hairline">
-                    <button type="button" @click="resolveModal = false" class="btn btn-secondary text-xs">Batal</button>
-                    <button type="submit" class="btn btn-primary text-xs">Simpan Resolusi</button>
-                </div>
-            </form>
-        </div>
-    </div>
+            <div class="modal-foot">
+                <button type="button" @click="$refs.resolveModal.close()" class="btn btn-secondary text-xs">Batal</button>
+                <button type="submit" class="btn btn-primary text-xs">Simpan Resolusi</button>
+            </div>
+        </form>
+    </dialog>
 </div>
 @endsection

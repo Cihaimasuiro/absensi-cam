@@ -384,7 +384,9 @@ rather than rebuilding.
 
 | Key | Purpose |
 |---|---|
-| `FACE_EMBED_BIN` | Path to the embedding binary |
+| `FACE_EXTRACT_BIN` | Path to the server face-extract binary (see [docs/SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md)) |
+| `FACE_MODELS_DIR` | Path to directory containing detector and recognizer ONNX models |
+| `ORT_DYLIB_PATH` | Path to libonnxruntime dynamic library |
 | `ENROLLMENT_EMBED_KEY` | Encryption key for face templates — **rotate if ever exposed** |
 | `PAIRING_ALLOW_HTTP` | Permits pairing over plain HTTP for local device testing |
 | `ATTENDANCE_RETENTION_DAYS` | Retention window before records are pruned |

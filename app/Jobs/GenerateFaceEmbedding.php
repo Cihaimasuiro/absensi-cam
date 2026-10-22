@@ -10,7 +10,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
 
 class GenerateFaceEmbedding implements ShouldQueue
 {
@@ -122,7 +121,18 @@ class GenerateFaceEmbedding implements ShouldQueue
             }
 
         } catch (\Throwable $e) {
-            // Rethrow so queue retry mechanism works; do NOT delete tmpPath here so attempt 2 can retry
+            $msg = $e->getMessage();
+            $isNonRetryable = $e instanceof \App\Domain\Enrollment\Exceptions\DuplicateFaceException
+                || str_contains($msg, 'No face detected')
+                || str_contains($msg, 'Multiple faces detected')
+                || str_contains($msg, 'Face alignment failed')
+                || str_contains($msg, 'Could not read image')
+                || str_contains($msg, 'Face extraction image file not found');
+
+            if ($isNonRetryable) {
+                $this->fail($e);
+            }
+
             throw $e;
         }
     }

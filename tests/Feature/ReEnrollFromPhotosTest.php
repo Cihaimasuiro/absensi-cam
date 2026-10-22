@@ -103,10 +103,14 @@ class ReEnrollFromPhotosTest extends TestCase
         $mockEmbedding = str_repeat('Z', 2048);
 
         Process::fake([
-            '*' => Process::result(json_encode([
-                'success'       => true,
-                'embedding_b64' => base64_encode($mockEmbedding),
-            ])),
+            '*' => function ($process) use ($mockEmbedding) {
+                $this->assertContains('--image', $process->command);
+                $this->assertContains('--models-dir', $process->command);
+                return Process::result(json_encode([
+                    'success'       => true,
+                    'embedding_b64' => base64_encode($mockEmbedding),
+                ]));
+            },
         ]);
 
         $this->artisan('app:re-enroll-from-photos', [
@@ -163,10 +167,14 @@ class ReEnrollFromPhotosTest extends TestCase
 
         // Mock process to extract identical vector
         Process::fake([
-            '*' => Process::result(json_encode([
-                'success'       => true,
-                'embedding_b64' => base64_encode($duplicateVector),
-            ])),
+            '*' => function ($process) use ($duplicateVector) {
+                $this->assertContains('--image', $process->command);
+                $this->assertContains('--models-dir', $process->command);
+                return Process::result(json_encode([
+                    'success'       => true,
+                    'embedding_b64' => base64_encode($duplicateVector),
+                ]));
+            },
         ]);
 
         // With --force only, duplicate detection MUST abort to prevent unintended collision

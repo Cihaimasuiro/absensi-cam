@@ -12,7 +12,8 @@ import {
     ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
     UsersRound, LogIn as LogInIcon, Edit2 as Edit2Icon, Info, ScanLine, WifiOff,
     ArrowRightLeft, CircleCheck, BadgeCheck, FileCheck2, Timer, Layers,
-    MonitorCog, ExternalLink, FileDown
+    MonitorCog, ExternalLink, FileDown, AlertOctagon, FilePlus, FileCheck,
+    UserCog, ShieldAlert
 } from 'lucide'
 
 window.openModal = function(id) {
@@ -932,6 +933,109 @@ Alpine.data('membersData', () => ({
     }
 }));
 
+Alpine.data('usersData', () => ({
+    openEdit(param) {
+        let user = null;
+        if (param && param.id) {
+            user = param;
+        } else if (param?.currentTarget?.dataset?.user) {
+            try {
+                user = JSON.parse(param.currentTarget.dataset.user);
+            } catch (err) {
+                console.error('Failed to parse user dataset:', err);
+            }
+        }
+        if (!user) return;
+
+        const f = this.$refs.editUserForm || document.getElementById('editUserForm');
+        if (f) {
+            f.action = '/admin/users/' + user.id;
+            const nameEl = f.querySelector('[name="name"]');
+            if (nameEl) nameEl.value = user.name || '';
+            const emailEl = f.querySelector('[name="email"]');
+            if (emailEl) emailEl.value = user.email || '';
+            const roleEl = f.querySelector('[name="role"]');
+            if (roleEl) roleEl.value = user.role || 'user';
+            const passEl = f.querySelector('[name="password"]');
+            if (passEl) passEl.value = '';
+        }
+        const modal = this.$refs.editUserModal || document.getElementById('editUserModal');
+        modal?.showModal();
+    },
+
+    confirmSubmit(e) {
+        e.preventDefault();
+        const form = e.target.closest('form');
+        if (!form) return;
+        const msg = form.getAttribute('data-confirm') || 'Anda yakin?';
+        window.showGlobalConfirm(msg, () => form.submit());
+    }
+}));
+
+Alpine.data('quarantineData', () => ({
+    selectedItem: null,
+    openResolve(param) {
+        let item = null;
+        if (param && param.id) {
+            item = param;
+        } else if (param?.currentTarget?.dataset?.item) {
+            try {
+                item = JSON.parse(param.currentTarget.dataset.item);
+            } catch (err) {
+                console.error('Failed to parse quarantine item dataset:', err);
+            }
+        }
+        if (!item) return;
+        this.selectedItem = item;
+
+        const f = this.$refs.resolveForm || document.getElementById('resolveForm');
+        if (f) {
+            f.action = '/admin/quarantine/' + item.id + '/resolve';
+            const notesEl = f.querySelector('[name="notes"]');
+            if (notesEl) notesEl.value = '';
+        }
+        const labelEl = document.getElementById('resolveStudentName');
+        if (labelEl) labelEl.textContent = item.student || 'anggota';
+
+        const modal = this.$refs.resolveModal || document.getElementById('resolveModal');
+        modal?.showModal();
+    }
+}));
+
+Alpine.data('auditData', () => ({
+    selectedLog: null,
+    openDetails(param) {
+        let log = null;
+        if (param && param.id) {
+            log = param;
+        } else if (param?.currentTarget?.dataset?.log) {
+            try {
+                log = JSON.parse(param.currentTarget.dataset.log);
+            } catch (err) {
+                console.error('Failed to parse audit log dataset:', err);
+            }
+        }
+        if (!log) return;
+        this.selectedLog = log;
+
+        const timeEl = document.getElementById('auditDetailTime');
+        if (timeEl) timeEl.textContent = log.time || '-';
+        const nameEl = document.getElementById('auditDetailName');
+        if (nameEl) nameEl.textContent = log.log_name || '-';
+        const causerEl = document.getElementById('auditDetailCauser');
+        if (causerEl) causerEl.textContent = log.causer || '-';
+        const subjectEl = document.getElementById('auditDetailSubject');
+        if (subjectEl) subjectEl.textContent = log.subject || '-';
+        const propsEl = document.getElementById('auditDetailProps');
+        if (propsEl) propsEl.textContent = JSON.stringify(log.properties, null, 2);
+        const idEl = document.getElementById('auditDetailId');
+        if (idEl) idEl.textContent = '#' + log.id;
+
+        const modal = this.$refs.detailsModal || document.getElementById('auditDetailsModal');
+        modal?.showModal();
+    }
+}));
+
 const lucideIcons = {
     ScanFace, Users, Video, Wifi, VideoOff, Activity, User, LogIn, LogOut,
     Clock, History, ArrowRight, PowerOff, Cpu, Key, LayoutDashboard, FileText,
@@ -942,7 +1046,8 @@ const lucideIcons = {
     Sparkles, ShieldCheck, Eye, Pause, Play,
     ArrowLeft, Calendar, ChevronRight, DoorClosed, DoorOpen, Globe, UserMinus, Zap,
     UsersRound, LogInIcon, Info, ScanLine, WifiOff, ArrowRightLeft, CircleCheck,
-    BadgeCheck, FileCheck2, Timer, Layers, MonitorCog, ExternalLink, FileDown
+    BadgeCheck, FileCheck2, Timer, Layers, MonitorCog, ExternalLink, FileDown,
+    AlertOctagon, FilePlus, FileCheck, UserCog, ShieldAlert
 };
 
 export function refreshIcons() {

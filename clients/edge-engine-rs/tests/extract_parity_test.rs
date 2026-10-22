@@ -11,64 +11,46 @@ use std::path::PathBuf;
 #[test]
 fn test_python_rust_extraction_parity() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let parity_dir = manifest.join("tests/fixtures/parity");
+    let mut parity_dir = manifest.join("tests/fixtures/parity");
 
     if !parity_dir.exists() {
-        println!("[SKIP] Parity fixtures directory {:?} does not exist, skipping.", parity_dir);
-        return;
+        let root_parity = manifest.join("../../tests/fixtures/parity");
+        if root_parity.exists() {
+            parity_dir = root_parity;
+        } else {
+            panic!("Parity fixtures directory {:?} does not exist. Parity test must fail, not skip.", parity_dir);
+        }
     }
 
-    let entries = match fs::read_dir(&parity_dir) {
-        Ok(e) => e,
-        Err(_) => {
-            println!("[SKIP] Cannot read parity fixtures directory, skipping.");
-            return;
-        }
-    };
+    let entries = fs::read_dir(&parity_dir)
+        .expect("Cannot read parity fixtures directory");
 
     let mut found_fixture = false;
 
-    // Initialize models
-    let det_path = match find_model(&["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"]) {
-        Some(p) => p,
-        None => {
-            println!("[SKIP] detector.onnx not found for parity test, skipping.");
-            return;
-        }
-    };
+    // When fixtures directory exists, models and ORT must be present and valid
+    let det_path = find_model(&["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"])
+        .expect("detector.onnx model is required to run extract_parity_test");
 
-    let rec_path = match find_model(&["recognizer.onnx", "sface.onnx", "arcface.onnx"]) {
-        Some(p) => p,
-        None => {
-            println!("[SKIP] recognizer.onnx not found for parity test, skipping.");
-            return;
-        }
-    };
+    let rec_path = find_model(&["recognizer.onnx", "sface.onnx", "arcface.onnx"])
+        .expect("recognizer.onnx model is required to run extract_parity_test");
 
-    if let Err(e) = init_onnx_runtime(None) {
-        println!("[SKIP] Failed to initialize ONNX Runtime: {e}, skipping.");
-        return;
-    }
+    let ort_dylib = std::env::var("ORT_DYLIB_PATH").ok();
+    init_onnx_runtime(ort_dylib.as_deref().map(std::path::Path::new))
+        .expect("ONNX Runtime must initialize successfully for extract_parity_test");
 
-    let mut detector = match FaceDetector::load(&det_path) {
-        Ok(d) => d,
-        Err(e) => {
-            println!("[SKIP] Failed to load detector: {e}, skipping.");
-            return;
-        }
-    };
+    let mut detector = FaceDetector::load(&det_path)
+        .expect("Face detector must load successfully from detector.onnx");
 
-    let mut recognizer = match FaceRecognizer::load(&rec_path) {
-        Ok(r) => r,
-        Err(e) => {
-            println!("[SKIP] Failed to load recognizer: {e}, skipping.");
-            return;
-        }
-    };
+    let mut recognizer = FaceRecognizer::load(&rec_path)
+        .expect("Face recognizer must load successfully from recognizer.onnx");
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("jpg") || s.eq_ignore_ascii_case("jpeg")).unwrap_or(false) {
+        let is_image = path.extension().and_then(|s| s.to_str()).map(|ext| {
+            ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") || ext.eq_ignore_ascii_case("png")
+        }).unwrap_or(false);
+
+        if is_image {
             let json_path = path.with_extension("json");
             if !json_path.exists() {
                 continue;
@@ -117,6 +99,6 @@ fn test_python_rust_extraction_parity() {
     }
 
     if !found_fixture {
-        println!("[SKIP] No *.jpg with matching *.json found in {:?}, skipping.", parity_dir);
+        panic!("No matching (*.jpg/*.jpeg/*.png with *.json) fixtures found in {:?}", parity_dir);
     }
 }

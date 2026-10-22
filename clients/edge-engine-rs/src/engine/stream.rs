@@ -18,7 +18,7 @@ use crate::server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, Overla
 use crate::vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 
 use super::tracker::TrackedStudent;
-use super::utils::{find_model_path, wait_for_shutdown_signal};
+use super::utils::{find_model_path, model_search_dirs, wait_for_shutdown_signal};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_stream(
@@ -383,7 +383,7 @@ pub async fn run_stream(
     let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<AiFrame>(1);
 
     if vision_enabled {
-        let base_dirs = utils::model_search_dirs(models_dir_opt.as_deref());
+        let base_dirs = model_search_dirs(models_dir_opt.as_deref());
 
         let detector_path = find_model_path(&base_dirs, &["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"]);
         let recognizer_path = find_model_path(&base_dirs, &["recognizer.onnx", "sface.onnx", "arcface.onnx"]);

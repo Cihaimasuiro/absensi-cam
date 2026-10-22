@@ -85,8 +85,7 @@ pub fn load_image_with_exif<P: AsRef<Path>>(path: P) -> Result<DynamicImage, Ext
 /// 2. Face count: Exactly one face required (defaults: conf 0.6, NMS 0.3).
 ///
 /// Note on unported Python behavior:
-/// Low-light gamma preprocessing in Python `face_detector/detector.py` is intentionally
-/// omitted to avoid CPU overhead on Edge/Server workers, as it only affects dark photos.
+/// Low-light gamma preprocessing from Python detector.py was not ported as the edge engine pipeline does not use it.
 pub fn extract_embedding(
     image: &DynamicImage,
     detector: &mut FaceDetector,
@@ -178,6 +177,24 @@ pub fn run_extract(
     models_dir: Option<&str>,
     ort_path: Option<&str>,
 ) -> i32 {
+    let img = match load_image_with_exif(image_path) {
+        Ok(i) => i,
+        Err(ExtractError::CouldNotReadImage) => {
+            let err = serde_json::json!({
+                "error": "Could not read image"
+            });
+            eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
+            return 1;
+        }
+        Err(e) => {
+            let err = serde_json::json!({
+                "error": e.to_string()
+            });
+            eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
+            return 1;
+        }
+    };
+
     let base_dirs = model_search_dirs(models_dir);
 
     let detector_path = match find_model_path(&base_dirs, &["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"]) {
@@ -226,24 +243,6 @@ pub fn run_extract(
         Err(e) => {
             let err = serde_json::json!({
                 "error": format!("Failed to load recognizer model from {:?}: {e}", recognizer_path)
-            });
-            eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
-            return 1;
-        }
-    };
-
-    let img = match load_image_with_exif(image_path) {
-        Ok(i) => i,
-        Err(ExtractError::CouldNotReadImage) => {
-            let err = serde_json::json!({
-                "error": "Could not read image"
-            });
-            eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
-            return 1;
-        }
-        Err(e) => {
-            let err = serde_json::json!({
-                "error": e.to_string()
             });
             eprintln!("{}", serde_json::to_string(&err).unwrap_or_default());
             return 1;

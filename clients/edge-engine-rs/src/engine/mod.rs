@@ -101,14 +101,6 @@ pub async fn run_cli() -> Result<()> {
         }) => {
             crate::core::harden_storage(&data_mount, partition.as_deref(), &fs_type, dry_run)?;
         }
-        Some(Commands::Extract {
-            image,
-            models_dir,
-            ort_path,
-        }) => {
-            let code = extract::run_extract(&image, models_dir.as_deref(), ort_path.as_deref());
-            std::process::exit(code);
-        }
         None => {
             // Default: run sync using top-level flags (for backward-compatible systemd service)
             run_sync(

@@ -8,7 +8,7 @@
 @endsection
 
 @section('content')
-<div x-data="{ detailsModal: false, selectedLog: null }" class="space-y-sm">
+<div x-data="auditData" class="space-y-sm">
     {{-- Filter bar --}}
     <div class="card p-xs">
         <form method="GET" action="{{ route('admin.audit.index') }}" class="flex flex-wrap items-center gap-xs">
@@ -84,15 +84,16 @@
                             </td>
                             <td class="text-right whitespace-nowrap">
                                 <button type="button"
-                                        @click="selectedLog = {{ json_encode([
+                                        data-log="{{ json_encode([
                                             'id' => $log->id,
                                             'description' => $log->description,
                                             'log_name' => $log->log_name,
-                                            'time' => $log->created_at->format('Y-m-d H:i:s'),
+                                            'time' => $log->created_at->timezone(config('app.timezone'))->format('Y-m-d H:i:s'),
                                             'causer' => $log->causer?->name ?? 'Sistem',
                                             'subject' => ($log->subject_type ? class_basename($log->subject_type) : '—') . ' (#' . ($log->subject_id ?? '—') . ')',
                                             'properties' => $log->properties,
-                                        ]) }}; detailsModal = true"
+                                        ]) }}"
+                                        @click="openDetails"
                                         class="btn btn-secondary text-xs py-0.5 px-2">
                                     Detail
                                 </button>
@@ -113,47 +114,48 @@
         @endif
     </div>
 
-    {{-- Details Modal --}}
-    <div x-show="detailsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-sm bg-ink/40">
-        <div @click.away="detailsModal = false" class="card w-full max-w-xl p-md space-y-sm bg-canvas">
-            <div class="flex items-center justify-between border-b border-hairline pb-xs">
-                <h3 class="text-sm font-semibold text-ink">
-                    Detail Log Audit <span class="font-mono text-ink-muted" x-text="'#' + (selectedLog ? selectedLog.id : '')"></span>
-                </h3>
-                <button type="button" @click="detailsModal = false" class="text-ink-muted hover:text-ink text-sm">&times;</button>
-            </div>
+    {{-- ───────────────────────── Details Modal ───────────────────────── --}}
+    <dialog id="auditDetailsModal" x-ref="detailsModal" @click="$event.target === $el && $el.close()"
+            class="w-[min(600px,94vw)] m-auto">
+        <div class="modal-head">
+            <h2 class="modal-title">
+                <i data-lucide="file-text" class="w-4 h-4 text-primary"></i>
+                Detail Log Audit <span id="auditDetailId" class="font-mono text-ink-muted text-xs"></span>
+            </h2>
+            <button type="button" @click="$refs.detailsModal.close()" aria-label="Tutup" class="btn-icon">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
 
-            <div class="space-y-xs text-xs" x-if="selectedLog">
-                <div class="grid grid-cols-2 gap-xs bg-canvas-soft p-xs rounded border border-hairline">
-                    <div>
-                        <span class="text-ink-muted block text-[11px]">Waktu Eksekusi</span>
-                        <span class="font-mono font-medium text-ink" x-text="selectedLog?.time"></span>
-                    </div>
-                    <div>
-                        <span class="text-ink-muted block text-[11px]">Kategori</span>
-                        <span class="font-mono font-medium text-ink" x-text="selectedLog?.log_name"></span>
-                    </div>
-                    <div>
-                        <span class="text-ink-muted block text-[11px]">Pelaku (Causer)</span>
-                        <span class="font-medium text-ink" x-text="selectedLog?.causer"></span>
-                    </div>
-                    <div>
-                        <span class="text-ink-muted block text-[11px]">Target Entitas</span>
-                        <span class="font-mono font-medium text-ink" x-text="selectedLog?.subject"></span>
-                    </div>
-                </div>
-
+        <div class="modal-body flex flex-col gap-sm text-xs">
+            <div class="grid grid-cols-2 gap-xs bg-canvas-soft p-xs rounded border border-hairline">
                 <div>
-                    <span class="text-ink-muted block text-[11px] mb-1">Payload Properti / Parameter</span>
-                    <pre class="bg-canvas-soft p-xs rounded font-mono text-[11px] overflow-x-auto max-h-60 border border-hairline"
-                         x-text="JSON.stringify(selectedLog?.properties, null, 2)"></pre>
+                    <span class="text-ink-muted block text-[11px]">Waktu Eksekusi</span>
+                    <span id="auditDetailTime" class="font-mono font-medium text-ink"></span>
+                </div>
+                <div>
+                    <span class="text-ink-muted block text-[11px]">Kategori</span>
+                    <span id="auditDetailName" class="font-mono font-medium text-ink"></span>
+                </div>
+                <div>
+                    <span class="text-ink-muted block text-[11px]">Pelaku (Causer)</span>
+                    <span id="auditDetailCauser" class="font-medium text-ink"></span>
+                </div>
+                <div>
+                    <span class="text-ink-muted block text-[11px]">Target Entitas</span>
+                    <span id="auditDetailSubject" class="font-mono font-medium text-ink"></span>
                 </div>
             </div>
 
-            <div class="flex justify-end pt-xs border-t border-hairline">
-                <button type="button" @click="detailsModal = false" class="btn btn-secondary text-xs">Tutup</button>
+            <div>
+                <span class="text-ink-muted block text-[11px] mb-1">Payload Properti / Parameter</span>
+                <pre id="auditDetailProps" class="bg-canvas-soft p-xs rounded font-mono text-[11px] overflow-x-auto max-h-60 border border-hairline"></pre>
             </div>
         </div>
-    </div>
+
+        <div class="modal-foot">
+            <button type="button" @click="$refs.detailsModal.close()" class="btn btn-secondary text-xs">Tutup</button>
+        </div>
+    </dialog>
 </div>
 @endsection

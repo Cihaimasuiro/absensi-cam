@@ -4,7 +4,7 @@ use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::server::auth::AuthManager;
 use crate::server::AppState;
@@ -317,7 +317,7 @@ pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
     }
 
     let tz = settings.time.timezone.trim();
-    if tz.is_empty() || tz.len() > 64 || !tz.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '_' || c == '-' || c == '+') {
+    if !is_valid_timezone(tz) {
         return Err("Invalid timezone format (e.g. Asia/Jakarta)".to_string());
     }
 
@@ -329,18 +329,38 @@ pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
     Ok(())
 }
 
+pub fn is_valid_timezone(tz: &str) -> bool {
+    let trimmed = tz.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 64
+        && !trimmed.starts_with('-')
+        && trimmed.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '+'))
+}
+
 pub fn apply_time_settings(time: &TimeSettings) {
     let tz = time.timezone.trim();
-    if !tz.is_empty() && tz.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '_' || c == '-' || c == '+') {
+    if is_valid_timezone(tz) {
         info!("Applying system timezone: {}", tz);
-        let _ = std::process::Command::new("timedatectl")
+        match std::process::Command::new("timedatectl")
             .args(["set-timezone", tz])
-            .status();
+            .status()
+        {
+            Ok(s) if !s.success() => warn!("timedatectl set-timezone exited with status: {s}"),
+            Err(e) => warn!("timedatectl command execution failed: {e}"),
+            _ => {}
+        }
+    } else if !tz.is_empty() {
+        warn!("Skipping invalid timezone in time settings: {}", tz);
     }
 
     let ntp_arg = if time.ntp_enabled { "true" } else { "false" };
     info!("Setting NTP synchronization: {}", ntp_arg);
-    let _ = std::process::Command::new("timedatectl")
+    match std::process::Command::new("timedatectl")
         .args(["set-ntp", ntp_arg])
-        .status();
+        .status()
+    {
+        Ok(s) if !s.success() => warn!("timedatectl set-ntp exited with status: {s}"),
+        Err(e) => warn!("timedatectl command execution failed: {e}"),
+        _ => {}
+    }
 }

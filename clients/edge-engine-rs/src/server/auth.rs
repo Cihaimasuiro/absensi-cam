@@ -364,25 +364,28 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("auth_test_{}", Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
+        let test_pwd = format!("pwd_{}", Uuid::new_v4());
+        let wrong_pwd = format!("wrong_{}", Uuid::new_v4());
+
         let auth = AuthManager::new(&temp_dir, "test_secret_123".to_string());
         assert!(!auth.is_initialized());
 
         let code = auth.setup_code.read().unwrap().clone().expect("Setup code should exist");
 
         // Invalid code should fail
-        assert!(auth.setup_first_password("999999", "new_secure_pwd_123").is_err());
+        assert!(auth.setup_first_password("999999", &test_pwd).is_err());
         assert!(!auth.is_initialized());
 
         // Correct code initializes password
-        assert!(auth.setup_first_password(&code, "new_secure_pwd_123").is_ok());
+        assert!(auth.setup_first_password(&code, &test_pwd).is_ok());
         assert!(auth.is_initialized());
 
         // Login with correct password
-        let token = auth.verify_login("192.168.1.50", "new_secure_pwd_123").expect("Login should succeed");
+        let token = auth.verify_login("192.168.1.50", &test_pwd).expect("Login should succeed");
         assert!(!token.is_empty());
 
         // Login with wrong password
-        let err = auth.verify_login("192.168.1.50", "wrong_password");
+        let err = auth.verify_login("192.168.1.50", &wrong_pwd);
         assert!(err.is_err());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -393,23 +396,26 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("lockout_test_{}", Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
+        let correct_pwd = format!("correct_{}", Uuid::new_v4());
+        let wrong_pwd = format!("wrong_{}", Uuid::new_v4());
+
         let auth = AuthManager::new(&temp_dir, "test_secret_123".to_string());
-        let _ = auth.save_password("correct_password_123");
+        let _ = auth.save_password(&correct_pwd);
 
         let ip = "192.168.1.99";
 
         // 4 failed attempts shouldn't lock out completely yet
         for _ in 0..4 {
-            let res = auth.verify_login(ip, "wrong");
+            let res = auth.verify_login(ip, &wrong_pwd);
             assert!(res.is_err());
         }
 
         // 5th failed attempt triggers lockout
-        let res5 = auth.verify_login(ip, "wrong");
+        let res5 = auth.verify_login(ip, &wrong_pwd);
         assert!(res5.is_err());
 
         // Immediate subsequent attempt should get 429 Too Many Requests
-        let res6 = auth.verify_login(ip, "correct_password_123");
+        let res6 = auth.verify_login(ip, &correct_pwd);
         assert_eq!(res6.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
 
         let _ = std::fs::remove_dir_all(&temp_dir);

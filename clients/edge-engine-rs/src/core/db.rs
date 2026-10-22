@@ -744,7 +744,8 @@ mod tests {
         assert_eq!(loaded[0].name, "Siti Rahma");
 
         // Verifikasi load_templates GAGAL TOTAL jika key salah (mencegah silent boot ke reject everyone)
-        let wrong_key = vec![0u8; 32];
+        let mut wrong_key = key.clone();
+        wrong_key[0] ^= 0xFF;
         let load_err = db.load_templates(Some(&wrong_key), model_version).await;
         assert!(load_err.is_err(), "Harus error jika database berisi template tapi gagal didekripsi karena key salah");
     }

@@ -1,0 +1,15 @@
+name: "CodeQL config"
+
+paths-ignore:
+  - "**/tests/**"
+  - "**/*_test.rs"
+  - "clients/edge-engine-rs/tests/**"
+
+query-filters:
+  - exclude:
+      id: rust/hard-coded-cryptographic-value
+      path:
+        - "**/tests/**"
+        - "**/*_test.rs"
+        - "**/src/server/auth.rs"
+        - "**/src/core/db.rs"

@@ -72,4 +72,27 @@ Route::middleware('auth')->group(function () {
         Route::put('/{school}/classrooms/timing', [SchoolController::class, 'bulkUpdateTiming'])->name('classrooms.bulkUpdateTiming');
         Route::post('/buildings',           [SchoolController::class, 'storeBuilding'])->name('buildings.store');
     });
+
+    // Admin Console
+    Route::prefix('admin')->name('admin.')->group(function () {
+        // User CRUD + role assignment
+        Route::resource('users', \App\Http\Controllers\Web\Admin\UserController::class)->except(['create', 'show', 'edit']);
+
+        // Audit log viewer
+        Route::get('audit-logs', [\App\Http\Controllers\Web\Admin\AuditLogController::class, 'index'])->name('audit.index');
+        Route::get('audit-logs/export', [\App\Http\Controllers\Web\Admin\AuditLogController::class, 'exportCsv'])->name('audit.export');
+
+        // Quarantine review & re-enroll
+        Route::get('quarantine', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'index'])->name('quarantine.index');
+        Route::post('quarantine/scan', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'scan'])->name('quarantine.scan');
+        Route::post('quarantine/{quarantine}/re-enroll', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'reEnroll'])->name('quarantine.re-enroll');
+        Route::post('quarantine/{quarantine}/resolve', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'resolve'])->name('quarantine.resolve');
+
+        // Consent management (UU PDP No. 27/2022)
+        Route::get('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'index'])->name('consents.index');
+        Route::post('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'store'])->name('consents.store');
+        Route::post('consents/{consent}/withdraw', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'withdraw'])->name('consents.withdraw');
+        Route::get('consents/export', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'exportCsv'])->name('consents.export');
+    });
 });
+

@@ -87,6 +87,52 @@
                     <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Perangkat</span>
                 </a>
             </li>
+
+            @canany(['user.manage', 'audit.view', 'quarantine.view', 'consent.manage'])
+                <li class="nav-section" aria-hidden="true">
+                    <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Konsol Admin</span>
+                </li>
+
+                @can('user.manage')
+                    <li>
+                        <a href="{{ route('admin.users.index') }}" title="Pengguna"
+                           class="nav-item {{ request()->routeIs('admin.users.*') ? 'is-active' : '' }}">
+                            <i data-lucide="user-cog" class="w-4 h-4"></i>
+                            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Pengguna</span>
+                        </a>
+                    </li>
+                @endcan
+
+                @can('audit.view')
+                    <li>
+                        <a href="{{ route('admin.audit.index') }}" title="Log Audit"
+                           class="nav-item {{ request()->routeIs('admin.audit.*') ? 'is-active' : '' }}">
+                            <i data-lucide="shield-check" class="w-4 h-4"></i>
+                            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Log Audit</span>
+                        </a>
+                    </li>
+                @endcan
+
+                @can('quarantine.view')
+                    <li>
+                        <a href="{{ route('admin.quarantine.index') }}" title="Karantina Biometrik"
+                           class="nav-item {{ request()->routeIs('admin.quarantine.*') ? 'is-active' : '' }}">
+                            <i data-lucide="alert-octagon" class="w-4 h-4"></i>
+                            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Karantina</span>
+                        </a>
+                    </li>
+                @endcan
+
+                @can('consent.manage')
+                    <li>
+                        <a href="{{ route('admin.consents.index') }}" title="Persetujuan UU PDP"
+                           class="nav-item {{ request()->routeIs('admin.consents.*') ? 'is-active' : '' }}">
+                            <i data-lucide="file-check" class="w-4 h-4"></i>
+                            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Persetujuan</span>
+                        </a>
+                    </li>
+                @endcan
+            @endcanany
         </ul>
     </nav>
 

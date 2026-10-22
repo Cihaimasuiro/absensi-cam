@@ -30,6 +30,10 @@ class RoleSeeder extends Seeder
             'school.manage',
             'report.view',
             'report.export',
+            'user.manage',
+            'audit.view',
+            'quarantine.view',
+            'consent.manage',
         ];
 
         foreach ($permissions as $permission) {
@@ -54,6 +58,9 @@ class RoleSeeder extends Seeder
             'school.manage',
             'report.view',
             'report.export',
+            'audit.view',
+            'quarantine.view',
+            'consent.manage',
         ]);
 
         $user->syncPermissions([

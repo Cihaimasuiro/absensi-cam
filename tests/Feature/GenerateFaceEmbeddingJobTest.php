@@ -14,10 +14,21 @@ class GenerateFaceEmbeddingJobTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function giveConsent(Student $student): void
+    {
+        $user = \App\Domain\User\Models\User::first() ?? \App\Domain\User\Models\User::factory()->create();
+        $student->consents()->create([
+            'given_at'     => now(),
+            'text_version' => 'v1.0',
+            'recorded_by'  => $user->id,
+        ]);
+    }
+
     public function test_job_successfully_extracts_and_encrypts_embedding()
     {
         $school = School::factory()->create();
         $student = Student::factory()->create(['school_id' => $school->id]);
+        $this->giveConsent($student);
         
         $tmpPath = sys_get_temp_dir() . '/test_photo.jpg';
         file_put_contents($tmpPath, 'dummy image data');
@@ -56,6 +67,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         
         $school = School::factory()->create();
         $student = Student::factory()->create(['school_id' => $school->id]);
+        $this->giveConsent($student);
         
         $tmpPath = sys_get_temp_dir() . '/test_photo3.jpg';
         file_put_contents($tmpPath, 'dummy image data');
@@ -90,6 +102,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
     {
         $school = School::factory()->create();
         $student = Student::factory()->create(['school_id' => $school->id]);
+        $this->giveConsent($student);
         
         $tmpPath = sys_get_temp_dir() . '/test_photo2.jpg';
         file_put_contents($tmpPath, 'dummy image data');

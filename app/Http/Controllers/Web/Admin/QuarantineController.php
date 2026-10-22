@@ -166,6 +166,10 @@ class QuarantineController extends Controller
             return back()->with('error', 'Data siswa tidak ditemukan.');
         }
 
+        if (!$student->hasActiveConsent()) {
+            return back()->with('error', "Gagal mendaftarkan ulang: Siswa {$student->name} tidak memiliki persetujuan biometrik aktif (UU PDP No. 27/2022).");
+        }
+
         $template = $student->faceTemplate;
         $photoPath = $template?->photo_path ?? "faces/{$student->id}.jpg";
 
@@ -186,7 +190,9 @@ class QuarantineController extends Controller
             $photoPath,
             true,
             config('app.model_version'),
-            false
+            false,
+            $quarantine->id,
+            auth()->id()
         )->onQueue('enrollments');
 
         $quarantine->update([

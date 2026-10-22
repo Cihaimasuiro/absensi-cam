@@ -16,6 +16,16 @@ class BiometricDuplicateDetectionTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function giveConsent(Student $student): void
+    {
+        $user = \App\Domain\User\Models\User::first() ?? \App\Domain\User\Models\User::factory()->create();
+        $student->consents()->create([
+            'given_at'     => now(),
+            'text_version' => 'v1.0',
+            'recorded_by'  => $user->id,
+        ]);
+    }
+
     private function generateEmbeddingVector(float $val): string
     {
         $floats = array_fill(0, 512, $val);
@@ -27,6 +37,8 @@ class BiometricDuplicateDetectionTest extends TestCase
         $school = School::factory()->create();
         $student1 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-1']);
         $student2 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-2']);
+        $this->giveConsent($student1);
+        $this->giveConsent($student2);
 
         $encryptionService = app(FaceEncryptionService::class);
         $rawVector = $this->generateEmbeddingVector(0.5);
@@ -76,6 +88,8 @@ class BiometricDuplicateDetectionTest extends TestCase
         $school = School::factory()->create();
         $student1 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-1']);
         $student2 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-2']);
+        $this->giveConsent($student1);
+        $this->giveConsent($student2);
 
         $encryptionService = app(FaceEncryptionService::class);
         $rawVector = $this->generateEmbeddingVector(0.5);
@@ -118,6 +132,8 @@ class BiometricDuplicateDetectionTest extends TestCase
         $school = School::factory()->create();
         $student1 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-1']);
         $student2 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-2']);
+        $this->giveConsent($student1);
+        $this->giveConsent($student2);
 
         $encryptionService = app(FaceEncryptionService::class);
         $rawVector = $this->generateEmbeddingVector(0.5);

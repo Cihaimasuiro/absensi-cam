@@ -25,7 +25,9 @@ class GenerateFaceEmbedding implements ShouldQueue
         public ?string $photoPath = null,
         public bool $deleteAfter = true,
         public ?string $modelVersion = null,
-        public bool $allowDuplicate = false
+        public bool $allowDuplicate = false,
+        public ?int $quarantineId = null,
+        public ?int $actorId = null
     ) {
         $this->onQueue('enrollments');
     }
@@ -34,6 +36,18 @@ class GenerateFaceEmbedding implements ShouldQueue
     {
         if (! file_exists($this->tmpPath)) {
             Log::error("GenerateFaceEmbedding failed: Tmp file missing", ['path' => $this->tmpPath]);
+            return;
+        }
+
+        // Privacy guard: Ensure active biometric consent exists before processing (UU PDP No. 27/2022)
+        $student = \App\Domain\Student\Models\Student::find($this->studentId);
+        if (!$student || !$student->hasActiveConsent()) {
+            Log::warning('GenerateFaceEmbedding aborted: Active biometric consent not found or withdrawn', [
+                'student_id' => $this->studentId,
+            ]);
+            if ($this->deleteAfter) {
+                @unlink($this->tmpPath);
+            }
             return;
         }
 
@@ -119,21 +133,29 @@ class GenerateFaceEmbedding implements ShouldQueue
                     FaceTemplate::create(array_merge(['student_id' => $this->studentId], $data));
                 }
 
-                \App\Domain\Enrollment\Models\BiometricQuarantine::where('student_id', $this->studentId)
-                    ->where('status', 'quarantined')
-                    ->update([
-                        'status'           => 'resolved',
-                        'resolved_at'      => now(),
-                        'resolution_notes' => 'Otomatis terselesaikan melalui ekstraksi dan enkripsi ulang foto.',
-                    ]);
+                // If dispatched for a specific quarantine incident, resolve only that incident
+                if ($this->quarantineId) {
+                    \App\Domain\Enrollment\Models\BiometricQuarantine::where('id', $this->quarantineId)
+                        ->where('status', 'quarantined')
+                        ->update([
+                            'status'           => 'resolved',
+                            'resolved_at'      => now(),
+                            'resolved_by'      => $this->actorId,
+                            'resolution_notes' => 'Berhasil diekstrak dan dienkripsi ulang melalui antrean pemrosesan foto.',
+                        ]);
+                }
             });
 
             Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);
 
-        } finally {
+            // Only delete tmp file on successful completion
             if ($this->deleteAfter) {
                 @unlink($this->tmpPath);
             }
+
+        } catch (\Throwable $e) {
+            // Rethrow so queue retry mechanism works; do NOT delete tmpPath here so attempt 2 can retry
+            throw $e;
         }
     }
 

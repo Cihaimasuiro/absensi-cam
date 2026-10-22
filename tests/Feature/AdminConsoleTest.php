@@ -225,6 +225,14 @@ class AdminConsoleTest extends TestCase
         Storage::disk('local')->put('faces/student_q.jpg', 'dummy-photo');
 
         $student = Student::factory()->create();
+        Consent::create([
+            'student_id'    => $student->id,
+            'guardian_name' => 'Wali Siswa',
+            'text_version'  => 'v1.0',
+            'recorded_by'   => $this->superAdmin->id,
+            'given_at'      => now(),
+        ]);
+
         $quarantine = BiometricQuarantine::create([
             'student_id'     => $student->id,
             'reason'         => 'decryption_failed',
@@ -245,11 +253,11 @@ class AdminConsoleTest extends TestCase
         $response = $this->post(route('admin.quarantine.re-enroll', $quarantine));
         $response->assertRedirect(route('admin.quarantine.index'));
 
-        Queue::assertPushedOn('enrollments', GenerateFaceEmbedding::class, function ($job) use ($student) {
-            return $job->studentId === (string) $student->id;
+        Queue::assertPushedOn('enrollments', GenerateFaceEmbedding::class, function ($job) use ($student, $quarantine) {
+            return $job->studentId === (string) $student->id && $job->quarantineId === $quarantine->id;
         });
 
-        // Test that when GenerateFaceEmbedding handle runs, it resolves the quarantine
+        // Test that when GenerateFaceEmbedding handle runs, it resolves the quarantine and records actor
         Process::fake([
             '*' => Process::result(json_encode([
                 'success'       => true,
@@ -267,12 +275,191 @@ class AdminConsoleTest extends TestCase
             'faces/student_q.jpg',
             false,
             '3d9f1f77896fb3d1',
-            true
+            true,
+            $quarantine->id,
+            $this->superAdmin->id
         );
         $job->handle();
 
         $quarantine->refresh();
         $this->assertEquals('resolved', $quarantine->status);
+        $this->assertEquals($this->superAdmin->id, $quarantine->resolved_by);
+    }
+
+    public function test_quarantine_re_enroll_blocked_without_active_consent(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        Storage::fake('local');
+        Storage::disk('local')->put('faces/student_no_consent.jpg', 'dummy-photo');
+
+        $student = Student::factory()->create();
+
+        // 1. No consent given at all
+        $quarantine = BiometricQuarantine::create([
+            'student_id'     => $student->id,
+            'reason'         => 'decryption_failed',
+            'status'         => 'quarantined',
+            'quarantined_at' => now(),
+        ]);
+
+        FaceTemplate::create([
+            'student_id'     => $student->id,
+            'embedding_enc'  => base64_encode('corrupted'),
+            'model_version'  => '3d9f1f77896fb3d1',
+            'embedding_hash' => 'old_hash',
+            'photo_path'     => 'faces/student_no_consent.jpg',
+        ]);
+
+        Queue::fake([GenerateFaceEmbedding::class]);
+
+        $response = $this->post(route('admin.quarantine.re-enroll', $quarantine));
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        Queue::assertNothingPushed();
+
+        // 2. Consent was withdrawn
+        $consent = Consent::create([
+            'student_id'    => $student->id,
+            'guardian_name' => 'Wali Siswa',
+            'text_version'  => 'v1.0',
+            'recorded_by'   => $this->superAdmin->id,
+            'given_at'      => now()->subDay(),
+            'withdrawn_at'  => now(),
+        ]);
+
+        $response2 = $this->post(route('admin.quarantine.re-enroll', $quarantine));
+        $response2->assertRedirect();
+        $response2->assertSessionHas('error');
+        Queue::assertNothingPushed();
+
+        // 3. Even if job is dispatched somehow, handle() must refuse to process/restore
+        $tmpPath = Storage::disk('local')->path('tmp/test_noconsent.jpg');
+        @mkdir(dirname($tmpPath), 0777, true);
+        file_put_contents($tmpPath, 'test-photo');
+
+        $template = FaceTemplate::where('student_id', $student->id)->first();
+        $template->delete(); // Soft-deleted tombstone
+        $this->assertTrue($template->fresh()->trashed());
+
+        $job = new GenerateFaceEmbedding(
+            (string) $student->id,
+            $tmpPath,
+            'faces/student_no_consent.jpg',
+            true,
+            '3d9f1f77896fb3d1',
+            true,
+            $quarantine->id,
+            $this->superAdmin->id
+        );
+        $job->handle();
+
+        // Template must STILL be trashed (never revived without consent)
+        $this->assertTrue($template->fresh()->trashed());
+    }
+
+    public function test_re_enroll_resolves_only_targeted_quarantine_incident(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        Storage::fake('local');
+        $student = Student::factory()->create();
+        Consent::create([
+            'student_id'    => $student->id,
+            'guardian_name' => 'Wali Siswa',
+            'text_version'  => 'v1.0',
+            'recorded_by'   => $this->superAdmin->id,
+            'given_at'      => now(),
+        ]);
+
+        // Quarantine 1: Integrity issue (targeted for re-enrollment)
+        $integrityQuarantine = BiometricQuarantine::create([
+            'student_id'     => $student->id,
+            'reason'         => 'decryption_failed',
+            'status'         => 'quarantined',
+            'quarantined_at' => now(),
+        ]);
+
+        // Quarantine 2: Manual review / duplicate flag (unrelated, must NOT be auto-resolved)
+        $unrelatedQuarantine = BiometricQuarantine::create([
+            'student_id'     => $student->id,
+            'reason'         => 'manual_security_flag',
+            'status'         => 'quarantined',
+            'quarantined_at' => now(),
+        ]);
+
+        Process::fake([
+            '*' => Process::result(json_encode([
+                'success'       => true,
+                'embedding_b64' => base64_encode(str_repeat('Q', 2048)),
+            ])),
+        ]);
+
+        $tmpPath = Storage::disk('local')->path('tmp/target_q.jpg');
+        @mkdir(dirname($tmpPath), 0777, true);
+        file_put_contents($tmpPath, 'test-photo');
+
+        $job = new GenerateFaceEmbedding(
+            (string) $student->id,
+            $tmpPath,
+            'faces/target.jpg',
+            false,
+            '3d9f1f77896fb3d1',
+            true,
+            $integrityQuarantine->id,
+            $this->superAdmin->id
+        );
+        $job->handle();
+
+        $integrityQuarantine->refresh();
+        $unrelatedQuarantine->refresh();
+
+        $this->assertEquals('resolved', $integrityQuarantine->status);
+        $this->assertEquals($this->superAdmin->id, $integrityQuarantine->resolved_by);
+        $this->assertEquals('quarantined', $unrelatedQuarantine->status); // Preserved!
+    }
+
+    public function test_generate_face_embedding_preserves_tmp_file_on_retryable_failure(): void
+    {
+        $student = Student::factory()->create();
+        Consent::create([
+            'student_id'    => $student->id,
+            'guardian_name' => 'Wali Siswa',
+            'text_version'  => 'v1.0',
+            'recorded_by'   => $this->superAdmin->id,
+            'given_at'      => now(),
+        ]);
+
+        Storage::fake('local');
+        $tmpPath = Storage::disk('local')->path('tmp/retry_test.jpg');
+        @mkdir(dirname($tmpPath), 0777, true);
+        file_put_contents($tmpPath, 'test-photo');
+
+        // Simulate Python failure on attempt 1
+        Process::fake([
+            '*' => Process::result('', 'Temporary process timeout', 1),
+        ]);
+
+        $job = new GenerateFaceEmbedding(
+            (string) $student->id,
+            $tmpPath,
+            'faces/test.jpg',
+            true,
+            '3d9f1f77896fb3d1',
+            true
+        );
+
+        try {
+            $job->handle();
+            $this->fail('Expected exception was not thrown');
+        } catch (\RuntimeException $e) {
+            // Tmp file must STILL exist for queue attempt 2!
+            $this->assertFileExists($tmpPath);
+        }
+
+        // When failed() is invoked after all retries exhausted, tmp file is deleted
+        $job->failed(new \RuntimeException('All attempts exhausted'));
+        $this->assertFileDoesNotExist($tmpPath);
     }
 
     public function test_quarantine_resolve_validates_notes_length(): void

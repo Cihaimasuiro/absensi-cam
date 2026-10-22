@@ -17,7 +17,8 @@ class RotateEnrollmentKey extends Command
                             {--edge-env-path= : Custom path to edge engine .env file}
                             {--show-key : Display the unmasked key in console output}
                             {--verify : Verify that all database templates can be decrypted with active key}
-                            {--dry-run : Test decryption and re-encryption without persisting}';
+                            {--dry-run : Test decryption and re-encryption without persisting}
+                            {--force-sync : Bump version cursors for all existing templates to force edge devices to re-sync}';
 
     protected $description = 'Rotate the ENROLLMENT_EMBED_KEY and re-encrypt all existing biometric face templates';
 
@@ -27,15 +28,33 @@ class RotateEnrollmentKey extends Command
             return $this->verifyTemplates();
         }
 
+        if ($this->option('force-sync')) {
+            return $this->forceSyncTemplates();
+        }
+
         $envPath = $this->option('env-path') ?: config('app.env_file_path', base_path('.env'));
         $edgeEnvPath = $this->option('edge-env-path') ?: config('app.edge_env_file_path', base_path('clients/edge-engine-rs/.env'));
 
+        // Pre-flight check file existence and writability
+        if (!File::exists($envPath)) {
+            $this->error("Target .env file does not exist at {$envPath}. Aborting.");
+            return self::FAILURE;
+        }
+
+        if (!is_writable($envPath)) {
+            $this->error("Cannot write to .env file at {$envPath}. Aborting.");
+            return self::FAILURE;
+        }
+
+        if (File::exists($edgeEnvPath) && !is_writable($edgeEnvPath)) {
+            $this->error("Cannot write to edge engine .env at {$edgeEnvPath}. Aborting.");
+            return self::FAILURE;
+        }
+
         $oldKeyRaw = $this->option('old-key') ?: config('app.enrollment_embed_key');
         if (empty($oldKeyRaw)) {
-            if (File::exists($envPath)) {
-                preg_match('/^ENROLLMENT_EMBED_KEY=(.*)$/m', File::get($envPath), $matches);
-                $oldKeyRaw = trim($matches[1] ?? '');
-            }
+            preg_match('/^ENROLLMENT_EMBED_KEY=(.*)$/m', File::get($envPath), $matches);
+            $oldKeyRaw = trim($matches[1] ?? '');
         }
 
         if (empty($oldKeyRaw)) {
@@ -65,17 +84,6 @@ class RotateEnrollmentKey extends Command
 
         if ($this->option('new-key') && $oldKeyRaw === $newKeyBase64) {
             $this->warn('New key is identical to the current key. Aborting.');
-            return self::FAILURE;
-        }
-
-        // Pre-flight check file writability
-        if (File::exists($envPath) && !is_writable($envPath)) {
-            $this->error("Cannot write to .env file at {$envPath}. Aborting.");
-            return self::FAILURE;
-        }
-
-        if (File::exists($edgeEnvPath) && !is_writable($edgeEnvPath)) {
-            $this->error("Cannot write to edge engine .env at {$edgeEnvPath}. Aborting.");
             return self::FAILURE;
         }
 
@@ -131,26 +139,37 @@ class RotateEnrollmentKey extends Command
 
         try {
             DB::transaction(function () use ($templates, $reencrypted, $envPath, $edgeEnvPath, $newKeyBase64) {
-                // 1. Persist DB changes
+                // 1. Persist DB changes with incremented version_cursor
+                $maxCursor = (int) DB::table('face_templates')->max('version_cursor');
                 foreach ($templates as $template) {
                     if (isset($reencrypted[$template->id])) {
+                        $maxCursor++;
                         DB::table('face_templates')
                             ->where('id', $template->id)
-                            ->update(['embedding_enc' => $reencrypted[$template->id]]);
+                            ->update([
+                                'embedding_enc'  => $reencrypted[$template->id],
+                                'version_cursor' => $maxCursor,
+                                'updated_at'     => now(),
+                            ]);
                     }
                 }
 
-                // 2. Write root .env atomically
+                // 2. Invalidate edge heartbeat template hash cache
+                \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+
+                // 3. Write root .env atomically
                 $this->updateEnvFile($envPath, $newKeyBase64);
 
-                // 3. Write edge .env atomically if exists
+                // 4. Write edge .env atomically if exists
                 if (File::exists($edgeEnvPath)) {
                     $this->updateEnvFile($edgeEnvPath, $newKeyBase64);
                 }
             });
         } catch (\Throwable $e) {
             // Restore backups on failure
-            File::put($envPath, $backupEnv);
+            if ($backupEnv !== null && File::exists($envPath)) {
+                File::put($envPath, $backupEnv);
+            }
             if ($backupEdgeEnv !== null && File::exists($edgeEnvPath)) {
                 File::put($edgeEnvPath, $backupEdgeEnv);
             }
@@ -171,7 +190,7 @@ class RotateEnrollmentKey extends Command
             $this->line("New ENROLLMENT_EMBED_KEY: <comment>{$maskedKey}</comment> (written directly to .env)");
         }
 
-        $this->warn('NOTE: Any paired edge devices must re-sync or re-pair to receive newly re-encrypted templates.');
+        $this->warn('NOTE: Any paired edge devices will receive new templates on next sync (version_cursor bumped).');
 
         Log::info('ENROLLMENT_EMBED_KEY rotated successfully', [
             'reencrypted_count' => count($reencrypted),
@@ -296,4 +315,28 @@ class RotateEnrollmentKey extends Command
         $this->error("Verification FAILED: {$failed} templates could not be decrypted.");
         return self::FAILURE;
     }
+
+    private function forceSyncTemplates(): int
+    {
+        $templates = FaceTemplate::withTrashed()->get();
+        $this->info("Bumping version cursor for {$templates->count()} templates to trigger edge re-sync...");
+
+        $maxCursor = (int) DB::table('face_templates')->max('version_cursor');
+        DB::transaction(function () use ($templates, &$maxCursor) {
+            foreach ($templates as $template) {
+                $maxCursor++;
+                DB::table('face_templates')
+                    ->where('id', $template->id)
+                    ->update([
+                        'version_cursor' => $maxCursor,
+                        'updated_at'     => now(),
+                    ]);
+            }
+            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+        });
+
+        $this->info("Successfully bumped version cursors (new max cursor: {$maxCursor}). Edge devices will reconcile on next heartbeat/sync.");
+        return self::SUCCESS;
+    }
 }
+

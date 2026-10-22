@@ -90,5 +90,41 @@ class RotateEnrollmentKeyTest extends TestCase
         );
 
         $this->assertEquals($rawVector, $decrypted);
+        $this->assertGreaterThan(0, $template->version_cursor);
+    }
+
+    public function test_rotation_fails_gracefully_when_env_file_missing(): void
+    {
+        $nonExistentEnv = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'missing_env_' . uniqid();
+
+        $this->artisan('app:rotate-enrollment-key', [
+            '--env-path' => $nonExistentEnv,
+        ])
+        ->expectsOutputToContain('Target .env file does not exist')
+        ->assertFailed();
+    }
+
+    public function test_force_sync_bumps_version_cursor_for_edge_devices(): void
+    {
+        $student = Student::factory()->create();
+        $template = FaceTemplate::create([
+            'student_id'     => $student->id,
+            'embedding_enc'  => base64_encode(str_repeat('X', 2048)),
+            'model_version'  => '3d9f1f77896fb3d1',
+            'embedding_hash' => hash('sha256', 'dummy'),
+            'version_cursor' => 5,
+        ]);
+
+        $initialCursor = $template->version_cursor;
+
+        $this->artisan('app:rotate-enrollment-key', [
+            '--force-sync' => true,
+        ])
+        ->expectsOutputToContain('Successfully bumped version cursors')
+        ->assertSuccessful();
+
+        $template->refresh();
+        $this->assertGreaterThan($initialCursor, $template->version_cursor);
     }
 }
+

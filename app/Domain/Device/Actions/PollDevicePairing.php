@@ -24,7 +24,7 @@ class PollDevicePairing
             ];
         }
 
-        // Auto expire if past deadline
+        // Otomatis kedaluwarsakan jika melewati batas waktu
         if ($request->isExpired() || $request->status === 'expired') {
             if ($request->status !== 'expired') {
                 $request->update(['status' => 'expired']);
@@ -71,7 +71,7 @@ class PollDevicePairing
 
         if ($request->status === 'approved') {
             return DB::transaction(function () use ($request) {
-                // Re-lock record to prevent race conditions on single-use retrieval
+                // Lock ulang record untuk mencegah race condition pada pengambilan sekali pakai
                 $locked = DevicePairingRequest::where('id', $request->id)->lockForUpdate()->first();
 
                 if (! $locked || $locked->status !== 'approved' || empty($locked->encrypted_payload)) {
@@ -86,7 +86,7 @@ class PollDevicePairing
 
                 $payload = json_decode(Crypt::decryptString($locked->encrypted_payload), true);
 
-                // Instantly burn the credentials from DB (one-time delivery)
+                // Segera hapus kredensial dari DB (pengiriman sekali pakai)
                 $locked->update([
                     'status'            => 'claimed',
                     'claimed_at'        => now(),

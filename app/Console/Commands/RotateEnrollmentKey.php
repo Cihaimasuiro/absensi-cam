@@ -35,7 +35,7 @@ class RotateEnrollmentKey extends Command
         $envPath = $this->option('env-path') ?: config('app.env_file_path', base_path('.env'));
         $edgeEnvPath = $this->option('edge-env-path') ?: config('app.edge_env_file_path', base_path('clients/edge-engine-rs/.env'));
 
-        // Pre-flight check file existence and writability
+        // Pemeriksaan awal keberadaan dan izin tulis file
         if (!File::exists($envPath)) {
             $this->error("Target .env file does not exist at {$envPath}. Aborting.");
             return self::FAILURE;
@@ -68,7 +68,7 @@ class RotateEnrollmentKey extends Command
             return self::FAILURE;
         }
 
-        // Determine new key
+        // Tentukan kunci baru
         $newKeyBase64 = $this->option('new-key');
         if (!empty($newKeyBase64)) {
             $newKey = $this->decodeKey($newKeyBase64);
@@ -103,7 +103,7 @@ class RotateEnrollmentKey extends Command
                 return self::FAILURE;
             }
 
-            // Decrypt with old key
+            // Dekripsi dengan kunci lama
             $rawEmbedding = $this->decryptAesGcm(
                 $encryptedBlob,
                 $oldKey,
@@ -116,7 +116,7 @@ class RotateEnrollmentKey extends Command
                 return self::FAILURE;
             }
 
-            // Encrypt with new key
+            // Enkripsi dengan kunci baru
             $newBlob = $this->encryptAesGcm(
                 $rawEmbedding,
                 $newKey,
@@ -133,13 +133,13 @@ class RotateEnrollmentKey extends Command
             return self::SUCCESS;
         }
 
-        // Backup existing .env files prior to write
+        // Cadangkan file .env yang ada sebelum ditulis
         $backupEnv = File::get($envPath);
         $backupEdgeEnv = File::exists($edgeEnvPath) ? File::get($edgeEnvPath) : null;
 
         try {
             DB::transaction(function () use ($templates, $reencrypted, $envPath, $edgeEnvPath, $newKeyBase64) {
-                // 1. Persist DB changes with incremented version_cursor
+                // 1. Simpan perubahan DB dengan version_cursor yang dinaikkan
                 $maxCursor = (int) DB::table('face_templates')->max('version_cursor');
                 foreach ($templates as $template) {
                     if (isset($reencrypted[$template->id])) {
@@ -154,19 +154,19 @@ class RotateEnrollmentKey extends Command
                     }
                 }
 
-                // 2. Invalidate edge heartbeat template hash cache
+                // 2. Batalkan cache hash template pada heartbeat edge
                 \Illuminate\Support\Facades\Cache::forever('templates_hash_epoch', ((int) \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1)) + 1);
 
-                // 3. Write root .env atomically
+                // 3. Tulis .env root secara atomik
                 $this->updateEnvFile($envPath, $newKeyBase64);
 
-                // 4. Write edge .env atomically if exists
+                // 4. Tulis .env edge secara atomik jika ada
                 if (File::exists($edgeEnvPath)) {
                     $this->updateEnvFile($edgeEnvPath, $newKeyBase64);
                 }
             });
         } catch (\Throwable $e) {
-            // Restore backups on failure
+            // Pulihkan cadangan jika terjadi kegagalan
             if ($backupEnv !== null && File::exists($envPath)) {
                 File::put($envPath, $backupEnv);
             }

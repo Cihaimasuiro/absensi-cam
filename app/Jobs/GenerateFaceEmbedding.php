@@ -38,7 +38,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             return;
         }
 
-        // Privacy guard: Ensure active biometric consent exists before processing (UU PDP No. 27/2022)
+        // Pengaman privasi: Pastikan consent biometrik aktif ada sebelum pemrosesan (UU PDP No. 27/2022)
         $student = \App\Domain\Student\Models\Student::find($this->studentId);
         if (!$student || !$student->hasActiveConsent()) {
             Log::warning('GenerateFaceEmbedding aborted: Active biometric consent not found or withdrawn', [
@@ -71,7 +71,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                 }
             }
             
-            // Apply AES-256-GCM encryption
+            // Terapkan enkripsi AES-256-GCM
             $encryptionService = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class);
             $usedModelVersion = $this->modelVersion ?? config('app.model_version');
             $encryptedBlob = $encryptionService->encrypt($stdout, $this->studentId, $usedModelVersion);
@@ -81,7 +81,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             DB::transaction(function () use ($encryptedBlob, $hash, $usedModelVersion) {
                 $data = [
                     'embedding_enc' => base64_encode($encryptedBlob),
-                    'key_id' => 'default_key', // This should match edge engine's configured key
+                    'key_id' => 'default_key', // Ini harus sama dengan key yang dikonfigurasi pada edge engine
                     'model_version' => $usedModelVersion,
                     'embedding_hash' => $hash,
                 ];
@@ -100,7 +100,7 @@ class GenerateFaceEmbedding implements ShouldQueue
                     FaceTemplate::create(array_merge(['student_id' => $this->studentId], $data));
                 }
 
-                // If dispatched for a specific quarantine incident, resolve only that incident
+                // Jika di-dispatch untuk insiden karantina tertentu, selesaikan hanya insiden tersebut
                 if ($this->quarantineId) {
                     \App\Domain\Enrollment\Models\BiometricQuarantine::where('id', $this->quarantineId)
                         ->where('status', 'quarantined')
@@ -115,7 +115,7 @@ class GenerateFaceEmbedding implements ShouldQueue
 
             Log::info('Face enrollment generated successfully', ['student_id' => $this->studentId]);
 
-            // Only delete tmp file on successful completion
+            // Hapus file tmp hanya setelah berhasil sepenuhnya
             if ($this->deleteAfter) {
                 @unlink($this->tmpPath);
             }

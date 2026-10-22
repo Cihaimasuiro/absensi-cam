@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Jalankan migration.
      */
     public function up(): void
     {
@@ -21,7 +21,7 @@ return new class extends Migration
         throw_if($teams && empty($columnNames['team_foreign_key'] ?? null), 'Error: team_foreign_key on config/permission.php not loaded. Run [php artisan config:clear] and try again.');
 
         /**
-         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
+         * Lihat `docs/prerequisites.md` untuk saran panjang kolom 'name' dan 'guard_name' bila muncul error "1071 Specified key was too long".
          */
         Schema::create($tableNames['permissions'], static function (Blueprint $table) {
             $table->id(); // permission id
@@ -33,7 +33,7 @@ return new class extends Migration
         });
 
         /**
-         * See `docs/prerequisites.md` for suggested lengths on 'name' and 'guard_name' if "1071 Specified key was too long" errors are encountered.
+         * Lihat `docs/prerequisites.md` untuk saran panjang kolom 'name' dan 'guard_name' bila muncul error "1071 Specified key was too long".
          */
         Schema::create($tableNames['roles'], static function (Blueprint $table) use ($teams, $columnNames) {
             $table->id(); // role id
@@ -120,7 +120,7 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Batalkan (reverse) migration.
      */
     public function down(): void
     {

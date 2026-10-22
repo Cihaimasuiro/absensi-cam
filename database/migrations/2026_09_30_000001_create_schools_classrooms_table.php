@@ -17,7 +17,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Division / department / class inside an org (FR-S02)
+        // Division / department / class di dalam sebuah org (FR-S02)
         Schema::create('classrooms', function (Blueprint $table) {
             $table->id();
             $table->foreignId('school_id')->constrained('schools')->cascadeOnDelete();
@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('code', 50)->nullable()->comment('Kode divisi/kelas');
             $table->string('type', 30)->default('department')->comment('department|class|division');
             $table->boolean('is_active')->default(true)->index();
-            // Attendance rules per group (from Facenox AttendanceGroup concept)
+            // Aturan absensi per group (dari konsep AttendanceGroup Facenox)
             $table->time('class_start_time')->default('08:00')->comment('Jam masuk resmi');
             $table->boolean('late_threshold_enabled')->default(false);
             $table->unsignedSmallInteger('late_threshold_minutes')->default(15);

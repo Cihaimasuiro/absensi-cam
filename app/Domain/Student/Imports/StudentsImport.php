@@ -37,7 +37,7 @@ class StudentsImport implements ToModel, WithHeadingRow, WithValidation, WithBat
 
     public function prepareForValidation($data, $index)
     {
-        // Support common column names
+        // Dukung nama kolom yang umum
         $data['code'] = $data['code'] ?? $data['nis'] ?? $data['nip'] ?? null;
         $data['name'] = $data['name'] ?? $data['nama'] ?? null;
         $data['phone'] = $data['phone'] ?? $data['telepon'] ?? null;

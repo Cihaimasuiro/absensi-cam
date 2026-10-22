@@ -7,8 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Pruned from: Facenox maintenance.py /cleanup concept
- * Removes expired, unused pairing codes — they are single-use and time-limited.
+ * Diadaptasi dari: konsep /cleanup pada Facenox maintenance.py
+ * Menghapus pairing code yang kedaluwarsa dan belum terpakai — code bersifat sekali pakai dan dibatasi waktu.
  */
 class PruneStaleClassroomPairingCodes extends Command
 {

@@ -39,7 +39,7 @@ class ConsentController extends Controller
         $totalWithdrawn = Consent::whereNotNull('withdrawn_at')->count();
         $totalStudents = Student::count();
 
-        // Students without active consent for "Record Consent" dropdown
+        // Siswa tanpa consent aktif untuk dropdown "Record Consent"
         $studentsWithoutConsent = Student::whereDoesntHave('activeConsent')
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
@@ -103,7 +103,7 @@ class ConsentController extends Controller
             $consent->update(['withdrawn_at' => now()]);
             $student = $consent->student;
 
-            // Cascade soft delete to face template to send tombstone to edge terminals (UU PDP No. 27/2022)
+            // Soft delete berantai ke face template agar tombstone terkirim ke terminal edge (UU PDP No. 27/2022)
             if ($student && $student->faceTemplate && !$student->faceTemplate->trashed()) {
                 $student->faceTemplate->delete();
             }

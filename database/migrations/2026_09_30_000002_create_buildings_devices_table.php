@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Buildings = physical locations / buildings / doors (FR-S02)
+        // Buildings = lokasi fisik / gedung / pintu (FR-S02)
         Schema::create('buildings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Edge devices (Orange Pi Lite 2 terminals) — FR-S05, FR-S08
+        // Edge device (terminal Orange Pi Lite 2) — FR-S05, FR-S08
         Schema::create('devices', function (Blueprint $table) {
             $table->id();
             $table->foreignId('building_id')->nullable()->constrained('buildings')->nullOnDelete();
@@ -38,14 +38,14 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // M:N — devices can recognize students from multiple classrooms (FR-E06, FR-S07)
+        // M:N — device dapat mengenali siswa dari beberapa classroom (FR-E06, FR-S07)
         Schema::create('device_groups', function (Blueprint $table) {
             $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
             $table->foreignId('classroom_id')->constrained('classrooms')->cascadeOnDelete();
             $table->primary(['device_id', 'classroom_id']);
         });
 
-        // One-time pairing codes — FR-S05
+        // Pairing code sekali pakai — FR-S05
         Schema::create('pairing_codes', function (Blueprint $table) {
             $table->id();
             $table->foreignId('building_id')->constrained('buildings')->cascadeOnDelete();

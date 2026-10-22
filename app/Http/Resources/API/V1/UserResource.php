@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class UserResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Ubah resource menjadi array.
      *
      * @return array<string, mixed>
      */

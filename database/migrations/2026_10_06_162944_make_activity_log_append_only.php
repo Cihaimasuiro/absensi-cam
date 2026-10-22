@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Jalankan migration.
      */
     public function up(): void
     {
-        // For SQLite
+        // Untuk SQLite
         if (DB::connection()->getDriverName() === 'sqlite') {
             DB::unprepared("
                 CREATE TRIGGER prevent_activity_log_update BEFORE UPDATE ON activity_log 
@@ -23,7 +23,7 @@ return new class extends Migration
                 BEGIN SELECT RAISE(ABORT, 'activity_log is append-only'); END;
             ");
         } 
-        // For MySQL
+        // Untuk MySQL
         else if (DB::connection()->getDriverName() === 'mysql') {
             DB::unprepared("
                 CREATE TRIGGER prevent_activity_log_update BEFORE UPDATE ON activity_log
@@ -37,7 +37,7 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Batalkan (reverse) migration.
      */
     public function down(): void
     {

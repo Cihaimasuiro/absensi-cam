@@ -104,7 +104,7 @@ class QuarantineController extends Controller
                     }
                 }
 
-                // Batch process corrupted items: insert if not already active in quarantine
+                // Proses massal item rusak: insert jika belum aktif di karantina
                 if (!empty($corruptedItems)) {
                     $chunkCorruptedIds = array_column($corruptedItems, 'student_id');
                     $alreadyQuarantined = BiometricQuarantine::whereIn('student_id', $chunkCorruptedIds)
@@ -133,7 +133,7 @@ class QuarantineController extends Controller
                     $quarantinedCount += count($corruptedItems);
                 }
 
-                // Batch resolve healthy items (ONLY if previously quarantined due to integrity failure)
+                // Selesaikan item sehat secara massal (HANYA jika sebelumnya dikarantina karena kegagalan integritas)
                 if (!empty($healthyStudentIds)) {
                     BiometricQuarantine::whereIn('student_id', $healthyStudentIds)
                         ->where('status', 'quarantined')
@@ -177,13 +177,13 @@ class QuarantineController extends Controller
             return back()->with('error', "Foto anggota {$student->name} tidak ditemukan di server ({$photoPath}). Silakan unggah foto baru melalui menu Anggota.");
         }
 
-        // Copy file to tmp for queued processing (mimics EnrollFace action)
+        // Salin file ke tmp untuk pemrosesan melalui queue (meniru action EnrollFace)
         $ext = pathinfo($photoPath, PATHINFO_EXTENSION) ?: 'jpg';
         $tmpFilename = "reenroll_{$student->id}_" . Str::uuid() . ".{$ext}";
         Storage::disk('local')->copy($photoPath, "tmp/{$tmpFilename}");
         $tmpPath = Storage::disk('local')->path("tmp/{$tmpFilename}");
 
-        // Dispatch background job on enrollments queue
+        // Dispatch background job pada queue enrollments
         GenerateFaceEmbedding::dispatch(
             (string) $student->id,
             $tmpPath,

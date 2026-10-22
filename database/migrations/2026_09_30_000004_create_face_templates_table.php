@@ -8,14 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Face templates — enrollment result, distributed to edge via delta sync (FR-S03, FR-S07)
-        // No photo stored here. Only embedding. Photo deleted immediately after face-embed job runs.
+        // Face templates — hasil enrollment, didistribusikan ke edge lewat delta sync (FR-S03, FR-S07)
+        // Tidak ada foto yang disimpan di sini. Hanya embedding. Foto dihapus segera setelah job face-embed berjalan.
         Schema::create('face_templates', function (Blueprint $table) {
             $table->id();
             $table->uuid('student_id');
             $table->foreign('student_id')->references('id')->on('students')->cascadeOnDelete();
-            // Encrypted embedding: AES-256-GCM (12 byte nonce + N byte payload + 16 byte tag)
-            // SFace 128-d float32 = 512 bytes → encrypted = 540 bytes, stored as base64 string
+            // Embedding terenkripsi: AES-256-GCM (12 byte nonce + N byte payload + 16 byte tag)
+            // SFace 128-d float32 = 512 byte → terenkripsi = 540 byte, disimpan sebagai string base64
             $table->text('embedding_enc')->comment('AES-256-GCM ciphertext base64; nonce prepended');
             $table->string('model_version', 60)->comment('mis. 3d9f1f77896fb3d1/1 — versi harus cocok dengan edge');
             // version_cursor untuk delta sync: edge meminta GET /templates?cursor=<N>

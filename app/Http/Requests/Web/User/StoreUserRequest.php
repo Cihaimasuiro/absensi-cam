@@ -7,16 +7,16 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreUserRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Tentukan apakah user berwenang membuat request ini.
      */
     public function authorize(): bool
     {
-        // Add permission check here, e.g. $this->user()->can('user.create')
+        // Tambahkan pemeriksaan permission di sini, misalnya $this->user()->can('user.create')
         return true;
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Ambil aturan validasi yang berlaku untuk request ini.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

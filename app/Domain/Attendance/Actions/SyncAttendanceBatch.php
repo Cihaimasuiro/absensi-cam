@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Log;
 class SyncAttendanceBatch
 {
     /**
-     * Idempotently insert a batch of attendance records from an edge device.
+     * Sisipkan satu batch catatan absensi dari perangkat edge secara idempoten.
      *
-     * Returns per-record results: created | duplicate | rejected.
+     * Mengembalikan hasil per record: created | duplicate | rejected.
      *
      * @param  array<array{id: string, student_id: string, captured_at: string,
      *                     direction: string, score: float, liveness_score: ?float,
@@ -23,13 +23,13 @@ class SyncAttendanceBatch
     {
         $results = [];
 
-        // Process each record in its own small transaction for true idempotency:
-        // if the whole batch wrapped in one TX failed midway, edge would retry
-        // and we'd get duplicates. Per-record TX means only the failed ones need retry.
+        // Proses setiap record dalam transaksi kecil tersendiri agar benar-benar idempoten:
+        // jika seluruh batch dibungkus satu TX lalu gagal di tengah, edge akan mengulang
+        // dan kita mendapat duplikat. Dengan TX per record, hanya yang gagal perlu diulang.
         foreach ($records as $record) {
             try {
                 $inserted = DB::transaction(function () use ($device, $record): bool {
-                    // UUID from edge is the PK — insertOrIgnore handles the duplicate case
+                    // UUID dari edge adalah PK — insertOrIgnore menangani kasus duplikat
                     $affected = AttendanceLog::insertOrIgnore([[
                         'id'             => $record['id'],
                         'student_id'      => $record['student_id'],

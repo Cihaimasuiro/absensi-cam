@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Students — PRD §11.1 server schema, FR-S02, FR-S04
+        // Students — skema server PRD §11.1, FR-S02, FR-S04
         Schema::create('students', function (Blueprint $table) {
             $table->uuid('id')->primary()->comment('UUID dari server; digunakan di edge sebagai student_id');
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->index(['classroom_id', 'is_active']);
         });
 
-        // Biometric consent (WAJIB per UU PDP No. 27/2022 pasal data biometrik) — FR-S04
+        // Consent biometrik (WAJIB per UU PDP No. 27/2022 pasal data biometrik) — FR-S04
         Schema::create('consents', function (Blueprint $table) {
             $table->id();
             $table->uuid('student_id');

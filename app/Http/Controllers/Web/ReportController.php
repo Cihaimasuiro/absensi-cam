@@ -111,7 +111,7 @@ class ReportController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, ['ID', 'Nama', 'Kode', 'Perangkat', 'Waktu', 'Arah', 'Skor', 'Dikoreksi']);
             foreach ($logs as $log) {
-                // Prevent CSV injection
+                // Cegah CSV injection
                 $sanitize = function($val) {
                     return preg_match('/^[=\-+\@]/', (string)$val) ? "'" . $val : $val;
                 };

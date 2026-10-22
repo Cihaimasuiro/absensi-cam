@@ -8,11 +8,11 @@ use RuntimeException;
 class FaceExtractor
 {
     /**
-     * Extract 512-d normalized face embedding (2048 raw bytes) from an image photo.
+     * Ekstrak face embedding 512-d yang ternormalisasi (2048 byte mentah) dari sebuah foto.
      *
-     * @param string $imagePath Absolute or relative filesystem path to the photo.
-     * @return string Binary string of exactly 2048 bytes (512 little-endian IEEE-754 f32).
-     * @throws RuntimeException When extraction fails, face is invalid, or embedding size mismatch.
+     * @param string $imagePath Path filesystem absolut atau relatif ke foto.
+     * @return string String biner tepat 2048 byte (512 little-endian IEEE-754 f32).
+     * @throws RuntimeException Saat ekstraksi gagal, wajah tidak valid, atau ukuran embedding tidak cocok.
      */
     public function extract(string $imagePath): string
     {
@@ -65,7 +65,7 @@ class FaceExtractor
             throw new RuntimeException("Face extraction failed: {$errorMsg}");
         }
 
-        // Take the last non-empty line of stdout to avoid any extraneous stdout logs
+        // Ambil baris terakhir yang tidak kosong dari stdout untuk menghindari log stdout yang tidak perlu
         $stdout = trim($result->output());
         $lines = array_values(array_filter(explode("\n", str_replace("\r", "", $stdout)), fn($l) => trim($l) !== ''));
         $lastLine = !empty($lines) ? end($lines) : '';

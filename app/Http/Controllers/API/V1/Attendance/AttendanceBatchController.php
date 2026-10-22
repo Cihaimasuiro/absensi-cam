@@ -11,8 +11,8 @@ use Illuminate\Http\JsonResponse;
 /**
  * POST /api/v1/attendance/batch
  *
- * Idempotent batch insert from edge outbox.
- * Max 200 records per call (FR-E10).
+ * Insert batch idempoten dari outbox edge.
+ * Maksimal 200 record per pemanggilan (FR-E10).
  * Response per record: created | duplicate | rejected (PRD §11.2).
  */
 class AttendanceBatchController extends Controller

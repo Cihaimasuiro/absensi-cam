@@ -11,8 +11,8 @@ use Illuminate\Http\Request;
 /**
  * POST /api/v1/logs
  *
- * Optional endpoint — edge ships error/warn logs for server-side visibility (FR-E12, NFR-06).
- * Server retains for 7 days (PRD §12.3). Batch: up to 50 log lines per call.
+ * Endpoint opsional — edge mengirim log error/warn untuk visibilitas di sisi server (FR-E12, NFR-06).
+ * Server menyimpan selama 7 hari (PRD §12.3). Batch: maksimal 50 baris log per pemanggilan.
  */
 class DeviceLogController extends Controller
 {

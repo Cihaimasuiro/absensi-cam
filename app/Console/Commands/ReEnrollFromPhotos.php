@@ -42,7 +42,7 @@ class ReEnrollFromPhotos extends Command
         $failed = 0;
 
         foreach ($templates as $template) {
-            // Safeguard 1: Skip templates that can already be decrypted unless --all is specified
+            // Pengaman 1: Lewati template yang sudah bisa didekripsi kecuali --all ditentukan
             if (!$this->option('all') && !empty($template->embedding_enc)) {
                 try {
                     $existingRaw = $encryptionService->decrypt(
@@ -57,7 +57,7 @@ class ReEnrollFromPhotos extends Command
                         continue;
                     }
                 } catch (\Throwable) {
-                    // Not decryptable with current key; proceed with recovery re-enrollment
+                    // Tidak dapat didekripsi dengan key saat ini; lanjutkan re-enrollment pemulihan
                 }
             }
 
@@ -78,7 +78,7 @@ class ReEnrollFromPhotos extends Command
                 continue;
             }
 
-            // Safeguard 2: Biometric 1:N duplicate face detection
+            // Pengaman 2: Deteksi wajah duplikat biometrik 1:N
             if (!$this->option('skip-duplicate-check')) {
                 $duplicate = $duplicateDetector->detect($rawEmbedding, (string) $template->student_id);
                 if ($duplicate !== null) {
@@ -93,7 +93,7 @@ class ReEnrollFromPhotos extends Command
             $encryptedBlob = $encryptionService->encrypt($rawEmbedding, (string) $template->student_id, $modelVersion);
             $hash = hash('sha256', $rawEmbedding);
 
-            // Safeguard 3: Verify immediate roundtrip decrypt before saving
+            // Pengaman 3: Verifikasi dekripsi roundtrip segera sebelum menyimpan
             $decrypted = $encryptionService->decrypt($encryptedBlob, (string) $template->student_id, $modelVersion);
             if ($decrypted !== $rawEmbedding) {
                 $this->error("Roundtrip verification failed for template ID {$template->id}");
@@ -101,14 +101,14 @@ class ReEnrollFromPhotos extends Command
                 continue;
             }
 
-            // Safeguard 4: Dry-run simulation without touching database
+            // Pengaman 4: Simulasi dry-run tanpa menyentuh database
             if ($this->option('dry-run')) {
                 $this->info("[dry-run] Successfully extracted and verified template ID {$template->id} (student: {$template->student_id}). Database unchanged.");
                 $success++;
                 continue;
             }
 
-            // Safeguard 5: Atomic database transaction & version_cursor bump for edge sync
+            // Pengaman 5: Transaksi database atomik & kenaikan version_cursor untuk edge sync
             DB::transaction(function () use ($template, $encryptedBlob, $hash, $modelVersion, &$maxCursor) {
                 $maxCursor++;
                 DB::table('face_templates')

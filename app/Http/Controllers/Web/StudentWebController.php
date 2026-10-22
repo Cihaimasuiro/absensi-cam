@@ -108,7 +108,7 @@ class StudentWebController extends Controller
             activity('student')->performedOn($student)->causedBy(auth()->user())->log('Consent given');
         } elseif (!$request->boolean('has_consent') && $student->hasActiveConsent()) {
             $student->activeConsent()->update(['withdrawn_at' => now()]);
-            // Also delete face template if consent is withdrawn
+            // Hapus juga face template jika consent ditarik
             if ($student->faceTemplate) {
                 $student->faceTemplate->delete();
             }
@@ -120,7 +120,7 @@ class StudentWebController extends Controller
 
     public function destroy(Student $student)
     {
-        $student->delete(); // soft-delete triggers tombstone sync
+        $student->delete(); // soft-delete memicu sinkronisasi tombstone
         
         activity('student')
             ->performedOn($student)
@@ -155,7 +155,7 @@ class StudentWebController extends Controller
             foreach ($failures as $failure) {
                 $messages[] = "Baris {$failure->row()}: " . implode(', ', $failure->errors());
             }
-            // limit to first 3 errors to avoid huge flash messages
+            // batasi ke 3 error pertama agar flash message tidak terlalu besar
             if (count($messages) > 3) {
                 $messages = array_slice($messages, 0, 3);
                 $messages[] = '...dan kesalahan lainnya.';
@@ -234,7 +234,7 @@ class StudentWebController extends Controller
     public function bulkEnroll(Request $request)
     {
         $request->validate([
-            'zip_file' => ['required', 'file', 'mimes:zip', 'max:51200'], // 50MB max
+            'zip_file' => ['required', 'file', 'mimes:zip', 'max:51200'], // maksimal 50MB
             'has_consent' => ['required', 'boolean'],
         ]);
 
@@ -242,7 +242,7 @@ class StudentWebController extends Controller
             $zip = new \ZipArchive;
             $res = $zip->open($request->file('zip_file')->path());
             if ($res === true) {
-                // Pre-flight check for Zip Slip
+                // Pemeriksaan awal terhadap Zip Slip
                 for ($i = 0; $i < $zip->numFiles; $i++) {
                     $stat = $zip->statIndex($i);
                     if (str_contains($stat['name'], '../') || str_contains($stat['name'], '..\\')) {
@@ -251,7 +251,7 @@ class StudentWebController extends Controller
                     }
                 }
 
-                // Extract to temp folder
+                // Ekstrak ke folder temp
                 $extractPath = storage_path('app/tmp/bulk_enroll_' . \Illuminate\Support\Str::uuid());
                 if (!\Illuminate\Support\Facades\File::exists($extractPath)) {
                     \Illuminate\Support\Facades\File::makeDirectory($extractPath, 0755, true);
@@ -260,7 +260,7 @@ class StudentWebController extends Controller
                 $zip->extractTo($extractPath);
                 $zip->close();
                 
-                // Read all files
+                // Baca semua file
                 $files = \Illuminate\Support\Facades\File::allFiles($extractPath);
                 $successCount = 0;
                 $skippedCount = 0;
@@ -269,7 +269,7 @@ class StudentWebController extends Controller
                 foreach ($files as $file) {
                     $filename = $file->getFilename();
                     
-                    // Skip hidden files and non-images
+                    // Lewati file tersembunyi dan non-gambar
                     if (str_starts_with($filename, '.')) continue;
                     $ext = strtolower($file->getExtension());
                     if (!in_array($ext, ['jpg', 'jpeg', 'png'])) continue;
@@ -278,7 +278,7 @@ class StudentWebController extends Controller
                     
                     $student = Student::where('code', $code)->first();
                     if ($student) {
-                        // Make sure consent is recorded
+                        // Pastikan consent tercatat
                         if (!$student->hasActiveConsent() && $request->boolean('has_consent')) {
                             $student->consents()->create([
                                 'given_at'     => now(),
@@ -287,7 +287,7 @@ class StudentWebController extends Controller
                             ]);
                         }
                         
-                        // Fake an UploadedFile
+                        // Buat UploadedFile palsu
                         $uploadedFile = new \Illuminate\Http\UploadedFile(
                             $file->getPathname(),
                             $file->getFilename(),

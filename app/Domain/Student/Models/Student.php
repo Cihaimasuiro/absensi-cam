@@ -95,7 +95,7 @@ class Student extends Model
     protected static function booted()
     {
         static::deleting(function (Student $student) {
-            // Cascade soft delete to faceTemplate so tombstone is sent to edge
+            // Cascade soft delete ke faceTemplate agar tombstone terkirim ke edge
             $template = $student->faceTemplate()->withTrashed()->first();
             if ($template && ! $template->trashed()) {
                 $template->delete();
@@ -104,7 +104,7 @@ class Student extends Model
 
         static::updated(function (Student $student) {
             if ($student->wasChanged('classroom_id') && $student->faceTemplate) {
-                // Touch the faceTemplate to bump version_cursor so devices get the tombstone if it moved out of scope
+                // Touch faceTemplate untuk menaikkan version_cursor agar perangkat menerima tombstone jika keluar dari scope
                 $student->faceTemplate->touch();
             }
         });

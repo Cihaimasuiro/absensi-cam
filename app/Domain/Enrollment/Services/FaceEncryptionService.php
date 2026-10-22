@@ -5,9 +5,10 @@ namespace App\Domain\Enrollment\Services;
 class FaceEncryptionService
 {
     /**
-     * Resolves and base64-decodes the 32-byte AES-256-GCM key, stripping any 'base64:' prefix.
+     * Mengambil lalu men-decode base64 kunci AES-256-GCM 32 byte, sekaligus membuang
+     * awalan 'base64:' jika ada.
      *
-     * @throws \RuntimeException If the key is missing or not 32 bytes
+     * @throws \RuntimeException Jika kunci tidak ada atau panjangnya bukan 32 byte
      */
     private function getDecodedKey(): string
     {
@@ -29,14 +30,14 @@ class FaceEncryptionService
     }
 
     /**
-     * Encrypts the raw face embedding using AES-256-GCM.
+     * Enkripsi embedding wajah mentah memakai AES-256-GCM.
      *
-     * @param string $rawEmbedding The raw binary embedding (2048 bytes for ArcFace-512)
-     * @param string $studentId The student ID for Additional Authenticated Data (AAD)
-     * @param string $modelVersion The model version for AAD
-     * @return string The encrypted blob (nonce + ciphertext + tag)
+     * @param string $rawEmbedding Embedding biner mentah (2048 byte untuk ArcFace-512)
+     * @param string $studentId ID siswa untuk Additional Authenticated Data (AAD)
+     * @param string $modelVersion Versi model untuk AAD
+     * @return string Blob terenkripsi (nonce + ciphertext + tag)
      *
-     * @throws \RuntimeException If encryption fails or key is invalid
+     * @throws \RuntimeException Jika enkripsi gagal atau kunci tidak valid
      */
     public function encrypt(string $rawEmbedding, string $studentId, string $modelVersion): string
     {
@@ -65,14 +66,14 @@ class FaceEncryptionService
     }
 
     /**
-     * Decrypts the encrypted blob back to raw binary embedding (2048 bytes).
+     * Dekripsi blob terenkripsi kembali menjadi embedding biner mentah (2048 byte).
      *
-     * @param string $encryptedBlob The encrypted blob (12-byte nonce + ciphertext + 16-byte tag)
-     * @param string $studentId The student ID for Additional Authenticated Data (AAD)
-     * @param string $modelVersion The model version for AAD
-     * @return string The raw binary embedding (2048 bytes)
+     * @param string $encryptedBlob Blob terenkripsi (nonce 12 byte + ciphertext + tag 16 byte)
+     * @param string $studentId ID siswa untuk Additional Authenticated Data (AAD)
+     * @param string $modelVersion Versi model untuk AAD
+     * @return string Embedding biner mentah (2048 byte)
      *
-     * @throws \RuntimeException If decryption fails or authentication tag does not match
+     * @throws \RuntimeException Jika dekripsi gagal atau authentication tag tidak cocok
      */
     public function decrypt(string $encryptedBlob, string $studentId, string $modelVersion): string
     {

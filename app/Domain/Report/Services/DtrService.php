@@ -9,7 +9,7 @@ class DtrService
 {
     public function generateDtr(iterable $logs): Collection
     {
-        // $logs already have captures_at casted to app timezone by accessor
+        // $logs sudah memiliki captures_at yang di-cast ke timezone aplikasi oleh accessor
         
         $dtr = [];
         
@@ -97,7 +97,7 @@ class DtrService
             ];
         }
         
-        // Sort by date then name
+        // Urutkan berdasarkan tanggal lalu nama
         usort($results, function($a, $b) {
             if ($a['date'] === $b['date']) {
                 return strcmp($a['name'], $b['name']);

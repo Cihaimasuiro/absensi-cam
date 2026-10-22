@@ -55,7 +55,7 @@ class DeviceController extends Controller
         return back()->with('success', "Permintaan pairing ({$pairingRequest->pairing_code}) telah ditolak.");
     }
 
-    /** Create a device and generate an API token instantly */
+    /** Buat device dan langsung generate API token */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -80,7 +80,7 @@ class DeviceController extends Controller
             'status' => 'offline',
         ]);
 
-        // Generate Sanctum token
+        // Generate token Sanctum
         $token = $device->createToken('edge-token', ['device'])->plainTextToken;
 
         activity('device')
@@ -106,7 +106,7 @@ ENV;
             ->with('success', 'Perangkat berhasil ditambahkan.');
     }
 
-    /** Mark device offline / revoke Sanctum token */
+    /** Tandai device offline / cabut token Sanctum */
     public function revoke(Device $device)
     {
         $device->tokens()->delete();
@@ -120,7 +120,7 @@ ENV;
         return back()->with('success', "Token perangkat {$device->name} dicabut.");
     }
 
-    /** Reset token and show configuration again */
+    /** Reset token dan tampilkan konfigurasi kembali */
     public function resetToken(Request $request, Device $device)
     {
         $device->tokens()->delete();
@@ -151,7 +151,7 @@ ENV;
             ->with('success', "Token untuk perangkat {$device->name} berhasil di-reset.");
     }
 
-    /** Permanently delete the device */
+    /** Hapus device secara permanen */
     public function destroy(Device $device)
     {
         $name = $device->name;
@@ -165,7 +165,7 @@ ENV;
         return back()->with('success', "Perangkat {$name} berhasil dihapus.");
     }
 
-    /** Update device details */
+    /** Perbarui detail device */
     public function update(Request $request, Device $device)
     {
         $validated = $request->validate([

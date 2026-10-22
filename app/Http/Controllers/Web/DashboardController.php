@@ -16,7 +16,7 @@ class DashboardController extends Controller
         $startUtc = $today->copy()->startOfDay()->setTimezone('UTC');
         $endUtc = $today->copy()->endOfDay()->setTimezone('UTC');
 
-        // Stats (ported from Facenox Overview.tsx fetchOverviewData)
+        // Statistik (di-port dari Facenox Overview.tsx fetchOverviewData)
         $totalStudents    = Student::where('is_active', true)->count();
         $totalEnrolled   = Student::whereHas('faceTemplate')->count();
         $presentToday    = AttendanceLog::where('direction', 'in')
@@ -24,7 +24,7 @@ class DashboardController extends Controller
         $devicesOnline   = Device::where('status', 'online')
             ->where('last_heartbeat_at', '>=', now()->subMinutes(3))->count();
 
-        // Recent activity (last 30 events today — mirrors live log panel in Overview.tsx)
+        // Aktivitas terbaru (30 event terakhir hari ini — mencerminkan panel live log di Overview.tsx)
         $recentActivity = AttendanceLog::with(['student:id,name,code', 'device:id,name,device_code'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
             ->orderByDesc('captured_at')

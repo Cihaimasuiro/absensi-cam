@@ -13,7 +13,7 @@ use Laravel\Sanctum\NewAccessToken;
 class PairDevice
 {
     /**
-     * Exchange a one-time pairing code for a Sanctum device token.
+     * Tukar pairing code sekali pakai dengan token perangkat Sanctum.
      *
      * @param  array{code: string, device_name: string, fw_version: string, model_version: string}  $data
      * @throws ValidationException
@@ -35,10 +35,10 @@ class PairDevice
                 ]);
             }
 
-            // Mark code as used immediately (one-time)
+            // Tandai code sudah terpakai segera (sekali pakai)
             $pairingCode->update(['used_at' => now()]);
 
-            // Create device record attached to the building the code was created for
+            // Buat record perangkat yang terhubung ke building tempat code dibuat
             $device = Device::create([
                 'building_id'     => $pairingCode->building_id,
                 'name'          => $data['device_name'],
@@ -49,11 +49,11 @@ class PairDevice
                 'last_heartbeat_at' => now(),
             ]);
 
-            // Issue Sanctum token with 'device' ability (scoped, can be revoked)
+            // Terbitkan token Sanctum dengan ability 'device' (terbatas, dapat dicabut)
             /** @var NewAccessToken $token */
             $token = $device->createToken('edge-device', ['device']);
 
-            // Store hash of token for revocation lookup (Sanctum stores its own hash too)
+            // Simpan hash token untuk pencarian saat pencabutan (Sanctum juga menyimpan hash-nya sendiri)
             $device->update(['token_hash' => hash('sha256', $token->plainTextToken)]);
 
             activity('device')
@@ -67,7 +67,7 @@ class PairDevice
 
             return [
                 'device_id' => $device->device_code,
-                'token'     => $token->plainTextToken, // shown once
+                'token'     => $token->plainTextToken, // hanya ditampilkan sekali
                 'building_id' => $device->building_id,
                 'embed_key' => $embedKey,
                 'model_version' => config('app.model_version'),

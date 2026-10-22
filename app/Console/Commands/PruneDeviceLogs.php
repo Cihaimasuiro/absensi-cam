@@ -7,8 +7,8 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Pruned from: Facenox lifespan.py:127 cleanup_old_data() pattern
- * PRD §12.3 — device logs retained 7 days on server.
+ * Diadaptasi dari: pola cleanup_old_data() pada Facenox lifespan.py:127
+ * PRD §12.3 — device log disimpan 7 hari di server.
  */
 class PruneDeviceLogs extends Command
 {

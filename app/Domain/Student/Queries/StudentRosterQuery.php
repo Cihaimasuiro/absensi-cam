@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 final class StudentRosterQuery
 {
     /**
-     * Build and paginate the student roster based on incoming filters and search criteria.
+     * Bangun dan paginate daftar siswa berdasarkan filter dan kriteria pencarian yang masuk.
      */
     public function paginate(Request $request, int $perPage = 50): LengthAwarePaginator
     {

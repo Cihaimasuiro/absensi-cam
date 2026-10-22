@@ -55,7 +55,7 @@ The server turns those records into daily time records (DTR), CSV exports, and P
 | `routes/` | Web and API route definitions |
 | `models/` | Tracked ONNX models (detector, recognizer, liveness) |
 | `clients/edge-engine-rs/` | **Production edge runtime & server face-extract** — Rust, axum |
-| `clients/edge-engine/` | Python reference implementation (tooling only) |
+| `archive/edge-engine-py/` | Python reference implementation (tooling only) |
 | `packages/face_core/` | (Deprecated) Python face pipeline used for benchmarking |
 | `archive/edge-engine-py/` | Legacy — do not add features here |
 | `templates/artcraft/` | Design reference for the edge control panel |
@@ -344,8 +344,8 @@ unless you have logged into `/control` in the same browser.
 
 ### Guidelines
 
-`docs/AGENTS2.md` covers the Rust and Python edge rules in detail — thermal pacing, anti-spoofing,
-cross-compilation, read-only rootfs, flash wear.
+`docs/EDGE-GUIDELINES.md` covers the Rust and Python edge rules in detail — thermal pacing,
+anti-spoofing, cross-compilation, read-only rootfs, flash wear.
 
 ---
 
@@ -451,9 +451,9 @@ cargo test --lib
 | Document | Covers |
 |---|---|
 | [PRD.md](PRD.md) | Product requirements, hardware BOM, pinout, power budget, milestones |
-| [AGENTS2.md](AGENTS2.md) | Edge engine engineering rules — Rust and Python |
+| [EDGE-GUIDELINES.md](EDGE-GUIDELINES.md) | Edge engine engineering rules — Rust and Python |
 | [DESIGN.md](DESIGN.md) | Design tokens, typography, colour, spacing |
-| [TFT_STREAM_PLAN_V3.md](TFT_STREAM_PLAN_V3.md) | TFT display protocol from Orange Pi to Arduino |
+| [TFT_STREAM.md](TFT_STREAM.md) | TFT display protocol from Orange Pi to Arduino |
 | [commercial_models_plan.md](commercial_models_plan.md) | ONNX model licensing and commercial compliance |
 | [../AGENTS.md](../AGENTS.md) | Laravel engineering rules — the mandatory guideline |
 | [../SECURITY.md](../SECURITY.md) | Security policy |

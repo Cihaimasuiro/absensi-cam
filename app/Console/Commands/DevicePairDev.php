@@ -41,7 +41,7 @@ class DevicePairDev extends Command
 
         $url = $this->option('url');
         
-        // Ensure embed key matches server config
+        // Pastikan embed key sesuai dengan config server
         $embedKey = config('app.enrollment_embed_key');
         if (empty($embedKey)) {
             $this->error('ENROLLMENT_EMBED_KEY is not configured in config/app.php');

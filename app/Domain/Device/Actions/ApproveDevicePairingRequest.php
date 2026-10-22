@@ -21,7 +21,7 @@ class ApproveDevicePairingRequest
         }
 
         return DB::transaction(function () use ($pairingRequest, $data, $admin) {
-            // Determine next device_code (e.g. dev-0001)
+            // Tentukan device_code berikutnya (mis. dev-0001)
             $lastCode = DB::table('devices')
                 ->select('device_code')
                 ->get()
@@ -41,11 +41,11 @@ class ApproveDevicePairingRequest
                 'status'        => 'offline',
             ]);
 
-            // Create Sanctum token
+            // Buat token Sanctum
             $plainToken = $device->createToken('edge-engine', ['device'])->plainTextToken;
             $device->update(['token_hash' => hash('sha256', $plainToken)]);
 
-            // Prepare credentials payload for polling edge client
+            // Siapkan payload kredensial untuk edge client yang melakukan polling
             $embedKey = config('app.enrollment_embed_key');
             if (empty($embedKey)) {
                 throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in app config.');

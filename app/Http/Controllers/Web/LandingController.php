@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 class LandingController extends Controller
 {
     /**
-     * Render the public architectural landing page.
+     * Render landing page arsitektural yang bersifat publik.
      */
     public function index(Request $request)
     {

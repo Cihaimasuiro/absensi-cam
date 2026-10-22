@@ -19,7 +19,7 @@ final class CreateUser
             
             $user->save();
 
-            // Here you might dispatch events like: UserCreated::dispatch($user);
+            // Di sini Anda bisa dispatch event seperti: UserCreated::dispatch($user);
 
             return $user;
         });

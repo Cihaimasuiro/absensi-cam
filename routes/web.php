@@ -10,22 +10,22 @@ use App\Http\Controllers\Web\AttendanceCorrectionController;
 use App\Http\Controllers\Web\LandingController;
 use Illuminate\Support\Facades\Route;
 
-// Public Landing Page
+// Halaman Landing Publik
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 
-// Auth Routes
+// Route Autentikasi
 Route::get('login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.post');
 Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware('auth')->group(function () {
-    // Dashboard / Live Camera Monitor
+    // Dashboard / Monitor Kamera Langsung
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('live-camera', [DashboardController::class, 'index'])->name('live-camera.index');
     Route::get('live-camera/recent', [DashboardController::class, 'recentLogs'])->name('live-camera.recent');
 
-    // Students — full CRUD + enrollment
-    // Students
+    // Siswa — CRUD penuh + pendaftaran wajah
+    // Siswa
     Route::middleware('role:super_admin|admin')->group(function () {
         Route::get('students/template', [StudentWebController::class, 'downloadTemplate'])->name('students.template');
         Route::post('students/import', [StudentWebController::class, 'import'])->name('students.import');
@@ -37,7 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::get('students/{student}/photo', [StudentWebController::class, 'photo'])->name('students.photo');
     Route::resource('students', StudentWebController::class)->only(['index', 'show']);
 
-    // Reports
+    // Laporan
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/',    [ReportController::class, 'index'])->name('index');
         Route::get('/student-logs', [ReportController::class, 'studentLogs'])->name('student-logs');
@@ -49,7 +49,7 @@ Route::middleware('auth')->group(function () {
         });
     });
 
-    // Devices / Pairing
+    // Perangkat / Pairing
     Route::prefix('devices')->name('devices.')->middleware('role:super_admin|admin')->group(function () {
         Route::get('/', [DeviceController::class, 'index'])->name('index');
         Route::post('/', [DeviceController::class, 'store'])->name('store');
@@ -61,7 +61,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{device}', [DeviceController::class, 'destroy'])->name('destroy');
     });
 
-    // Schools, Classrooms, Buildings
+    // Sekolah, Kelas, Gedung
     Route::prefix('schools')->name('schools.')->middleware('role:super_admin|admin')->group(function () {
         Route::get('/',                    [SchoolController::class, 'index'])->name('index');
         Route::post('/',                   [SchoolController::class, 'store'])->name('store');
@@ -73,22 +73,22 @@ Route::middleware('auth')->group(function () {
         Route::post('/buildings',           [SchoolController::class, 'storeBuilding'])->name('buildings.store');
     });
 
-    // Admin Console
+    // Konsol Admin
     Route::prefix('admin')->name('admin.')->middleware('role:super_admin|admin')->group(function () {
-        // User CRUD + role assignment
+        // CRUD pengguna + penetapan role
         Route::resource('users', \App\Http\Controllers\Web\Admin\UserController::class)->except(['create', 'show', 'edit']);
 
-        // Audit log viewer
+        // Penampil log audit
         Route::get('audit-logs', [\App\Http\Controllers\Web\Admin\AuditLogController::class, 'index'])->name('audit.index');
         Route::get('audit-logs/export', [\App\Http\Controllers\Web\Admin\AuditLogController::class, 'exportCsv'])->name('audit.export');
 
-        // Quarantine review & re-enroll
+        // Tinjauan karantina & pendaftaran ulang
         Route::get('quarantine', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'index'])->name('quarantine.index');
         Route::post('quarantine/scan', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'scan'])->name('quarantine.scan');
         Route::post('quarantine/{quarantine}/re-enroll', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'reEnroll'])->name('quarantine.re-enroll');
         Route::post('quarantine/{quarantine}/resolve', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'resolve'])->name('quarantine.resolve');
 
-        // Consent management (UU PDP No. 27/2022)
+        // Manajemen persetujuan (UU PDP No. 27/2022)
         Route::get('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'index'])->name('consents.index');
         Route::post('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'store'])->name('consents.store');
         Route::post('consents/{consent}/withdraw', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'withdraw'])->name('consents.withdraw');

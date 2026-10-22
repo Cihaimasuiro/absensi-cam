@@ -7,7 +7,7 @@ use App\Domain\Device\Models\Device;
 class RecordHeartbeat
 {
     /**
-     * Update device telemetry from heartbeat payload.
+     * Perbarui telemetri perangkat dari payload heartbeat.
      *
      * @param  array{fw_version: string, model_version: string, cpu_temp: float, ram_free_mb: int,
      *               disk_free_mb: int, fps: float, outbox_len: int, serial_ok: bool, ip_address: ?string}  $data

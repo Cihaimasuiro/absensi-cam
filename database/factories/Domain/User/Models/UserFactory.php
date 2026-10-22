@@ -13,7 +13,7 @@ class UserFactory extends Factory
     protected $model = User::class;
 
     /**
-     * Define the model's default state.
+     * Definisikan state default model.
      *
      * @return array<string, mixed>
      */
@@ -22,7 +22,7 @@ class UserFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
-            'password' => 'password', // will be hashed by the model cast
+            'password' => 'password', // akan di-hash oleh cast model
         ];
     }
 }

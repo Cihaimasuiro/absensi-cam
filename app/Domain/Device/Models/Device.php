@@ -47,7 +47,7 @@ class Device extends Authenticatable
         return $this->belongsTo(Building::class);
     }
 
-    /** Classrooms whose students this device is allowed to recognize (FR-E06) */
+    /** Classroom yang siswanya boleh dikenali oleh perangkat ini (FR-E06) */
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Classroom::class, 'device_groups');
@@ -63,7 +63,7 @@ class Device extends Authenticatable
         return $query->where('status', 'online');
     }
 
-    /** Mark online/offline based on heartbeat age (> 3 min = offline) */
+    /** Tandai online/offline berdasarkan umur heartbeat (> 3 menit = offline) */
     public function isOnline(): bool
     {
         if ($this->last_heartbeat_at === null) { return false; } return $this->last_heartbeat_at->diffInMinutes(now()) <= 3;

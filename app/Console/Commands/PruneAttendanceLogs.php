@@ -7,13 +7,13 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Ported from: Facenox lifespan.py:120-130
+ * Diadaptasi dari: Facenox lifespan.py:120-130
  *   if settings.data_retention_days > 0:
  *       result = await repo.cleanup_old_data(settings.data_retention_days)
  *
- * In Laravel: config comes from env ATTENDANCE_RETENTION_DAYS.
- * Default 0 = disabled (keep forever), matching Facenox default.
- * PRD §12.3 — attendance history: org policy, no forced default limit.
+ * Di Laravel: config berasal dari env ATTENDANCE_RETENTION_DAYS.
+ * Default 0 = nonaktif (simpan selamanya), sesuai default Facenox.
+ * PRD §12.3 — riwayat attendance: kebijakan org, tanpa batas default yang dipaksakan.
  */
 class PruneAttendanceLogs extends Command
 {

@@ -11,8 +11,8 @@ use Illuminate\Http\JsonResponse;
 /**
  * POST /api/v1/devices/heartbeat
  *
- * Requires: Authorization: Bearer <device_token> with ability 'device'.
- * Edge sends every 60 seconds (FR-E12). Device offline if silent > 3 min (PRD §1.4).
+ * Membutuhkan: Authorization: Bearer <device_token> dengan ability 'device'.
+ * Edge mengirim setiap 60 detik (FR-E12). Device dianggap offline jika diam > 3 menit (PRD §1.4).
  */
 class DeviceHeartbeatController extends Controller
 {
@@ -39,7 +39,7 @@ class DeviceHeartbeatController extends Controller
                 $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
             }
 
-            // Aggregate query for count and max cursor
+            // Query agregat untuk jumlah dan max cursor
             $scopeQuery = \Illuminate\Support\Facades\DB::table('face_templates')
                 ->join('students', 'students.id', '=', 'face_templates.student_id')
                 ->whereNull('face_templates.deleted_at')
@@ -58,7 +58,7 @@ class DeviceHeartbeatController extends Controller
             $count = $meta->total_count ?? 0;
             $maxCursor = $meta->max_cursor ?? 0;
 
-            // Scoped cache key with invalidation epoch, count, max_cursor, and 60-second TTL
+            // Cache key ter-scope dengan epoch invalidasi, jumlah, max_cursor, dan TTL 60 detik
             $epoch = \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1);
             $cacheKey = "device_templates_hash:e{$epoch}:s" . ($schoolId ?? 'all') . ":b" . ($buildingId ?? 'all') . ":c{$count}:m{$maxCursor}";
 

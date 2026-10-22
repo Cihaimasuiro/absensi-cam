@@ -7,15 +7,15 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Ported from: Facenox maintenance.py students.py:211-239
+ * Diporting dari: Facenox maintenance.py students.py:211-239
  *   is_active=False → await repo.remove_student(person_id)
- *   remove_student() deletes the Face row (biometric data)
+ *   remove_student() menghapus baris Face (data biometrik)
  *
- * In Laravel: students retain SoftDeletes on face_templates.
- * A soft-delete on face_templates acts as a tombstone → edge device
- * sees op=delete on next delta sync and purges local embedding.
+ * Di Laravel: siswa tetap memakai SoftDeletes pada face_templates.
+ * Soft-delete pada face_templates berperan sebagai tombstone → perangkat edge
+ * melihat op=delete pada delta sync berikutnya lalu menghapus embedding lokalnya.
  *
- * PRD §12.3 — face templates deleted when consent withdrawn (UU PDP / GDPR Art.17).
+ * PRD §12.3 — template wajah dihapus saat persetujuan ditarik (UU PDP / GDPR Art.17).
  */
 class TombstoneRevokedConsent extends Command
 {
@@ -26,7 +26,7 @@ class TombstoneRevokedConsent extends Command
 
     public function handle(): int
     {
-        // Students who: have no active consent AND still have a live face template
+        // Siswa yang: tidak punya persetujuan aktif DAN masih punya template wajah aktif
         $students = Student::whereDoesntHave('activeConsent')
             ->whereHas('faceTemplate')
             ->with('faceTemplate')

@@ -10,8 +10,8 @@ use Illuminate\Http\Request;
 /**
  * GET /api/v1/config
  *
- * Returns device-specific configuration (FR-E08, FR-E10).
- * Includes ETag for conditional GET support — edge skips body parse on 304.
+ * Mengembalikan konfigurasi khusus device (FR-E08, FR-E10).
+ * Menyertakan ETag untuk mendukung conditional GET — edge melewati parsing body saat 304.
  */
 class DeviceConfigController extends Controller
 {
@@ -20,8 +20,8 @@ class DeviceConfigController extends Controller
         /** @var Device $device */
         $device = $request->user();
 
-        // Config is sourced from the device's building/group settings
-        // Send timing per group since a device can serve multiple classrooms/staff
+        // Config bersumber dari pengaturan building/group milik device
+        // Kirim timing per group karena satu device dapat melayani beberapa classroom/staff
         $groups = $device->groups()->orderBy('id')->get();
         $firstGroup = $groups->first();
         
@@ -35,7 +35,7 @@ class DeviceConfigController extends Controller
                 'late_tolerance_minutes' => $g->late_tolerance_minutes,
                 'track_checkout' => (bool)$g->track_checkout,
             ])->toArray(),
-            'confidence_threshold'      => 0.363, // TODO: To be calibrated on M0 hardware (AC-22)
+            'confidence_threshold'      => 0.363, // TODO: Perlu dikalibrasi pada hardware M0 (AC-22)
             'liveness_enabled'          => (bool)$device->liveness_enabled,
             'max_faces_per_frame'       => 5,
             'mode'                      => 'both', // in|out|both

@@ -55,9 +55,9 @@ class Classroom extends Model
     {
         static::updated(function (Classroom $classroom) {
             if ($classroom->wasChanged('building_id')) {
-                // If a classroom moves to another building, we must bump the version_cursor 
-                // of all its enrolled students so that devices pull the sync (either as upsert or delete).
-                // We retrieve and touch them individually to trigger the saving event which handles the cursor.
+                // Jika sebuah classroom pindah ke building lain, kita harus menaikkan version_cursor
+                // semua siswa terdaftarnya agar perangkat menarik sync (baik sebagai upsert maupun delete).
+                // Kita ambil dan touch satu per satu untuk memicu saving event yang menangani cursor.
                 $classroom->students()->whereHas('faceTemplate')->with('faceTemplate')->get()->each(function ($student) {
                     $student->faceTemplate->touch();
                 });

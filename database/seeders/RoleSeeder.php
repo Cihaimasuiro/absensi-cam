@@ -10,11 +10,11 @@ use Spatie\Permission\Models\Permission;
 class RoleSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Jalankan seeder database.
      */
     public function run(): void
     {
-        // Reset cached roles and permissions
+        // Reset cache role dan permission
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         $permissions = [

@@ -13,12 +13,12 @@ class CreateDevicePairingRequest
         $ip = $data['ip_address'] ?? $clientIp;
         $mac = $data['mac_address'] ?? null;
 
-        // Auto-expire old pending requests
+        // Otomatis kedaluwarsakan permintaan pending yang lama
         DevicePairingRequest::where('status', 'pending')
             ->where('expires_at', '<=', now())
             ->update(['status' => 'expired']);
 
-        // Limit pending requests per IP or MAC to prevent flooding
+        // Batasi permintaan pending per IP atau MAC untuk mencegah flooding
         $pendingQuery = DevicePairingRequest::pending();
         if ($mac) {
             $pendingQuery->where(function ($q) use ($ip, $mac) {
@@ -37,12 +37,12 @@ class CreateDevicePairingRequest
             ]);
         }
 
-        // Generate unique readable pairing code (e.g. 782-419)
+        // Buat pairing code unik yang mudah dibaca (mis. 782-419)
         do {
             $code = sprintf('%03d-%03d', random_int(100, 999), random_int(100, 999));
         } while (DevicePairingRequest::pending()->where('pairing_code', $code)->exists());
 
-        // Generate high-entropy poll token (64 hex characters)
+        // Buat poll token berentropi tinggi (64 karakter hex)
         $pollToken = bin2hex(random_bytes(32));
         $pollTokenHash = hash('sha256', $pollToken);
 

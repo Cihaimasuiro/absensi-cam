@@ -10,7 +10,7 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * Register any application services.
+     * Daftarkan semua layanan aplikasi.
      */
     public function register(): void
     {
@@ -18,13 +18,13 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Bootstrap any application services.
+     * Bootstrap semua layanan aplikasi.
      */
     public function boot(): void
     {
         Gate::policy(Student::class, StudentPolicy::class);
 
-        // Implicitly grant 'super_admin' role all permission checks
+        // Berikan secara implisit semua pemeriksaan permission kepada role 'super_admin'
         Gate::before(function ($user, $ability) {
             return method_exists($user, 'hasRole') && $user->hasRole('super_admin') ? true : null;
         });

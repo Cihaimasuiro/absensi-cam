@@ -17,10 +17,10 @@ class UserController extends Controller
         
         $users = $query->build($keyword)->paginate(50);
 
-        // Here we would typically return a view, e.g.:
+        // Di sini biasanya kita mengembalikan view, misalnya:
         // return view('users.index', compact('users'));
         
-        // For now, since the view doesn't exist, we return a simple representation
+        // Untuk saat ini, karena view belum ada, kita mengembalikan representasi sederhana
         return response("This is the Web User Index. Total users: " . $users->total());
     }
 
@@ -30,7 +30,7 @@ class UserController extends Controller
         
         $user = $createUser->execute($userData);
 
-        // Here we would typically redirect, e.g.:
+        // Di sini biasanya kita melakukan redirect, misalnya:
         // return redirect()->route('users.index')->with('success', 'User created successfully!');
         
         return redirect('/users')->with('success', 'User created successfully!');

@@ -8,7 +8,7 @@ use App\Domain\User\Models\User;
 class StudentPolicy
 {
     /**
-     * Determine whether the user can view any students.
+     * Menentukan apakah pengguna boleh melihat daftar siswa.
      */
     public function viewAny(User $user): bool
     {
@@ -16,7 +16,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can view a specific student.
+     * Menentukan apakah pengguna boleh melihat data siswa tertentu.
      */
     public function view(User $user, Student $student): bool
     {
@@ -24,7 +24,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can view the student's biometric face photo.
+     * Menentukan apakah pengguna boleh melihat foto biometrik wajah siswa.
      */
     public function viewPhoto(User $user, Student $student): bool
     {
@@ -32,7 +32,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can create students.
+     * Menentukan apakah pengguna boleh menambah siswa.
      */
     public function create(User $user): bool
     {
@@ -40,7 +40,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can update the student.
+     * Menentukan apakah pengguna boleh memperbarui data siswa.
      */
     public function update(User $user, Student $student): bool
     {
@@ -48,7 +48,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can delete the student.
+     * Menentukan apakah pengguna boleh menghapus siswa.
      */
     public function delete(User $user, Student $student): bool
     {
@@ -56,7 +56,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can enroll the student's face.
+     * Menentukan apakah pengguna boleh mendaftarkan wajah siswa.
      */
     public function enroll(User $user, Student $student): bool
     {
@@ -64,7 +64,7 @@ class StudentPolicy
     }
 
     /**
-     * Determine whether the user can bypass duplicate face detection.
+     * Menentukan apakah pengguna boleh melewati deteksi wajah duplikat.
      */
     public function bypassDuplicate(User $user): bool
     {

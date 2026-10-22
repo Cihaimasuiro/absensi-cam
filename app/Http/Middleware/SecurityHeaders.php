@@ -18,7 +18,7 @@ class SecurityHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-        // Removed strict Content-Security-Policy to allow Vite (IPv6 [::1]) and local MJPEG streams
+        // Content-Security-Policy ketat dihapus agar Vite (IPv6 [::1]) dan stream MJPEG lokal dapat berjalan
         // $response->headers->set('Content-Security-Policy', ...);
 
         return $response;

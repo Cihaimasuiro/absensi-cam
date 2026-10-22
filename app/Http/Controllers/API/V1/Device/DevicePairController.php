@@ -10,8 +10,8 @@ use Illuminate\Http\JsonResponse;
 /**
  * POST /api/v1/devices/pair
  *
- * Public endpoint — no Bearer token required.
- * Rate-limited to 5 req/min to prevent brute-force on 8-char code space.
+ * Endpoint publik — tidak memerlukan Bearer token.
+ * Dibatasi 5 req/menit untuk mencegah brute-force pada ruang kode 8 karakter.
  */
 class DevicePairController extends Controller
 {

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class FaceTemplate extends Model
 {
     use HasFactory;
-    use SoftDeletes; // soft-delete = tombstone; op=delete sent to edge via delta sync
+    use SoftDeletes; // soft-delete = tombstone; op=delete dikirim ke edge via delta sync
 
     protected $fillable = [
         'student_id',
@@ -22,7 +22,7 @@ class FaceTemplate extends Model
         'photo_path',
     ];
 
-    protected $hidden = ['embedding_enc']; // Never expose ciphertext in API responses
+    protected $hidden = ['embedding_enc']; // Jangan pernah mengekspos ciphertext di response API
 
     protected $casts = ['version_cursor' => 'integer'];
 
@@ -31,7 +31,7 @@ class FaceTemplate extends Model
         return $this->belongsTo(Student::class);
     }
 
-    /** Whether this template's model version matches the given device model version */
+    /** Apakah model version template ini cocok dengan model version perangkat yang diberikan */
     public function isCompatibleWith(string $deviceModelVersion): bool
     {
         return $this->model_version === $deviceModelVersion;
@@ -41,8 +41,8 @@ class FaceTemplate extends Model
     {
         $assignCursor = function ($template) {
             \Illuminate\Support\Facades\Cache::lock('face_templates_cursor_lock', 10)->block(5, function () use ($template) {
-                // If it's already set in this exact request/job, don't overwrite unless we want to force it
-                // Actually, we ALWAYS want a new cursor on every save/delete so the edge pulls it.
+                // Jika sudah di-set pada request/job yang sama persis, jangan timpa kecuali memang ingin dipaksa
+                // Sebenarnya, kita SELALU ingin cursor baru pada setiap save/delete agar edge menariknya.
                 $next = \Illuminate\Support\Facades\DB::table('face_templates')->max('version_cursor') + 1;
                 $template->version_cursor = $next;
             });
@@ -51,7 +51,7 @@ class FaceTemplate extends Model
         static::saving($assignCursor);
         static::deleting(function ($template) use ($assignCursor) {
             $assignCursor($template);
-            // Must save quietly so we don't trigger saving again, but we just want to update the DB before it's deleted (soft delete)
+            // Harus disimpan secara senyap agar tidak memicu saving lagi, kita hanya ingin memperbarui DB sebelum datanya dihapus (soft delete)
             \Illuminate\Support\Facades\DB::table('face_templates')
                 ->where('id', $template->id)
                 ->update(['version_cursor' => $template->version_cursor]);

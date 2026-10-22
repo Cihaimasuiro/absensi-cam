@@ -17,7 +17,7 @@ class AppDoctor extends Command
         $this->info('🩺 Smart Absensi System Doctor');
         $this->line('----------------------------------------------------');
 
-        // 1. Check Database
+        // 1. Periksa Database
         try {
             DB::connection()->getPdo();
             $this->info('✅ Database is reachable.');
@@ -25,7 +25,7 @@ class AppDoctor extends Command
             $this->error('❌ Database connection failed: ' . $e->getMessage());
         }
 
-        // 2. Check Queue Worker
+        // 2. Periksa Queue Worker
         $this->line("\nChecking queue worker (database connection)...");
         try {
             $pendingJobs = DB::table('jobs')->count();
@@ -49,7 +49,7 @@ class AppDoctor extends Command
             $this->error('❌ Failed to check queue: ' . $e->getMessage());
         }
 
-        // 3. Check Devices
+        // 3. Periksa Perangkat
         $this->line("\nChecking Devices...");
         $devices = Device::all();
         if ($devices->isEmpty()) {

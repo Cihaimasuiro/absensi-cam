@@ -8,8 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Attendance logs — synced from edge SQLite outbox (FR-S06, §11.1)
-        // Primary key = UUID from edge (UUIDv7); idempotent insert per PRD §11.2
+        // Attendance logs — disinkronkan dari outbox SQLite edge (FR-S06, §11.1)
+        // Primary key = UUID dari edge (UUIDv7); insert idempoten per PRD §11.2
         Schema::create('attendance_logs', function (Blueprint $table) {
             $table->uuid('id')->primary()->comment('UUID dari edge (UUIDv7); idempotensi kunci');
             $table->uuid('student_id')->nullable()->comment('Null jika anggota dihapus');
@@ -22,18 +22,18 @@ return new class extends Migration
             $table->string('time_source', 10)->default('ntp')
                 ->comment('ntp|rtc|unsynced (dari field time_source edge)');
             $table->timestamp('received_at')->useCurrent()->comment('Waktu diterima server');
-            // Manual correction tracking — original is never mutated (FR-S10)
+            // Pelacakan koreksi manual — data asli tidak pernah diubah (FR-S10)
             $table->boolean('is_corrected')->default(false)->index();
             $table->timestamps();
 
-            // One record per student per direction per day per device — but edge uses UUID so
-            // we rely on UUID uniqueness from edge, not a composite unique.
+            // Satu record per siswa per direction per hari per device — tetapi edge memakai UUID sehingga
+            // kita mengandalkan keunikan UUID dari edge, bukan composite unique.
             $table->index(['student_id', 'captured_at']);
             $table->index(['device_id', 'captured_at']);
             $table->index('captured_at');
         });
 
-        // Corrections — immutable original, new row records delta (FR-S10, §11.1)
+        // Corrections — data asli immutable, baris baru mencatat delta (FR-S10, §11.1)
         Schema::create('attendance_corrections', function (Blueprint $table) {
             $table->id();
             $table->uuid('attendance_log_id');
@@ -49,7 +49,7 @@ return new class extends Migration
             $table->index('attendance_log_id');
         });
 
-        // Device logs — edge error/info log shipping via POST /logs (FR-E12, §11.1)
+        // Device logs — pengiriman log error/info edge lewat POST /logs (FR-E12, §11.1)
         Schema::create('device_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->timestamp('logged_at')->comment('Waktu di edge');
             $table->timestamp('received_at')->useCurrent();
 
-            // Retention: 7 days per PRD §12.3 — cleaned by scheduled command
+            // Retensi: 7 hari per PRD §12.3 — dibersihkan oleh scheduled command
             $table->index(['device_id', 'logged_at']);
             $table->index('logged_at');
         });

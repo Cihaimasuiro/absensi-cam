@@ -11,9 +11,9 @@ use Illuminate\Http\Request;
 /**
  * GET /api/v1/templates?cursor=<N>&limit=200
  *
- * Delta sync of face templates to edge (FR-S07, FR-E11, PRD §11.2).
- * Returns templates with version_cursor > given cursor, including tombstones (op=delete).
- * Edge filters by model_version and rejects incompatible ones (AC-45).
+ * Sinkronisasi delta template wajah ke edge (FR-S07, FR-E11, PRD §11.2).
+ * Mengembalikan template dengan version_cursor > cursor yang diberikan, termasuk tombstone (op=delete).
+ * Edge memfilter berdasarkan model_version dan menolak yang tidak kompatibel (AC-45).
  */
 class TemplateController extends Controller
 {
@@ -25,14 +25,14 @@ class TemplateController extends Controller
         $cursor = (int) $request->query('cursor', 0);
         $limit  = min((int) $request->query('limit', 200), 200);
 
-        // Fetch active templates + soft-deleted tombstones
-        // Limited per school as requested
+        // Ambil template aktif + tombstone yang ter-soft-delete
+        // Dibatasi per sekolah sesuai permintaan
         $schoolId = $device->school_id ?? $device->building?->school_id;
         $buildingId = $device->building_id;
 
-        // If the device has a building assigned, check whether it has classrooms.
-        // If it has classrooms, only templates for students in those classrooms are 'in-scope'.
-        // If it has NO classrooms (gate device) or NO building assigned, ALL templates for the school are 'in-scope'.
+        // Jika perangkat punya gedung, periksa apakah gedung itu memiliki kelas.
+        // Jika punya kelas, hanya template siswa di kelas tersebut yang dianggap 'in-scope'.
+        // Jika TIDAK punya kelas (perangkat gerbang) atau TIDAK punya gedung, SEMUA template sekolah 'in-scope'.
         $buildingHasClassrooms = false;
         if ($buildingId) {
             $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
@@ -51,7 +51,7 @@ class TemplateController extends Controller
             ->limit($limit)
             ->get(['id', 'student_id', 'embedding_enc', 'model_version', 'version_cursor', 'deleted_at', 'updated_at']);
 
-        // Eager load the building_id of the students' classrooms to evaluate scope efficiently
+        // Eager load building_id dari kelas siswa agar evaluasi scope berjalan efisien
         $classroomIds = $templates->pluck('student.classroom_id')->filter()->unique();
         $classroomBuildings = \App\Domain\School\Models\Classroom::whereIn('id', $classroomIds)->pluck('building_id', 'id');
 
@@ -64,7 +64,7 @@ class TemplateController extends Controller
                 $inScope = ($studentBuildingId === $buildingId);
             }
 
-            // If the template is soft-deleted, OR if it's out of scope for this building, tell the device to delete it.
+            // Jika template ter-soft-delete, ATAU di luar scope gedung ini, perintahkan perangkat menghapusnya.
             $op = ($t->deleted_at || !$inScope) ? 'delete' : 'upsert';
 
             return [

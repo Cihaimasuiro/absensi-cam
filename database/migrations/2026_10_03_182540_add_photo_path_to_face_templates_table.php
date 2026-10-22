@@ -7,17 +7,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Jalankan migration.
      */
     public function up(): void
     {
         Schema::table('face_templates', function (Blueprint $table) {
-            $table->string('photo_path', 255)->nullable()->after('student_id')->comment('Original photo for model re-extraction');
+            $table->string('photo_path', 255)->nullable()->after('student_id')->comment('Foto asli untuk ekstraksi ulang model');
         });
     }
 
     /**
-     * Reverse the migrations.
+     * Batalkan (reverse) migration.
      */
     public function down(): void
     {

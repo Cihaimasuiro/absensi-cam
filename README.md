@@ -1,5 +1,7 @@
 <div align="center">
 
+**English** · [Bahasa Indonesia](docs/readme/README_id.md)
+
 # Absensi-Cam
 
 ### Edge-first, real-time face recognition attendance for constrained hardware.

@@ -1,12 +1,57 @@
 # Smart Absensi documentation
 
-A school attendance system built around face recognition at the door. Edge devices capture and match
-faces offline; a Laravel server aggregates the records and produces reports.
+**Face recognition attendance that runs at the door, not in a cloud.**
 
-This file is the entry point. It explains what the system does, how it is put together, and how to
-work on it without breaking things.
+A student walks up to the camera. The edge device detects the face, checks liveness, matches the
+embedding against templates held locally, and writes an attendance record to a SQLite outbox. The
+outbox drains to a Laravel server whenever the network allows.
+
+This page is the entry point. It explains what the system does, how the pieces fit, and which
+document answers which question.
+
+> [!IMPORTANT]
+> Face templates are biometric data. They are encrypted at rest with AES-256-GCM and travel to
+> edge devices only as ciphertext. Withdrawing consent soft-deletes the template, which reaches
+> every paired device as an `op=delete` tombstone on the next delta sync
+> (UU PDP No. 27/2022, GDPR Art. 17). See [ENCRYPTION.md](ENCRYPTION.md).
 
 ---
+
+## Start with one command
+
+```bash
+composer install && cp .env.example .env && php artisan key:generate && php artisan migrate --seed
+```
+
+Then start the stack:
+
+```bash
+npm run dev        # Laravel + Vite + queue worker + scheduler
+npm run dev:lan    # same, but Laravel binds 0.0.0.0 for device testing
+```
+
+On Windows, `dev-start.bat` runs `dev:lan`.
+
+Before a device can sync, it must be paired. Open **Devices** in the admin, create a pairing code,
+and enter it on the device. See [Local development](#9-local-development) for the full loop.
+
+For the server-side face extractor, see [SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md).
+
+## Choose a guide
+
+| Task | Guides |
+| --- | --- |
+| Understand the product scope and acceptance criteria | [PRD.md](PRD.md) |
+| Learn the architecture, data model, and conventions | [Architecture](#3-architecture), [Data model](#4-data-model), [Backend conventions](#6-backend-conventions) |
+| Build or change a UI screen | [Frontend conventions](#7-frontend-conventions), [DESIGN.md](DESIGN.md) |
+| Work on the Rust edge engine | [Edge engine](#8-edge-engine), [EDGE-GUIDELINES.md](EDGE-GUIDELINES.md) |
+| Deploy server face extraction | [SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md) |
+| Understand template encryption | [ENCRYPTION.md](ENCRYPTION.md) |
+| Drive the TFT display over serial | [TFT_STREAM.md](TFT_STREAM.md) |
+| Check model licensing before shipping commercially | [commercial_models_plan.md](commercial_models_plan.md) |
+| Review model selection and research notes | [LITERATURE.md](LITERATURE.md) |
+| Follow mandatory engineering rules | [../AGENTS.md](../AGENTS.md) |
+| Report a vulnerability | [../SECURITY.md](../SECURITY.md) |
 
 ## Contents
 
@@ -55,14 +100,12 @@ The server turns those records into daily time records (DTR), CSV exports, and P
 | `routes/` | Web and API route definitions |
 | `models/` | Tracked ONNX models (detector, recognizer, liveness) |
 | `clients/edge-engine-rs/` | **Production edge runtime & server face-extract** — Rust, axum |
-| `archive/edge-engine-py/` | Python reference implementation (tooling only) |
-| `packages/face_core/` | (Deprecated) Python face pipeline used for benchmarking |
-| `archive/edge-engine-py/` | Legacy — do not add features here |
+| `archive/edge-engine-py/` | Legacy Python reference implementation (tooling only) |
 | `templates/artcraft/` | Design reference for the edge control panel |
 | `docs/` | This documentation |
 
-The Rust engine is the only runtime in production (edge device sync/streamer and server `face-extract` CLI). The Python components exist for offline benchmarking and research reference.
-
+The Rust engine is the only runtime in production (edge device sync/streamer and server `face-extract`
+CLI). The Python components exist for offline benchmarking and research reference.
 
 ---
 
@@ -128,18 +171,21 @@ destroyed, so an edge device that has been offline for a week can reconcile corr
 
 ### Web routes
 
-Defined in `routes/web.php`.
+Defined in `routes/web.php`. Everything below `/dashboard` sits behind `auth`, and the
+administrative groups add `role:super_admin|admin`.
 
 | Path | Access |
 |---|---|
 | `/` | public — landing page |
 | `/login` | public, throttled to 5 attempts per minute |
 | `/dashboard`, `/live-camera` | any authenticated user |
-| `/reports/*` | view: any authenticated user · export and correction: `role:super_admin\|admin` |
-| `/students` (index, show) | any authenticated user |
-| `/students/*` (create, update, delete, enroll, import) | `role:super_admin\|admin` |
+| `/students` (index, show), `/students/{student}/photo` | any authenticated user |
+| `/students/*` (create, update, delete, enroll, import, bulk-enroll) | `role:super_admin\|admin` |
+| `/reports` (index, student-logs) | any authenticated user |
+| `/reports/csv`, `/reports/dtr/*`, `/reports/logs/{log}/correct` | `role:super_admin\|admin` |
 | `/devices/*` | `role:super_admin\|admin` |
 | `/schools/*` | `role:super_admin\|admin` |
+| `/admin/*` (users, audit-logs, quarantine, consents) | `role:super_admin\|admin` |
 
 ### API routes
 
@@ -154,6 +200,7 @@ Defined in `routes/api.php`, versioned under `/api/v1`.
 | `POST /api/v1/devices/heartbeat` | Sanctum, `ability:device` |
 | `POST /api/v1/attendance/batch` | Sanctum, `ability:device` |
 | `GET /api/v1/templates` | Sanctum, `ability:device` |
+| `GET /api/v1/templates/snapshot` | Sanctum, `ability:device` |
 | `GET /api/v1/config` | Sanctum, `ability:device` |
 | `POST /api/v1/logs` | Sanctum, `ability:device` |
 
@@ -213,6 +260,9 @@ activity('device')
     ->causedBy(auth()->user())
     ->log('Device created and token generated');
 ```
+
+The `activity_log` table is append-only: SQL triggers reject `UPDATE` and `DELETE`. Archiving the
+table requires dropping the triggers first. See the root [README](../README.md#database-requirements-and-audit-logging).
 
 ### Validation
 
@@ -293,7 +343,7 @@ read in `init()`, not through inline JavaScript arguments.
 
 ### Styling
 
-Tokens live in the `@theme` block of `resources/css/app.css` and match `docs/DESIGN.md`.
+Tokens live in the `@theme` block of `resources/css/app.css` and match [DESIGN.md](DESIGN.md).
 
 | Token | Value |
 |---|---|
@@ -344,8 +394,8 @@ unless you have logged into `/control` in the same browser.
 
 ### Guidelines
 
-`docs/EDGE-GUIDELINES.md` covers the Rust and Python edge rules in detail — thermal pacing,
-anti-spoofing, cross-compilation, read-only rootfs, flash wear.
+[EDGE-GUIDELINES.md](EDGE-GUIDELINES.md) covers the Rust and Python edge rules in detail — thermal
+pacing, anti-spoofing, cross-compilation, read-only rootfs, flash wear.
 
 ---
 
@@ -384,7 +434,7 @@ rather than rebuilding.
 
 | Key | Purpose |
 |---|---|
-| `FACE_EXTRACT_BIN` | Path to the server face-extract binary (see [docs/SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md)) |
+| `FACE_EXTRACT_BIN` | Path to the server face-extract binary (see [SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md)) |
 | `FACE_MODELS_DIR` | Path to directory containing detector and recognizer ONNX models |
 | `ORT_DYLIB_PATH` | Path to libonnxruntime dynamic library |
 | `ENROLLMENT_EMBED_KEY` | Encryption key for face templates — **rotate if ever exposed** |
@@ -424,10 +474,14 @@ cargo test --lib
 `RefreshDatabase` on feature tests. `UserFactory` exists; most other models are created with
 `::create()`. Roles via `Role::firstOrCreate`.
 
-### Known pre-existing failure
+### Known pre-existing failures
 
-`MigrationTest > migration maps old columns and types correctly` expects `null` but receives `0` from
-`late_tolerance_minutes`. Unrelated to recent work.
+Two tests fail on a clean checkout, unrelated to recent work:
+
+- `MigrationTest > migration maps old columns and types correctly` expects `null` but receives `0`
+  from `late_tolerance_minutes`.
+- `RotateEnrollmentKeyTest > can rotate enrollment key and reencrypt face templates` — the
+  `--dry-run` invocation exits 1.
 
 ---
 
@@ -453,10 +507,14 @@ cargo test --lib
 | [PRD.md](PRD.md) | Product requirements, hardware BOM, pinout, power budget, milestones |
 | [EDGE-GUIDELINES.md](EDGE-GUIDELINES.md) | Edge engine engineering rules — Rust and Python |
 | [DESIGN.md](DESIGN.md) | Design tokens, typography, colour, spacing |
+| [ENCRYPTION.md](ENCRYPTION.md) | AES-256-GCM template format, key management, cross-language parity |
+| [SERVER_FACE_EXTRACT.md](SERVER_FACE_EXTRACT.md) | Building and deploying the server `face-extract` binary |
 | [TFT_STREAM.md](TFT_STREAM.md) | TFT display protocol from Orange Pi to Arduino |
+| [LITERATURE.md](LITERATURE.md) | Model selection and research notes |
 | [commercial_models_plan.md](commercial_models_plan.md) | ONNX model licensing and commercial compliance |
 | [../AGENTS.md](../AGENTS.md) | Laravel engineering rules — the mandatory guideline |
 | [../SECURITY.md](../SECURITY.md) | Security policy |
+| [../THIRD_PARTY_LICENSES.md](../THIRD_PARTY_LICENSES.md) | Dependency licensing |
 
 ---
 
@@ -467,3 +525,9 @@ cargo test --lib
 3. Find a working page of the same kind and diff the broken one against it.
 4. Check `AGENTS.md` §118–121 (agent behaviour) and §138 (golden rules).
 5. Change one thing, then run the tests.
+
+<div align="center">
+
+**[Back to top](#smart-absensi-documentation)**
+
+</div>

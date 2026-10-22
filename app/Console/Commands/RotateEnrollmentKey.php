@@ -155,7 +155,7 @@ class RotateEnrollmentKey extends Command
                 }
 
                 // 2. Invalidate edge heartbeat template hash cache
-                \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+                \Illuminate\Support\Facades\Cache::forever('templates_hash_epoch', ((int) \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1)) + 1);
 
                 // 3. Write root .env atomically
                 $this->updateEnvFile($envPath, $newKeyBase64);
@@ -332,7 +332,7 @@ class RotateEnrollmentKey extends Command
                         'updated_at'     => now(),
                     ]);
             }
-            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+            \Illuminate\Support\Facades\Cache::forever('templates_hash_epoch', ((int) \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1)) + 1);
         });
 
         $this->info("Successfully bumped version cursors (new max cursor: {$maxCursor}). Edge devices will reconcile on next heartbeat/sync.");

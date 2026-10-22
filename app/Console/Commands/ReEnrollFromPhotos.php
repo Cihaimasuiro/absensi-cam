@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\Storage;
 class ReEnrollFromPhotos extends Command
 {
     protected $signature = 'app:re-enroll-from-photos
-                            {--force : Bypass confirmation prompt and force overwrite on duplicate warnings}
+                            {--force : Bypass confirmation prompt}
                             {--dry-run : Inspect photos and simulate extraction without updating database}
                             {--all : Force re-enrollment even if template already decrypts cleanly}
-                            {--skip-duplicate-check : Skip 1:N duplicate face similarity check}';
+                            {--skip-duplicate-check : Allow saving even if duplicate face is detected}';
 
     protected $description = 'Safely re-extract and re-encrypt face embeddings from stored photos (recovery tool with safeguards)';
 
@@ -110,12 +110,9 @@ class ReEnrollFromPhotos extends Command
                 $duplicate = $duplicateDetector->detect($rawEmbedding, (string) $template->student_id);
                 if ($duplicate !== null) {
                     $sim = round($duplicate['similarity'], 4);
-                    $this->warn("Duplicate face detected for template ID {$template->id} (student: {$template->student_id}) matching student {$duplicate['matched_student_id']} (similarity: {$sim}).");
-                    if (!$this->option('force')) {
-                        $this->error("Aborting template ID {$template->id} due to duplicate face detection (use --force or --skip-duplicate-check to bypass).");
-                        $failed++;
-                        continue;
-                    }
+                    $this->error("Aborting template ID {$template->id} due to duplicate face detection (matches student {$duplicate['matched_student_id']} with similarity {$sim}). Use --skip-duplicate-check to override.");
+                    $failed++;
+                    continue;
                 }
             }
 
@@ -157,7 +154,7 @@ class ReEnrollFromPhotos extends Command
         }
 
         if ($success > 0 && !$this->option('dry-run')) {
-            Cache::increment('templates_hash_epoch');
+            Cache::forever('templates_hash_epoch', ((int) Cache::get('templates_hash_epoch', 1)) + 1);
         }
 
         $this->info("Re-enrollment summary: {$success} updated, {$skipped} skipped, {$failed} failed.");

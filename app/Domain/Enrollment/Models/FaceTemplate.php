@@ -58,11 +58,11 @@ class FaceTemplate extends Model
         });
 
         static::saved(function () {
-            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+            \Illuminate\Support\Facades\Cache::forever('templates_hash_epoch', ((int) \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1)) + 1);
         });
 
         static::deleted(function () {
-            \Illuminate\Support\Facades\Cache::increment('templates_hash_epoch');
+            \Illuminate\Support\Facades\Cache::forever('templates_hash_epoch', ((int) \Illuminate\Support\Facades\Cache::get('templates_hash_epoch', 1)) + 1);
         });
     }
 }

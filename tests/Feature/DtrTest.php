@@ -20,10 +20,10 @@ class DtrTest extends TestCase
     {
         parent::setUp();
         
-        // Setup timezone
+        // Atur timezone
         config(['app.timezone' => 'Asia/Jakarta']);
         
-        // Setup Roles
+        // Atur Roles
         Role::firstOrCreate(['name' => 'super_admin']);
         Role::firstOrCreate(['name' => 'admin']);
         Role::firstOrCreate(['name' => 'user']);
@@ -57,36 +57,36 @@ class DtrTest extends TestCase
             ])->id
         ]);
 
-        // Create logs
+        // Buat logs
         $logs = [
-            // 1. In time (07:10 - within tolerance) and out at 15:00
+            // 1. Masuk tepat waktu (07:10 - dalam toleransi) dan keluar pukul 15:00
             ['captured_at' => '2026-10-01 07:10:00', 'direction' => 'in', 'is_corrected' => false],
             ['captured_at' => '2026-10-01 15:00:00', 'direction' => 'out', 'is_corrected' => false],
 
-            // 2. Late (07:30 - out of tolerance) and out at 15:00
+            // 2. Terlambat (07:30 - di luar toleransi) dan keluar pukul 15:00
             ['captured_at' => '2026-10-02 07:30:00', 'direction' => 'in', 'is_corrected' => false],
             ['captured_at' => '2026-10-02 15:00:00', 'direction' => 'out', 'is_corrected' => false],
 
-            // 3. Only IN
+            // 3. Hanya IN
             ['captured_at' => '2026-10-03 07:00:00', 'direction' => 'in', 'is_corrected' => false],
 
             // 4. Only OUT (Tanpa Scan Masuk)
             ['captured_at' => '2026-10-04 15:00:00', 'direction' => 'out', 'is_corrected' => false],
 
-            // 5. Corrected log
+            // 5. Log yang dikoreksi
             ['captured_at' => '2026-10-05 07:00:00', 'direction' => 'in', 'is_corrected' => true],
             
-            // 6. WIB boundary (UTC+7). 17:30 UTC is 00:30 WIB next day.
-            // 17:30 UTC on 2026-10-06 is 2026-10-07 00:30:00 WIB
-            // Let's create raw logs that translate to late-night and early-morning WIB.
-            // Actually, we can just supply WIB time string into AttendanceLog which casts it to UTC.
+            // 6. Batas WIB (UTC+7). 17:30 UTC adalah 00:30 WIB hari berikutnya.
+            // 17:30 UTC pada 2026-10-06 adalah 2026-10-07 00:30:00 WIB
+            // Mari buat raw log yang setara dengan larut malam dan pagi buta WIB.
+            // Sebenarnya, kita bisa langsung memberi string waktu WIB ke AttendanceLog yang akan meng-cast-nya ke UTC.
         ];
 
         foreach ($logs as $logData) {
             AttendanceLog::create([
                 'student_id' => $student->id,
                 'device_id' => $device->id,
-                'captured_at' => Carbon::parse($logData['captured_at'], 'Asia/Jakarta')->setTimezone('UTC'), // Mutator handles it, but let's be explicit just in case. Wait, if we set string, mutator converts it assuming it's UTC if no TZ. Actually mutator receives what we pass. Let's pass UTC directly:
+                'captured_at' => Carbon::parse($logData['captured_at'], 'Asia/Jakarta')->setTimezone('UTC'), // Mutator menanganinya, tapi mari eksplisit untuk berjaga-jaga. Tunggu, jika kita set string, mutator mengonversinya dengan asumsi UTC bila tanpa TZ. Sebenarnya mutator menerima apa yang kita kirim. Mari kirim UTC langsung:
                 'direction' => $logData['direction'],
                 'method' => 'face',
                 'score' => 0.99,
@@ -94,7 +94,7 @@ class DtrTest extends TestCase
             ]);
         }
         
-        // Let's create a WIB boundary test specifically:
+        // Mari buat test batas WIB secara khusus:
         // WIB: 2026-10-06 06:30:00 IN
         // WIB: 2026-10-06 18:00:00 OUT
         AttendanceLog::create([
@@ -121,7 +121,7 @@ class DtrTest extends TestCase
         $service = new DtrService();
         $dtr = $service->generateDtr($queryLogs)->keyBy('date');
 
-        // Assertions
+        // Assertion
         $this->assertEquals('Hadir', $dtr['2026-10-01']['status']);
         $this->assertEquals(0, $dtr['2026-10-01']['minutes_late']);
         $this->assertEquals(470, $dtr['2026-10-01']['duration_minutes']); // 07:10 to 15:00 = 7 hours 50 mins = 470 mins
@@ -141,7 +141,7 @@ class DtrTest extends TestCase
         $this->assertEquals('18:00:00', $dtr['2026-10-06']['last_out']);
         $this->assertEquals('Hadir', $dtr['2026-10-06']['status']);
         
-        // Test null late_tolerance_minutes (late tracking off)
+        // Test late_tolerance_minutes null (pelacakan keterlambatan mati)
         $classroomNoLimit = Classroom::create([
             'school_id' => $school->id,
             'name' => 'No Limit Class',
@@ -227,7 +227,7 @@ class DtrTest extends TestCase
 
         $createLogs(2);
 
-        // Warm up auth/session queries
+        // Pemanasan query auth/session
         $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->toDateString(),
             'end' => Carbon::now()->toDateString()
@@ -244,7 +244,7 @@ class DtrTest extends TestCase
         $responseXlsx->assertStatus(200);
         $queries2 = count(\Illuminate\Support\Facades\DB::getQueryLog());
         
-        $createLogs(3); // Now we have 5 students/logs
+        $createLogs(3); // Sekarang kita punya 5 siswa/log
         
         \Illuminate\Support\Facades\DB::flushQueryLog();
         $this->get(route('reports.export.dtr.xlsx', [
@@ -253,12 +253,12 @@ class DtrTest extends TestCase
         ]));
         $queries5 = count(\Illuminate\Support\Facades\DB::getQueryLog());
         
-        // Due to lazy(1000) pulling in chunks of 1000, 
-        // the number of queries should be bounded and not linearly scale per record (N+1)
+        // Karena lazy(1000) menarik data per chunk 1000,
+        // jumlah query seharusnya terbatas dan tidak naik linear per record (N+1)
 
         $this->assertEquals($queries2, $queries5, "Query count should not grow linearly with logs when under the chunk size.");
 
-        // test pdf 200 without crashing dompdf
+        // test pdf 200 tanpa membuat dompdf crash
         \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')->andReturnSelf();
         \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('setPaper')->andReturnSelf();
         \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('download')->andReturn(response('pdf', 200));
@@ -283,14 +283,14 @@ class DtrTest extends TestCase
         ]));
         $response->assertSessionHasErrors('end');
 
-        // test 30 days diff (31 days inclusive) on XLSX -> PASS
+        // test selisih 30 hari (31 hari inklusif) pada XLSX -> PASS
         $responsePass = $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->subDays(30)->toDateString(),
             'end' => Carbon::now()->toDateString()
         ]));
         $responsePass->assertStatus(200);
 
-        // test 31 days diff (32 days inclusive) on XLSX -> FAIL
+        // test selisih 31 hari (32 hari inklusif) pada XLSX -> FAIL
         $responseFail = $this->get(route('reports.export.dtr.xlsx', [
             'start' => Carbon::now()->subDays(31)->toDateString(),
             'end' => Carbon::now()->toDateString()
@@ -300,7 +300,7 @@ class DtrTest extends TestCase
 
     public function test_dtr_export_formatting_and_pdf_rendering()
     {
-        // 1. Test DtrExport map() mitigation for CSV injection
+        // 1. Test mitigasi map() DtrExport untuk CSV injection
         $dtrRecords = collect([
             'test_key' => [
                 'date' => '2026-10-06',
@@ -324,9 +324,9 @@ class DtrTest extends TestCase
         $this->assertEquals("'=SUM(1)", $mapped[1]); // name
         $this->assertEquals("'+12345", $mapped[2]); // code
         $this->assertEquals("'-Class", $mapped[3]); // group
-        $this->assertEquals("@malicious", $mapped[4]); // first_in (not user-provided, not sanitized)
+        $this->assertEquals("@malicious", $mapped[4]); // first_in (bukan dari user, tidak disanitasi)
 
-        // 2. Test rendering the actual PDF view without crashing
+        // 2. Test render view PDF yang sebenarnya tanpa crash
         $html = view('reports.dtr_pdf', [
             'records' => $dtrRecords,
             'start' => '2026-10-06',
@@ -334,7 +334,7 @@ class DtrTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('2026-10-06', $html);
-        $this->assertStringContainsString('=SUM(1)', $html); // PDF view doesn't sanitize CSV injection, just HTML escaping
+        $this->assertStringContainsString('=SUM(1)', $html); // view PDF tidak menyanitasi CSV injection, hanya HTML escaping
     }
 
     public function test_dtr_pdf_export_blocks_unfiltered_requests_over_7_days()

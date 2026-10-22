@@ -69,7 +69,7 @@ class BuildingFilterTest extends TestCase
 
         $response->assertStatus(200);
         
-        // Should only return 2 items: studentA is upsert, studentB is delete (out of scope)
+        // Seharusnya hanya mengembalikan 2 item: studentA adalah upsert, studentB adalah delete (di luar scope)
         $items = collect($response->json('items'));
         $this->assertCount(2, $items);
         
@@ -100,13 +100,13 @@ class BuildingFilterTest extends TestCase
         
         $originalCursor = $template->version_cursor;
 
-        // Move student to classroom B
+        // Pindahkan siswa ke classroom B
         $student->update(['classroom_id' => $classroomB->id]);
         
         $template->refresh();
         $this->assertGreaterThan($originalCursor, $template->version_cursor);
 
-        // Fetch templates for Device A (since cursor bumped, it should see it as a delete)
+        // Ambil templates untuk Device A (karena cursor sudah naik, seharusnya terlihat sebagai delete)
         $deviceA = Device::factory()->create(['building_id' => $buildingA->id]);
         \Laravel\Sanctum\Sanctum::actingAs($deviceA, ['device']);
         $responseA = $this->getJson("/api/v1/templates?cursor={$originalCursor}");
@@ -115,7 +115,7 @@ class BuildingFilterTest extends TestCase
         $this->assertCount(1, $itemsA);
         $this->assertEquals('delete', $itemsA->first()['op']);
 
-        // Fetch templates for Device B (should see it as an upsert)
+        // Ambil templates untuk Device B (seharusnya terlihat sebagai upsert)
         $deviceB = Device::factory()->create(['building_id' => $buildingB->id]);
         \Laravel\Sanctum\Sanctum::actingAs($deviceB, ['device']);
         $responseB = $this->getJson("/api/v1/templates?cursor={$originalCursor}");

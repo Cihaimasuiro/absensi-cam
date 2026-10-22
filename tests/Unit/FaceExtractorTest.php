@@ -15,7 +15,7 @@ class FaceExtractorTest extends TestCase
         Process::fake([
             '*' => function ($process) {
                 $command = $process->command;
-                // Assert required arguments
+                // Pastikan argumen wajib ada
                 $this->assertContains('--image', $command);
                 $this->assertContains('/tmp/test_photo.jpg', $command);
                 $this->assertContains('--models-dir', $command);
@@ -23,7 +23,7 @@ class FaceExtractorTest extends TestCase
                 $this->assertContains('--ort-path', $command);
                 $this->assertContains('/usr/lib/libonnxruntime.so', $command);
 
-                // Simulate stderr tracing log and stdout with prior log noise and valid JSON on the final line
+                // Simulasikan log tracing di stderr dan stdout berisi noise log sebelumnya serta JSON valid di baris terakhir
                 $fakeBinary = random_bytes(2048);
                 $validJson = json_encode([
                     'success' => true,
@@ -85,7 +85,7 @@ class FaceExtractorTest extends TestCase
 
     public function test_extract_throws_on_embedding_dimension_mismatch(): void
     {
-        // 1024 bytes instead of required 2048 bytes
+        // 1024 byte, bukan 2048 byte yang diwajibkan
         $shortBytes = random_bytes(1024);
 
         Process::fake([
@@ -109,7 +109,7 @@ class FaceExtractorTest extends TestCase
 
     public function test_extract_throws_when_image_file_not_found(): void
     {
-        // In unrecorded mode, missing image file throws fast
+        // Dalam mode unrecorded, file gambar yang tidak ada langsung melempar exception
         $extractor = new FaceExtractor();
 
         $this->expectException(RuntimeException::class);

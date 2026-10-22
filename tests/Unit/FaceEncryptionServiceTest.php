@@ -10,7 +10,7 @@ class FaceEncryptionServiceTest extends TestCase
 {
     public function test_can_encrypt_and_decrypt_with_standard_base64_key(): void
     {
-        // 32-byte raw key encoded to base64
+        // Raw key 32 byte yang di-encode ke base64
         $rawKey = random_bytes(32);
         Config::set('app.enrollment_embed_key', base64_encode($rawKey));
 
@@ -29,7 +29,7 @@ class FaceEncryptionServiceTest extends TestCase
 
     public function test_can_encrypt_and_decrypt_with_base64_prefixed_key(): void
     {
-        // key:generate --show format (base64:... prefix)
+        // Format key:generate --show (prefix base64:...)
         $rawKey = random_bytes(32);
         Config::set('app.enrollment_embed_key', 'base64:' . base64_encode($rawKey));
 

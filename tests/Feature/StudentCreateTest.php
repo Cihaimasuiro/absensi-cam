@@ -52,7 +52,7 @@ class StudentCreateTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Verify it renders on the index page with classroom name
+        // Pastikan data tampil di halaman index beserta nama classroom
         $indexResponse = $this->actingAs($user)->get('/students');
         $indexResponse->assertStatus(200);
         $indexResponse->assertSee('XII RPL 1');

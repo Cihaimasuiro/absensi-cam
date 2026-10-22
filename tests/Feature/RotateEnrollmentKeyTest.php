@@ -60,7 +60,7 @@ class RotateEnrollmentKeyTest extends TestCase
             'embedding_hash' => hash('sha256', $rawVector),
         ]);
 
-        // Run dry-run using isolated temporary env files
+        // Jalankan dry-run memakai file env sementara yang terisolasi
         $this->artisan('app:rotate-enrollment-key', [
             '--new-key'       => $newKeyRaw,
             '--env-path'      => $this->tempEnvPath,
@@ -68,18 +68,18 @@ class RotateEnrollmentKeyTest extends TestCase
             '--dry-run'       => true,
         ])->assertSuccessful();
 
-        // Run actual rotation using isolated temporary env files
+        // Jalankan rotasi sebenarnya memakai file env sementara yang terisolasi
         $this->artisan('app:rotate-enrollment-key', [
             '--new-key'       => $newKeyRaw,
             '--env-path'      => $this->tempEnvPath,
             '--edge-env-path' => $this->tempEdgeEnvPath,
         ])->assertSuccessful();
 
-        // Verify the temporary env file was updated with the new key
+        // Pastikan file env sementara sudah diperbarui dengan key baru
         $this->assertStringContainsString("ENROLLMENT_EMBED_KEY={$newKeyRaw}", File::get($this->tempEnvPath));
         $this->assertStringContainsString("ENROLLMENT_EMBED_KEY={$newKeyRaw}", File::get($this->tempEdgeEnvPath));
 
-        // Now set the app config to the new key and verify decryption succeeds
+        // Sekarang set config app ke key baru dan pastikan dekripsi berhasil
         Config::set('app.enrollment_embed_key', $newKeyRaw);
         $template->refresh();
 

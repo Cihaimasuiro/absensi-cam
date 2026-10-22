@@ -17,7 +17,7 @@ class TimezoneTest extends TestCase
 
     public function test_utc_captured_at_is_handled_correctly_for_local_timezone()
     {
-        // Setup timezone to Jakarta for the test (just in case it's not)
+        // Atur timezone ke Jakarta untuk test ini (untuk berjaga-jaga bila belum)
         config(['app.timezone' => 'Asia/Jakarta']);
         date_default_timezone_set('Asia/Jakarta');
 
@@ -28,7 +28,7 @@ class TimezoneTest extends TestCase
         
         $token = $device->createToken('edge-engine', ['device'])->plainTextToken;
 
-        // 2026-09-30 23:30:00 UTC is 2026-10-01 06:30:00 WIB (Jakarta)
+        // 2026-09-30 23:30:00 UTC adalah 2026-10-01 06:30:00 WIB (Jakarta)
         $utcTime = '2026-09-30T23:30:00Z';
         $uuid = Str::uuid()->toString();
 
@@ -50,7 +50,7 @@ class TimezoneTest extends TestCase
 
         $response->assertStatus(200);
 
-        // Verify the database has the record
+        // Pastikan record sudah ada di database
         $this->assertDatabaseHas('attendance_logs', [
             'id' => $uuid,
             'student_id' => $student->id,
@@ -58,22 +58,22 @@ class TimezoneTest extends TestCase
 
         $log = AttendanceLog::find($uuid);
 
-        // Accessor should format using the app timezone by default.
-        // The time should represent 06:30:00 in Jakarta time.
+        // Accessor seharusnya memformat memakai timezone app secara default.
+        // Waktu tersebut seharusnya merepresentasikan 06:30:00 dalam waktu Jakarta.
         $this->assertEquals('2026-10-01 06:30:00', $log->captured_at->format('Y-m-d H:i:s'));
         
-        // The raw DB value MUST be UTC.
+        // Nilai mentah di DB WAJIB UTC.
         $rawLog = \Illuminate\Support\Facades\DB::table('attendance_logs')->where('id', $uuid)->first();
         $this->assertEquals('2026-09-30 23:30:00', $rawLog->captured_at);
 
-        // Let's test the `scopeToday` method if we mock 'today' to be 2026-10-01
+        // Mari uji method `scopeToday` dengan mem-mock 'today' menjadi 2026-10-01
         Carbon::setTestNow('2026-10-01 10:00:00');
         
         $todayLogs = AttendanceLog::today()->get();
         $this->assertCount(1, $todayLogs);
         $this->assertEquals($uuid, $todayLogs->first()->id);
 
-        // Test Evening Scan (18:00 WIB = 11:00 UTC)
+        // Uji Evening Scan (18:00 WIB = 11:00 UTC)
         $eveningUuid = Str::uuid()->toString();
         $this->postJson('/api/v1/attendance/batch', [
             'records' => [
@@ -92,7 +92,7 @@ class TimezoneTest extends TestCase
         $rawEvening = \Illuminate\Support\Facades\DB::table('attendance_logs')->where('id', $eveningUuid)->first();
         $this->assertEquals('2026-10-01 11:00:00', $rawEvening->captured_at);
 
-        // Evening scan should ALSO be included in "today" (10-01)
+        // Evening scan JUGA harus masuk ke "today" (10-01)
         $todayLogs = AttendanceLog::today()->get();
         $this->assertCount(2, $todayLogs);
     }

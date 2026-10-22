@@ -58,7 +58,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
 
         $template = FaceTemplate::where('student_id', $student->id)->first();
         $this->assertNotNull($template->embedding_enc);
-        $this->assertFalse(file_exists($tmpPath)); // Should delete the file
+        $this->assertFalse(file_exists($tmpPath)); // Seharusnya menghapus file
     }
     
     public function test_job_uses_config_model_version_when_null()

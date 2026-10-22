@@ -11,8 +11,8 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Feature: Attendance Batch Sync API
- * Covers: POST /api/v1/attendance/batch
+ * Feature: API Sync Batch Attendance
+ * Mencakup: POST /api/v1/attendance/batch
  * Ref: PRD §3.3 Sync Protocol, AGENTS.md §Transactions (Rule 22), §Security (Rule 33)
  */
 class AttendanceSyncTest extends TestCase
@@ -105,13 +105,13 @@ class AttendanceSyncTest extends TestCase
         $second->assertStatus(200)
             ->assertJsonPath('results.0.status', 'duplicate');
 
-        // Only one record in DB despite two submissions
+        // Hanya satu record di DB meskipun ada dua kali submit
         $this->assertCount(1, AttendanceLog::all());
     }
 
     public function test_unauthenticated_batch_is_rejected(): void
     {
-        // Actually drop the token by flushing auth instead of dropping middleware
+        // Sebenarnya menghapus token dengan flush auth, bukan dengan melepas middleware
         auth('sanctum')->forgetUser();
         $this->withHeaders(['Authorization' => 'Bearer bad-token']);
 
@@ -142,7 +142,7 @@ class AttendanceSyncTest extends TestCase
             ]],
         ]);
 
-        // Either validation error 422, or 200 with status=error per record
+        // Entah error validasi 422, atau 200 dengan status=error per record
         $this->assertTrue(in_array($response->status(), [200, 422]));
     }
 

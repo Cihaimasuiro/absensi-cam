@@ -10,7 +10,7 @@ class ExampleTest extends TestCase
     use RefreshDatabase;
     
     /**
-     * A basic test example.
+     * Contoh test dasar.
      */
     public function test_the_application_returns_a_successful_response(): void
     {

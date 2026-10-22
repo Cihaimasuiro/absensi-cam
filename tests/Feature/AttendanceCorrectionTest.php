@@ -34,8 +34,8 @@ class AttendanceCorrectionTest extends TestCase
         $building = \App\Domain\School\Models\Building::factory()->create(['school_id' => $school->id]);
         $device = \App\Domain\Device\Models\Device::factory()->create(['building_id' => $building->id]);
         
-        // Simulating an original log stored as UTC
-        $originalUtc = '2026-10-01 23:30:00'; // 06:30 WIB next day
+        // Menyimulasikan log asli yang tersimpan sebagai UTC
+        $originalUtc = '2026-10-01 23:30:00'; // 06:30 WIB hari berikutnya
         $log = AttendanceLog::create([
             'student_id'     => $student->id,
             'device_id'      => $device->id,
@@ -48,8 +48,8 @@ class AttendanceCorrectionTest extends TestCase
 
         $this->actingAs($admin);
 
-        // Correction payload (sent in local time, e.g., WIB)
-        // Admin corrects it to 08:00 WIB the next day
+        // Payload correction (dikirim dalam waktu lokal, mis. WIB)
+        // Admin mengoreksinya menjadi 08:00 WIB hari berikutnya
         $correctedLocal = '2026-10-02 08:00:00'; 
         
         $response = $this->post(route('reports.logs.correct', $log->id), [
@@ -64,27 +64,27 @@ class AttendanceCorrectionTest extends TestCase
         $this->assertTrue($log->is_corrected);
         $this->assertEquals('out', $log->direction);
 
-        // Accessor should return local time
+        // Accessor seharusnya mengembalikan waktu lokal
         $this->assertEquals($correctedLocal, $log->captured_at->format('Y-m-d H:i:s'));
         
-        // But the raw DB value should be UTC!
+        // Namun nilai mentah di DB seharusnya UTC!
         $rawLog = \Illuminate\Support\Facades\DB::table('attendance_logs')->where('id', $log->id)->first();
         // 08:00 WIB = 01:00 UTC
         $this->assertEquals('2026-10-02 01:00:00', $rawLog->captured_at);
 
-        // Check AttendanceCorrection record
+        // Periksa record AttendanceCorrection
         $correction = AttendanceCorrection::where('attendance_log_id', $log->id)->first();
         $this->assertNotNull($correction);
         $this->assertEquals('Wrong shift', $correction->reason);
         
-        // Check raw DB values for Correction
+        // Periksa nilai mentah di DB untuk Correction
         $rawCorrection = \Illuminate\Support\Facades\DB::table('attendance_corrections')->where('id', $correction->id)->first();
         $this->assertEquals($originalUtc, $rawCorrection->original_captured_at);
         $this->assertEquals('2026-10-02 01:00:00', $rawCorrection->corrected_captured_at);
         $this->assertEquals('in', $rawCorrection->original_direction);
         $this->assertEquals('out', $rawCorrection->corrected_direction);
 
-        // A second correction should be blocked with 422
+        // Koreksi kedua seharusnya ditolak dengan 422
         $response2 = $this->post(route('reports.logs.correct', $log->id), [
             'reason'                => 'Double correction',
             'corrected_captured_at' => $correctedLocal,

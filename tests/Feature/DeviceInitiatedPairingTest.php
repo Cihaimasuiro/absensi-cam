@@ -51,7 +51,7 @@ class DeviceInitiatedPairingTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^\d{3}-\d{3}$/', $pairingCode);
 
-        // Verify poll token is stored as SHA-256 hash in DB, NOT plain text
+        // Pastikan poll token tersimpan sebagai hash SHA-256 di DB, BUKAN plain text
         $this->assertDatabaseHas('device_pairing_requests', [
             'pairing_code'    => $pairingCode,
             'poll_token_hash' => hash('sha256', $pollToken),
@@ -60,7 +60,7 @@ class DeviceInitiatedPairingTest extends TestCase
             'status'          => 'pending',
         ]);
 
-        // Device polls while pending
+        // Device melakukan poll saat status masih pending
         $pollResponse = $this->postJson('/api/v1/devices/pairing/poll', [
             'poll_token' => $pollToken,
         ]);
@@ -74,7 +74,7 @@ class DeviceInitiatedPairingTest extends TestCase
 
     public function test_approved_pairing_delivers_credentials_and_burns_payload_preventing_reuse(): void
     {
-        // 1. Device requests pairing
+        // 1. Device meminta pairing
         $reqResponse = $this->postJson('/api/v1/devices/pairing/request', [
             'hostname'    => 'orangepilite2',
             'mac_address' => '02:42:ac:11:00:02',
@@ -83,7 +83,7 @@ class DeviceInitiatedPairingTest extends TestCase
         $pollToken = $reqResponse->json('poll_token');
         $pairingReq = DevicePairingRequest::where('poll_token_hash', hash('sha256', $pollToken))->firstOrFail();
 
-        // 2. Admin approves device
+        // 2. Admin menyetujui device
         $device = Device::create([
             'id'          => (string) \Illuminate\Support\Str::uuid(),
             'name'        => 'Terminal Absensi 1',
@@ -111,7 +111,7 @@ class DeviceInitiatedPairingTest extends TestCase
             'encrypted_payload' => Crypt::encryptString(json_encode($credentials)),
         ]);
 
-        // 3. Device polls and receives credentials
+        // 3. Device melakukan poll dan menerima credentials
         $pollResponse = $this->postJson('/api/v1/devices/pairing/poll', [
             'poll_token' => $pollToken,
         ]);
@@ -123,13 +123,13 @@ class DeviceInitiatedPairingTest extends TestCase
                 'device_code' => 'dev-0001',
             ]);
 
-        // 4. Verify credentials payload was permanently deleted from DB (single-use delivery)
+        // 4. Pastikan payload credentials sudah dihapus permanen dari DB (pengiriman sekali pakai)
         $refreshed = $pairingReq->fresh();
         $this->assertEquals('claimed', $refreshed->status);
         $this->assertNull($refreshed->encrypted_payload);
         $this->assertNotNull($refreshed->claimed_at);
 
-        // 5. Replay attempt: polling again must be rejected with HTTP 410 (claimed)
+        // 5. Percobaan replay: poll lagi harus ditolak dengan HTTP 410 (claimed)
         $replayResponse = $this->postJson('/api/v1/devices/pairing/poll', [
             'poll_token' => $pollToken,
         ]);
@@ -186,7 +186,7 @@ class DeviceInitiatedPairingTest extends TestCase
 
     public function test_flooding_pending_requests_is_rejected_after_limit(): void
     {
-        // Create 3 active pending requests from the same MAC
+        // Buat 3 request pending aktif dari MAC yang sama
         for ($i = 0; $i < 3; $i++) {
             $resp = $this->postJson('/api/v1/devices/pairing/request', [
                 'hostname'    => 'orangepilite2',
@@ -195,7 +195,7 @@ class DeviceInitiatedPairingTest extends TestCase
             $resp->assertStatus(201);
         }
 
-        // 4th request must be rejected with 422
+        // Request ke-4 harus ditolak dengan 422
         $resp4 = $this->postJson('/api/v1/devices/pairing/request', [
             'hostname'    => 'orangepilite2',
             'mac_address' => '02:42:ac:11:00:99',
@@ -222,7 +222,7 @@ class DeviceInitiatedPairingTest extends TestCase
         $role = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'admin']);
         $this->admin->assignRole($role);
 
-        // 1. Device requests pairing
+        // 1. Device meminta pairing
         $reqResponse = $this->postJson('/api/v1/devices/pairing/request', [
             'hostname'    => 'orangepilite2',
             'mac_address' => '02:42:ac:11:00:55',
@@ -230,13 +230,13 @@ class DeviceInitiatedPairingTest extends TestCase
         $pollToken = $reqResponse->json('poll_token');
         $pairingReq = DevicePairingRequest::where('poll_token_hash', hash('sha256', $pollToken))->firstOrFail();
 
-        // 2. Admin views index page
+        // 2. Admin membuka halaman index
         $indexResponse = $this->actingAs($this->admin)->get('/devices');
         $indexResponse->assertStatus(200)
             ->assertSee($pairingReq->pairing_code)
             ->assertSee('02:42:ac:11:00:55');
 
-        // 3. Admin approves request via web route
+        // 3. Admin menyetujui request lewat web route
         $approveResponse = $this->actingAs($this->admin)->post("/devices/pairing/{$pairingReq->id}/approve", [
             'building_id' => $this->building->id,
             'name'        => 'Kamera Gerbang 1',
@@ -244,7 +244,7 @@ class DeviceInitiatedPairingTest extends TestCase
         $approveResponse->assertRedirect();
         $approveResponse->assertSessionHas('success');
 
-        // 4. Verify request status is approved and device created
+        // 4. Pastikan status request approved dan device sudah dibuat
         $refreshed = $pairingReq->fresh();
         $this->assertEquals('approved', $refreshed->status);
         $this->assertNotNull($refreshed->device_id);
@@ -254,7 +254,7 @@ class DeviceInitiatedPairingTest extends TestCase
         $this->assertEquals('Kamera Gerbang 1', $device->name);
         $this->assertEquals($this->building->id, $device->building_id);
 
-        // 5. Device polls and gets credentials
+        // 5. Device melakukan poll dan mendapatkan credentials
         $pollResponse = $this->postJson('/api/v1/devices/pairing/poll', [
             'poll_token' => $pollToken,
         ]);
@@ -283,7 +283,7 @@ class DeviceInitiatedPairingTest extends TestCase
         $refreshed = $pairingReq->fresh();
         $this->assertEquals('rejected', $refreshed->status);
 
-        // Device poll returns 403
+        // Poll dari device mengembalikan 403
         $pollResponse = $this->postJson('/api/v1/devices/pairing/poll', [
             'poll_token' => $pollToken,
         ]);

@@ -11,8 +11,8 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Feature: Device Pairing & Heartbeat API
- * Covers: POST /api/v1/devices/pair · POST /api/v1/devices/heartbeat
+ * Feature: API Device Pairing & Heartbeat
+ * Mencakup: POST /api/v1/devices/pair · POST /api/v1/devices/heartbeat
  * Ref: PRD §4.2 Device Provisioning, AGENTS.md §Security (Rule 31)
  */
 class DevicePairingTest extends TestCase
@@ -72,7 +72,7 @@ class DevicePairingTest extends TestCase
         PairingCode::create([
             'building_id' => $building->id,
             'code_hash'   => hash('sha256', $plain),
-            'expires_at'  => now()->subMinute(),   // already expired
+            'expires_at'  => now()->subMinute(),   // sudah kedaluwarsa
             'created_by'  => $user->id,
         ]);
 
@@ -97,7 +97,7 @@ class DevicePairingTest extends TestCase
             'building_id' => $building->id,
             'code_hash'   => hash('sha256', $plain),
             'expires_at'  => now()->addMinutes(15),
-            'used_at'     => now(),                // already used
+            'used_at'     => now(),                // sudah dipakai
             'created_by'  => $user->id,
         ]);
 
@@ -137,7 +137,7 @@ class DevicePairingTest extends TestCase
     {
         config(['app.pairing_allow_http' => false]);
         
-        // Mock a valid pairing code
+        // Mock pairing code yang valid
         $building = Building::factory()->create();
         $user = \App\Domain\User\Models\User::factory()->create();
         $plain = 'ABCD-1234';
@@ -148,7 +148,7 @@ class DevicePairingTest extends TestCase
             'created_by'  => $user->id,
         ]);
 
-        // Override the request to pretend it is secure by using https://
+        // Override request agar dianggap aman dengan memakai https://
         $response = $this->postJson('https://localhost/api/v1/devices/pair', [
             'code'          => $plain,
             'device_name'   => 'Test HTTPS Device',

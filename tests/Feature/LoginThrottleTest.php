@@ -23,7 +23,7 @@ class LoginThrottleTest extends TestCase
         
         RateLimiter::clear($key);
 
-        // Make 5 failed attempts
+        // Lakukan 5 percobaan gagal
         for ($i = 0; $i < 5; $i++) {
             $response = $this->post('/login', [
                 'email' => 'test@example.com',
@@ -33,7 +33,7 @@ class LoginThrottleTest extends TestCase
             $response->assertSessionHasErrors('email');
         }
 
-        // The 6th attempt should be rate limited
+        // Percobaan ke-6 seharusnya kena rate limit
         $response = $this->post('/login', [
             'email' => 'test@example.com',
             'password' => 'wrongpassword',

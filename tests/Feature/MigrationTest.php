@@ -12,16 +12,16 @@ class MigrationTest extends TestCase
 
     public function test_migration_maps_old_columns_and_types_correctly()
     {
-        // Actually, we can't easily test migration from PHP code if we use RefreshDatabase 
-        // because it runs up all migrations before the test method!
-        // To test migration, we'd have to roll back that specific migration, insert data, and migrate again.
+        // Sebenarnya, kita tidak bisa dengan mudah menguji migration dari kode PHP jika memakai RefreshDatabase
+        // karena trait itu menjalankan semua migration sebelum method test dijalankan!
+        // Untuk menguji migration, kita harus rollback migration tertentu, insert data, lalu migrate lagi.
         
-        // Setup: rollback the target migration
+        // Setup: rollback migration target
         $this->artisan('migrate:rollback', [
             '--path' => 'database/migrations/2026_10_06_204945_add_type_to_classrooms_table.php'
         ]);
         
-        // Insert old data
+        // Insert data lama
         $schoolId = DB::table('schools')->insertGetId([
             'name' => 'Test School',
             'code' => 'TEST',
@@ -31,7 +31,7 @@ class MigrationTest extends TestCase
         $class1Id = DB::table('classrooms')->insertGetId([
             'school_id' => $schoolId,
             'name' => 'Kelas 10',
-            'type' => 'department', // old default
+            'type' => 'department', // default lama
             'class_start_time' => '07:30:00',
             'late_threshold_enabled' => true,
             'late_threshold_minutes' => 10,
@@ -46,10 +46,10 @@ class MigrationTest extends TestCase
             'late_threshold_minutes' => 15,
         ]);
 
-        // Run the migration
+        // Jalankan migration
         $this->artisan('migrate');
 
-        // Assert
+        // Assertion
         $class1 = DB::table('classrooms')->where('id', $class1Id)->first();
         $this->assertEquals('class', $class1->type);
         $this->assertEquals('07:30:00', $class1->start_time);

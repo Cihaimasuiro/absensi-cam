@@ -37,7 +37,7 @@ class ReEnrollFromPhotosTest extends TestCase
 
         $initialUpdated = $template->updated_at;
 
-        // Running without --all must skip the template because it already decrypts cleanly
+        // Menjalankan tanpa --all harus melewati template karena sudah bisa didekripsi dengan bersih
         $this->artisan('app:re-enroll-from-photos', [
             '--force' => true,
         ])
@@ -123,7 +123,7 @@ class ReEnrollFromPhotosTest extends TestCase
         $template->refresh();
         $this->assertGreaterThan($initialCursor, $template->version_cursor);
 
-        // Verify template now decrypts with active key
+        // Pastikan template sekarang bisa didekripsi dengan key aktif
         $encryptionService = app(FaceEncryptionService::class);
         $decrypted = $encryptionService->decrypt(
             base64_decode($template->embedding_enc),
@@ -145,7 +145,7 @@ class ReEnrollFromPhotosTest extends TestCase
         $encryptionService = app(FaceEncryptionService::class);
         $duplicateVector = str_repeat('D', 2048);
 
-        // Student 1 already has this vector enrolled
+        // Siswa 1 sudah memiliki vector ini ter-enroll
         $student1 = Student::factory()->create();
         FaceTemplate::create([
             'student_id'     => $student1->id,
@@ -155,7 +155,7 @@ class ReEnrollFromPhotosTest extends TestCase
             'photo_path'     => 'faces/student1.jpg',
         ]);
 
-        // Student 2 has undecryptable template
+        // Siswa 2 memiliki template yang tidak bisa didekripsi
         $student2 = Student::factory()->create(['school_id' => $student1->school_id]);
         $template2 = FaceTemplate::create([
             'student_id'     => $student2->id,
@@ -165,7 +165,7 @@ class ReEnrollFromPhotosTest extends TestCase
             'photo_path'     => 'faces/student2.jpg',
         ]);
 
-        // Mock process to extract identical vector
+        // Mock process untuk mengekstrak vector yang identik
         Process::fake([
             '*' => function ($process) use ($duplicateVector) {
                 $this->assertContains('--image', $process->command);
@@ -177,14 +177,14 @@ class ReEnrollFromPhotosTest extends TestCase
             },
         ]);
 
-        // With --force only, duplicate detection MUST abort to prevent unintended collision
+        // Dengan hanya --force, deteksi duplikat WAJIB membatalkan proses untuk mencegah tabrakan yang tidak diinginkan
         $this->artisan('app:re-enroll-from-photos', [
             '--force' => true,
         ])
         ->expectsOutputToContain('Aborting template ID ' . $template2->id . ' due to duplicate face detection')
         ->assertFailed();
 
-        // With --skip-duplicate-check, it succeeds
+        // Dengan --skip-duplicate-check, proses berhasil
         $this->artisan('app:re-enroll-from-photos', [
             '--force'                => true,
             '--skip-duplicate-check' => true,

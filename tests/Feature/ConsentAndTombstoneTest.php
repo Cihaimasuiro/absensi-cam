@@ -20,7 +20,7 @@ class ConsentAndTombstoneTest extends TestCase
         
         $student = Student::factory()->create();
 
-        // 1. Give consent and create a template
+        // 1. Berikan consent dan buat sebuah template
         $student->consents()->create([
             'given_at'     => now(),
             'text_version' => 'v1.0',
@@ -42,18 +42,18 @@ class ConsentAndTombstoneTest extends TestCase
             'code' => $student->code ?? $student->student_number ?? '12345',
             'building_id' => $student->building_id,
             'has_consent' => false,
-            '_method' => 'PUT' // because Route::resource usually uses PUT/PATCH
+            '_method' => 'PUT' // karena Route::resource biasanya memakai PUT/PATCH
         ]);
 
-        // 3. Verify consent is withdrawn
+        // 3. Pastikan consent sudah dicabut
         $this->assertFalse($student->fresh()->hasActiveConsent());
 
-        // 4. Verify template is soft-deleted
+        // 4. Pastikan template sudah di-soft-delete
         $this->assertSoftDeleted('face_templates', [
             'id' => $template->id,
         ]);
 
-        // 5. Verify version_cursor is incremented
+        // 5. Pastikan version_cursor sudah bertambah
         $deletedTemplate = FaceTemplate::withTrashed()->find($template->id);
         $this->assertGreaterThan($initialCursor, $deletedTemplate->version_cursor);
     }

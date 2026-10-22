@@ -8,8 +8,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Unit: Device Model & PairingCode Model
- * Covers: isOnline(), isExpired(), isUsed()
+ * Unit: Model Device & Model PairingCode
+ * Mencakup: isOnline(), isExpired(), isUsed()
  * Ref: AGENTS.md §Model Rules (Rule 10)
  */
 class DeviceModelTest extends TestCase

@@ -38,7 +38,7 @@ class HeartbeatReconciliationTest extends TestCase
 
         Sanctum::actingAs($device, ['device']);
 
-        // 1. Expected hash calculation
+        // 1. Perhitungan hash yang diharapkan
         $expectedCombined = $student->id . ':' . ($template->version_cursor ?? 1) . "\n";
         $expectedHash = hash('sha256', $expectedCombined);
 
@@ -53,7 +53,7 @@ class HeartbeatReconciliationTest extends TestCase
             'serial_ok' => true,
         ];
 
-        // 2. Heartbeat dengan matching hash -> action 'none'
+        // 2. Heartbeat dengan hash yang cocok -> action 'none'
         $responseMatch = $this->postJson('/api/v1/devices/heartbeat', array_merge($basePayload, [
             'templates_count' => 1,
             'templates_hash' => $expectedHash,
@@ -66,7 +66,7 @@ class HeartbeatReconciliationTest extends TestCase
             'server_hash' => $expectedHash,
         ]);
 
-        // 3. Heartbeat dengan stale/mismatched hash -> action 'reconcile_templates'
+        // 3. Heartbeat dengan hash basi/tidak cocok -> action 'reconcile_templates'
         $staleHash = hash('sha256', "stale_hash_data\n");
         $responseMismatch = $this->postJson('/api/v1/devices/heartbeat', array_merge($basePayload, [
             'templates_count' => 2,
@@ -80,7 +80,7 @@ class HeartbeatReconciliationTest extends TestCase
             'server_hash' => $expectedHash,
         ]);
 
-        // 4. Verifikasi snapshot mengembalikan ID aktif
+        // 4. Verifikasi snapshot mengembalikan ID yang aktif
         $snapshotRes = $this->getJson('/api/v1/templates/snapshot');
         $snapshotRes->assertStatus(200);
         $snapshotRes->assertJson([
@@ -123,7 +123,7 @@ class HeartbeatReconciliationTest extends TestCase
         $this->assertContains($student1->id, $resBefore->json('valid_student_ids'));
         $this->assertContains($student2->id, $resBefore->json('valid_student_ids'));
 
-        // Soft delete student 2
+        // Soft delete siswa 2
         $student2->delete();
 
         $resAfter = $this->getJson('/api/v1/templates/snapshot');
@@ -164,7 +164,7 @@ class HeartbeatReconciliationTest extends TestCase
             'serial_ok' => true,
         ];
 
-        // 1. Initial heartbeat with exact hash matches -> action is 'none'
+        // 1. Heartbeat awal dengan hash yang persis cocok -> action adalah 'none'
         $expectedHash1 = hash('sha256', $student1->id . ':' . ($template1->version_cursor ?? 1) . "\n");
 
         $res1 = $this->postJson('/api/v1/devices/heartbeat', array_merge($basePayload, [
@@ -179,7 +179,7 @@ class HeartbeatReconciliationTest extends TestCase
             'server_hash' => $expectedHash1,
         ]);
 
-        // 2. Add a new template (student 2 enrolled)
+        // 2. Tambah template baru (siswa 2 sudah enroll)
         $student2 = Student::factory()->create(['school_id' => $school->id, 'code' => 'STU-002']);
         $template2 = FaceTemplate::create([
             'student_id' => $student2->id,
@@ -188,8 +188,8 @@ class HeartbeatReconciliationTest extends TestCase
             'embedding_hash' => 'hash_2',
         ]);
 
-        // 3. Device sends heartbeat still reporting the old hash ($expectedHash1)
-        // Must flip action to 'reconcile_templates' immediately!
+        // 3. Device mengirim heartbeat yang masih melaporkan hash lama ($expectedHash1)
+        // Action harus langsung berubah menjadi 'reconcile_templates'!
         $res2 = $this->postJson('/api/v1/devices/heartbeat', array_merge($basePayload, [
             'templates_count' => 1,
             'templates_hash' => $expectedHash1,
@@ -202,7 +202,7 @@ class HeartbeatReconciliationTest extends TestCase
         ]);
         $this->assertNotEquals($expectedHash1, $res2->json('server_hash'));
 
-        // 4. Verify server hash matches the new 2-template sorted hash
+        // 4. Pastikan hash server cocok dengan hash baru dari 2 template yang sudah diurutkan
         $sorted = collect([
             ['id' => $student1->id, 'cursor' => $template1->version_cursor],
             ['id' => $student2->id, 'cursor' => $template2->version_cursor],
@@ -214,7 +214,7 @@ class HeartbeatReconciliationTest extends TestCase
         $expectedHash2 = hash('sha256', $combinedNew);
         $this->assertEquals($expectedHash2, $res2->json('server_hash'));
 
-        // 5. Soft-delete template 2 -> next heartbeat with $expectedHash2 must flip action back to reconcile_templates!
+        // 5. Soft-delete template 2 -> heartbeat berikutnya dengan $expectedHash2 harus mengembalikan action ke reconcile_templates!
         $template2->delete();
 
         $res3 = $this->postJson('/api/v1/devices/heartbeat', array_merge($basePayload, [

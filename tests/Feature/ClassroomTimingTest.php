@@ -72,7 +72,7 @@ class ClassroomTimingTest extends TestCase
             'late_tolerance_minutes' => 30,
         ]);
 
-        // Check activity log properties
+        // Periksa properti activity log
         $log = \Spatie\Activitylog\Models\Activity::where('subject_type', Classroom::class)
             ->where('subject_id', $classroom->id)
             ->first();
@@ -104,7 +104,7 @@ class ClassroomTimingTest extends TestCase
             'late_tolerance_minutes' => 5,
         ]);
 
-        // Staff should remain untouched
+        // Staff seharusnya tidak berubah
         $this->assertDatabaseHas('classrooms', [
             'id' => $staff1->id,
             'start_time' => '06:00:00',
@@ -120,9 +120,9 @@ class ClassroomTimingTest extends TestCase
     {
         $response = $this->actingAs($this->admin)->put(route('schools.classrooms.bulkUpdateTiming', $this->school), [
             'start_time' => '06:45',
-            'late_tolerance_minutes' => 121, // invalid max
+            'late_tolerance_minutes' => 121, // melebihi batas maksimum
             'type_filter' => 'all',
-            // missing confirm_retroactive
+            // confirm_retroactive tidak dikirim
         ]);
 
         $response->assertSessionHasErrors(['confirm_retroactive', 'late_tolerance_minutes']);
@@ -167,7 +167,7 @@ class ClassroomTimingTest extends TestCase
 
         $response->assertSessionHas('success');
         $this->assertDatabaseHas('classrooms', ['id' => $staff1->id, 'start_time' => '05:45', 'late_tolerance_minutes' => 0]);
-        $this->assertDatabaseHas('classrooms', ['id' => $class1->id, 'start_time' => '07:00:00']); // untouched
+        $this->assertDatabaseHas('classrooms', ['id' => $class1->id, 'start_time' => '07:00:00']); // tidak berubah
     }
 
     public function test_can_bulk_update_all()

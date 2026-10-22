@@ -49,12 +49,12 @@ class AdminConsoleTest extends TestCase
     {
         $this->actingAs($this->superAdmin);
 
-        // 1. List users
+        // 1. Daftar user
         $response = $this->get(route('admin.users.index'));
         $response->assertOk();
         $response->assertSee('Super Admin');
 
-        // 2. Create user with role
+        // 2. Buat user dengan role
         $createResponse = $this->post(route('admin.users.store'), [
             'name'     => 'Staff Baru',
             'email'    => 'staff@example.com',
@@ -78,12 +78,12 @@ class AdminConsoleTest extends TestCase
         $staff->refresh();
         $this->assertTrue($staff->hasRole('super_admin'));
 
-        // 4. Cannot delete self
+        // 4. Tidak boleh menghapus diri sendiri
         $deleteSelf = $this->delete(route('admin.users.destroy', $this->superAdmin));
         $deleteSelf->assertRedirect();
         $this->assertDatabaseHas('users', ['id' => $this->superAdmin->id]);
 
-        // 5. Delete other user
+        // 5. Hapus user lain
         $deleteOther = $this->delete(route('admin.users.destroy', $staff));
         $deleteOther->assertRedirect(route('admin.users.index'));
         $this->assertDatabaseMissing('users', ['id' => $staff->id]);
@@ -91,7 +91,7 @@ class AdminConsoleTest extends TestCase
 
     public function test_privilege_escalation_is_prevented(): void
     {
-        // Create an admin user who is granted user.manage permission directly
+        // Buat user admin yang diberi permission user.manage secara langsung
         $adminUser = User::factory()->create([
             'name'     => 'Admin Manager',
             'email'    => 'admin.mgr@example.com',
@@ -102,7 +102,7 @@ class AdminConsoleTest extends TestCase
 
         $this->actingAs($adminUser);
 
-        // 1. Cannot create user with super_admin role
+        // 1. Tidak boleh membuat user dengan role super_admin
         $createAttempt = $this->post(route('admin.users.store'), [
             'name'     => 'Hacker',
             'email'    => 'hacker@example.com',
@@ -112,7 +112,7 @@ class AdminConsoleTest extends TestCase
         $createAttempt->assertSessionHasErrors('role');
         $this->assertDatabaseMissing('users', ['email' => 'hacker@example.com']);
 
-        // 2. Cannot escalate existing user to super_admin
+        // 2. Tidak boleh menaikkan user yang sudah ada menjadi super_admin
         $otherUser = User::factory()->create(['email' => 'victim@example.com']);
         $otherUser->assignRole('user');
 
@@ -125,7 +125,7 @@ class AdminConsoleTest extends TestCase
         $otherUser->refresh();
         $this->assertFalse($otherUser->hasRole('super_admin'));
 
-        // 3. Cannot modify an existing super_admin
+        // 3. Tidak boleh mengubah super_admin yang sudah ada
         $tamperAttempt = $this->put(route('admin.users.update', $this->superAdmin), [
             'name'  => 'Compromised Super Admin',
             'email' => 'superadmin@example.com',
@@ -133,7 +133,7 @@ class AdminConsoleTest extends TestCase
         ]);
         $tamperAttempt->assertForbidden();
 
-        // 4. Cannot delete an existing super_admin
+        // 4. Tidak boleh menghapus super_admin yang sudah ada
         $deleteAttempt = $this->delete(route('admin.users.destroy', $this->superAdmin));
         $deleteAttempt->assertForbidden();
     }
@@ -142,7 +142,7 @@ class AdminConsoleTest extends TestCase
     {
         $this->actingAs($this->regularUser);
 
-        // Blocked by route group middleware role:super_admin|admin
+        // Diblokir oleh middleware route group role:super_admin|admin
         $this->get(route('admin.users.index'))->assertForbidden();
         $this->get(route('admin.audit.index'))->assertForbidden();
         $this->get(route('admin.quarantine.index'))->assertForbidden();
@@ -153,18 +153,18 @@ class AdminConsoleTest extends TestCase
     {
         $this->actingAs($this->superAdmin);
 
-        // Trigger an activity log
+        // Picu sebuah activity log
         activity('test_log')
             ->performedOn($this->superAdmin)
             ->causedBy($this->superAdmin)
             ->log('Audit test executed');
 
-        // View audit logs
+        // Lihat audit logs
         $response = $this->get(route('admin.audit.index'));
         $response->assertOk();
         $response->assertSee('Audit test executed');
 
-        // Export audit logs CSV
+        // Export audit logs ke CSV
         $export = $this->get(route('admin.audit.export'));
         $export->assertOk();
         $export->assertHeader('content-type', 'text/csv; charset=UTF-8');
@@ -182,7 +182,7 @@ class AdminConsoleTest extends TestCase
             'embedding_hash' => 'hash1',
         ]);
 
-        // Student 2 has valid template but has an unrelated quarantine flag (e.g. duplicate_face_detected)
+        // Siswa 2 punya template valid tetapi memiliki flag karantina yang tidak terkait (mis. duplicate_face_detected)
         $student2 = Student::factory()->create();
         $validBlob = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class)->encrypt(
             str_repeat('A', 2048),
@@ -206,13 +206,13 @@ class AdminConsoleTest extends TestCase
         $scanResponse = $this->post(route('admin.quarantine.scan'));
         $scanResponse->assertRedirect(route('admin.quarantine.index'));
 
-        // Student 1 must be quarantined
+        // Siswa 1 harus dikarantina
         $this->assertDatabaseHas('biometric_quarantines', [
             'student_id' => $student1->id,
             'status'     => 'quarantined',
         ]);
 
-        // Student 2's duplicate quarantine must NOT be auto-resolved by scan
+        // Karantina duplikat milik siswa 2 TIDAK BOLEH otomatis diselesaikan oleh scan
         $unrelatedQuarantine->refresh();
         $this->assertEquals('quarantined', $unrelatedQuarantine->status);
     }
@@ -257,7 +257,7 @@ class AdminConsoleTest extends TestCase
             return $job->studentId === (string) $student->id && $job->quarantineId === $quarantine->id;
         });
 
-        // Test that when GenerateFaceEmbedding handle runs, it resolves the quarantine and records actor
+        // Uji bahwa saat handle GenerateFaceEmbedding berjalan, karantina diselesaikan dan actor tercatat
         Process::fake([
             '*' => function ($process) {
                 $this->assertContains('--image', $process->command);
@@ -299,7 +299,7 @@ class AdminConsoleTest extends TestCase
 
         $student = Student::factory()->create();
 
-        // 1. No consent given at all
+        // 1. Consent sama sekali belum diberikan
         $quarantine = BiometricQuarantine::create([
             'student_id'     => $student->id,
             'reason'         => 'decryption_failed',
@@ -322,7 +322,7 @@ class AdminConsoleTest extends TestCase
         $response->assertSessionHas('error');
         Queue::assertNothingPushed();
 
-        // 2. Consent was withdrawn
+        // 2. Consent sudah dicabut
         $consent = Consent::create([
             'student_id'    => $student->id,
             'guardian_name' => 'Wali Siswa',
@@ -337,13 +337,13 @@ class AdminConsoleTest extends TestCase
         $response2->assertSessionHas('error');
         Queue::assertNothingPushed();
 
-        // 3. Even if job is dispatched somehow, handle() must refuse to process/restore
+        // 3. Bahkan jika job ter-dispatch entah bagaimana, handle() harus menolak memproses/memulihkan
         $tmpPath = Storage::disk('local')->path('tmp/test_noconsent.jpg');
         @mkdir(dirname($tmpPath), 0777, true);
         file_put_contents($tmpPath, 'test-photo');
 
         $template = FaceTemplate::where('student_id', $student->id)->first();
-        $template->delete(); // Soft-deleted tombstone
+        $template->delete(); // Tombstone hasil soft-delete
         $this->assertTrue($template->fresh()->trashed());
 
         $job = new GenerateFaceEmbedding(
@@ -358,7 +358,7 @@ class AdminConsoleTest extends TestCase
         );
         $job->handle();
 
-        // Template must STILL be trashed (never revived without consent)
+        // Template HARUS tetap ter-trash (tidak pernah dihidupkan lagi tanpa consent)
         $this->assertTrue($template->fresh()->trashed());
     }
 
@@ -376,7 +376,7 @@ class AdminConsoleTest extends TestCase
             'given_at'      => now(),
         ]);
 
-        // Quarantine 1: Integrity issue (targeted for re-enrollment)
+        // Karantina 1: Masalah integritas (ditargetkan untuk re-enrollment)
         $integrityQuarantine = BiometricQuarantine::create([
             'student_id'     => $student->id,
             'reason'         => 'decryption_failed',
@@ -384,7 +384,7 @@ class AdminConsoleTest extends TestCase
             'quarantined_at' => now(),
         ]);
 
-        // Quarantine 2: Manual review / duplicate flag (unrelated, must NOT be auto-resolved)
+        // Karantina 2: Review manual / flag duplikat (tidak terkait, TIDAK BOLEH otomatis diselesaikan)
         $unrelatedQuarantine = BiometricQuarantine::create([
             'student_id'     => $student->id,
             'reason'         => 'manual_security_flag',
@@ -424,7 +424,7 @@ class AdminConsoleTest extends TestCase
 
         $this->assertEquals('resolved', $integrityQuarantine->status);
         $this->assertEquals($this->superAdmin->id, $integrityQuarantine->resolved_by);
-        $this->assertEquals('quarantined', $unrelatedQuarantine->status); // Preserved!
+        $this->assertEquals('quarantined', $unrelatedQuarantine->status); // Tetap dipertahankan!
     }
 
     public function test_generate_face_embedding_preserves_tmp_file_on_retryable_failure(): void
@@ -443,7 +443,7 @@ class AdminConsoleTest extends TestCase
         @mkdir(dirname($tmpPath), 0777, true);
         file_put_contents($tmpPath, 'test-photo');
 
-        // Simulate extraction failure on attempt 1
+        // Simulasikan kegagalan ekstraksi pada percobaan 1
         Process::fake([
             '*' => function ($process) {
                 $this->assertContains('--image', $process->command);
@@ -465,11 +465,11 @@ class AdminConsoleTest extends TestCase
             $job->handle();
             $this->fail('Expected exception was not thrown');
         } catch (\RuntimeException $e) {
-            // Tmp file must STILL exist for queue attempt 2!
+            // File tmp HARUS tetap ada untuk percobaan queue ke-2!
             $this->assertFileExists($tmpPath);
         }
 
-        // When failed() is invoked after all retries exhausted, tmp file is deleted
+        // Saat failed() dipanggil setelah semua retry habis, file tmp dihapus
         $job->failed(new \RuntimeException('All attempts exhausted'));
         $this->assertFileDoesNotExist($tmpPath);
     }
@@ -508,7 +508,7 @@ class AdminConsoleTest extends TestCase
             'embedding_hash' => 'hash',
         ]);
 
-        // 1. Grant consent
+        // 1. Berikan consent
         $grantResponse = $this->post(route('admin.consents.store'), [
             'student_id'        => $student->id,
             'guardian_name'     => 'Bpk. Hendra',
@@ -524,14 +524,14 @@ class AdminConsoleTest extends TestCase
 
         $consent = Consent::where('student_id', $student->id)->first();
 
-        // 2. Withdraw consent - must tombstone faceTemplate
+        // 2. Cabut consent - harus membuat tombstone faceTemplate
         $withdrawResponse = $this->post(route('admin.consents.withdraw', $consent));
         $withdrawResponse->assertRedirect(route('admin.consents.index'));
 
         $consent->refresh();
         $this->assertNotNull($consent->withdrawn_at);
 
-        // FaceTemplate must be soft-deleted (tombstoned for edge sync)
+        // FaceTemplate harus di-soft-delete (dijadikan tombstone untuk edge sync)
         $this->assertSoftDeleted('face_templates', ['id' => $template->id]);
 
         // 3. Export CSV

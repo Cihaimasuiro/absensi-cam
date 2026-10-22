@@ -15,7 +15,7 @@ class RoleAccessTest extends TestCase
     {
         parent::setUp();
         
-        // Ensure roles exist
+        // Pastikan role sudah ada
         Role::firstOrCreate(['name' => 'admin']);
         Role::firstOrCreate(['name' => 'guru']);
     }

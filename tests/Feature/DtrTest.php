@@ -141,7 +141,7 @@ class DtrTest extends TestCase
         $this->assertEquals('18:00:00', $dtr['2026-10-06']['last_out']);
         $this->assertEquals('Hadir', $dtr['2026-10-06']['status']);
         
-        // Test late_tolerance_minutes null (pelacakan keterlambatan mati)
+        // Uji late_tolerance_minutes null (pelacakan keterlambatan mati)
         $classroomNoLimit = Classroom::create([
             'school_id' => $school->id,
             'name' => 'No Limit Class',

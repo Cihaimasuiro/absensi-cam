@@ -12,25 +12,25 @@ use Illuminate\Support\Facades\Schedule;
 |--------------------------------------------------------------------------
 */
 
-// PRD §12.3 — device logs: 7 days
+// PRD §12.3 — log perangkat: 7 hari
 Schedule::command('app:prune-device-logs')
     ->dailyAt('02:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// Expired unused pairing codes — no PRD requirement, common housekeeping
+// Kode pairing kedaluwarsa yang tak terpakai — tidak diwajibkan PRD, sekadar housekeeping
 Schedule::command('app:prune-stale-pairing-codes')
     ->dailyAt('03:00')
     ->withoutOverlapping()
     ->runInBackground();
 
-// PRD §12.3 — attendance history: org-configurable (ATTENDANCE_RETENTION_DAYS=0 → disabled)
+// PRD §12.3 — riwayat absensi: dapat diatur per organisasi (ATTENDANCE_RETENTION_DAYS=0 → nonaktif)
 Schedule::command('app:prune-attendance-logs')
     ->dailyAt('02:30')
     ->withoutOverlapping()
     ->runInBackground();
 
-// PRD §12.3 + UU PDP — face templates deleted when consent withdrawn
+// PRD §12.3 + UU PDP — template wajah dihapus saat persetujuan ditarik
 // Runs hourly so a revocation is acted on quickly (tombstone propagates on next edge sync)
 Schedule::command('app:tombstone-revoked-consent')
     ->hourly()

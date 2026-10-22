@@ -11,9 +11,9 @@ use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Feature: API Sync Batch Attendance
+ * Feature: API Sinkronisasi Batch Absensi
  * Mencakup: POST /api/v1/attendance/batch
- * Ref: PRD §3.3 Sync Protocol, AGENTS.md §Transactions (Rule 22), §Security (Rule 33)
+ * Rujukan: PRD §3.3 Sync Protocol, AGENTS.md §Transactions (Rule 22), §Security (Rule 33)
  */
 class AttendanceSyncTest extends TestCase
 {

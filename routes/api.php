@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// --- Health Check for Edge Engine & Monitoring ---
+// --- Health Check untuk Edge Engine & Monitoring ---
 Route::get('health', function () {
     return response()->json([
         'status' => 'ok',
@@ -35,12 +35,12 @@ Route::get('health', function () {
 
 Route::prefix('v1')->group(function () {
 
-    // --- Device Pairing (legacy public, strict rate limit: 5/min per IP) ---
+    // --- Pairing Perangkat (publik legacy, rate limit ketat: 5/menit per IP) ---
     Route::post('devices/pair', DevicePairController::class)
         ->middleware(['throttle:5,1'])
         ->name('api.v1.devices.pair');
 
-    // --- Device-Initiated Pairing (public, throttled per IP) ---
+    // --- Pairing Diprakarsai Perangkat (publik, dibatasi per IP) ---
     Route::post('devices/pairing/request', DevicePairingRequestController::class)
         ->middleware(['throttle:5,10'])
         ->name('api.v1.devices.pairing.request');

@@ -22,7 +22,7 @@ pub mod auth;
 pub mod control;
 pub use control::{register_control_routes, ControlState, ServerConfig};
 
-/// Central frame distribution hub backed by tokio::sync::watch.
+/// Pusat distribusi frame yang didukung oleh tokio::sync::watch.
 #[derive(Clone)]
 pub struct FrameHub {
     sender: Arc<watch::Sender<Option<Bytes>>>,
@@ -48,8 +48,8 @@ impl FrameHub {
         let _ = self.sender.send_replace(Some(frame));
     }
 
-    /// Flips the preview horizontally. Applied by the MJPEG encoder when
-    /// `camera.mirror_preview` is enabled in the edge settings.
+    /// Membalik preview secara horizontal. Diterapkan oleh encoder MJPEG saat
+    /// `camera.mirror_preview` diaktifkan pada pengaturan edge.
     pub fn set_mirror(&self, enabled: bool) {
         self.mirror.store(enabled, std::sync::atomic::Ordering::Relaxed);
     }
@@ -165,12 +165,12 @@ fn is_stream_authorized(
         .map(|t| !t.trim().is_empty())
         .unwrap_or(false);
 
-    // If device is not paired yet, allow stream for initial setup and standalone testing
+    // Jika perangkat belum dipasangkan, izinkan stream untuk setup awal dan pengujian mandiri
     if !is_paired {
         return true;
     }
 
-    // Allow requests originating from or sent to localhost / loopback
+    // Izinkan request yang berasal dari atau ditujukan ke localhost / loopback
     if let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) {
         if host.starts_with("127.0.0.1") || host.starts_with("localhost") {
             return true;
@@ -182,7 +182,7 @@ fn is_stream_authorized(
         }
     }
 
-    // Session cookie or valid HMAC signed stream token
+    // Cookie sesi atau token stream bertanda tangan HMAC yang valid
     auth.check_session(headers)
         || auth.verify_stream_token(query.token.as_deref(), query.expires.as_deref(), device_code)
 }

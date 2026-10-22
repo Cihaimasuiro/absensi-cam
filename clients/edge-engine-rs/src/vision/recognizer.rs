@@ -42,7 +42,7 @@ fn find_file_recursive(dir: &Path, prefix: &str, depth: usize) -> Option<PathBuf
     None
 }
 
-/// Find libonnxruntime.so dynamic library across system, virtualenvs, conda, and app paths
+/// Cari library dinamis libonnxruntime.so pada path sistem, virtualenv, conda, dan aplikasi
 pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("ORT_DYLIB_PATH") {
         if Path::new(&path).exists() {
@@ -72,7 +72,7 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
         }
     }
 
-    // Search inside python virtual environments & app directories
+    // Cari di dalam virtual environment python & direktori aplikasi
     let search_roots = [
         "/opt/smart-absensi/edge-engine/miniforge3/envs",
         "/opt/smart-absensi/edge-engine/venv",
@@ -91,7 +91,7 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
     None
 }
 
-/// Initialize ONNX Runtime environment, checking well-known paths on Orange Pi / Linux
+/// Inisialisasi environment ONNX Runtime, memeriksa path umum pada Orange Pi / Linux
 pub fn init_onnx_runtime(custom_path: Option<&Path>) -> Result<()> {
     if ONNX_INITIALIZED.load(Ordering::SeqCst) {
         return Ok(());
@@ -145,7 +145,7 @@ impl FaceRecognizer {
         Ok(Self { session })
     }
 
-    /// Extract 512-d normalized embedding from preprocessed (112, 112, 3) NCHW float tensor
+    /// Ekstrak embedding ternormalisasi 512-d dari tensor float NCHW (112, 112, 3) yang telah diprapemproses
     pub fn extract_embedding(&mut self, nchw_input: &[f32]) -> Result<Vec<f32>> {
         anyhow::ensure!(
             nchw_input.len() == 3 * 112 * 112,
@@ -166,7 +166,7 @@ impl FaceRecognizer {
 
         let mut embedding: Vec<f32> = slice.to_vec();
 
-        // L2 normalization
+        // Normalisasi L2
         let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
         if norm > 1e-6 {
             for val in &mut embedding {
@@ -177,7 +177,7 @@ impl FaceRecognizer {
         Ok(embedding)
     }
 
-    /// Calculate cosine similarity between two 512-d embeddings
+    /// Hitung kemiripan kosinus antara dua embedding 512-d
     pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
         if v1.len() != v2.len() || v1.is_empty() {
             return 0.0;

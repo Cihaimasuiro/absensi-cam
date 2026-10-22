@@ -1,4 +1,4 @@
-//! Smart Absensi Sync Daemon CLI (`smart-absensi-sync`)
+//! CLI Daemon Sinkronisasi Smart Absensi (`smart-absensi-sync`)
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

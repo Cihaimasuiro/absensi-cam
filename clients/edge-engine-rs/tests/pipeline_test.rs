@@ -11,12 +11,12 @@ use std::path::PathBuf;
 fn test_full_vision_pipeline_local() {
     println!("\n=== Testing Pure-Rust AI Vision Pipeline Locally ===");
 
-    // 1. Initialize ONNX Runtime
+    // 1. Inisialisasi ONNX Runtime
     let init_res = init_onnx_runtime(None);
     assert!(init_res.is_ok(), "Failed to initialize ONNX Runtime: {:?}", init_res.err());
     println!("[1/5] ONNX Runtime loaded successfully.");
 
-    // 2. Locate models
+    // 2. Cari lokasi model
     let det_path = find_model(&["detector.onnx", "yunet_2023mar.onnx"]).expect("detector.onnx not found");
     let rec_path = find_model(&["recognizer.onnx", "sface.onnx"]).expect("recognizer.onnx not found");
     let liv_path = find_model(&["liveness.onnx", "minifasnet.onnx"]).expect("liveness.onnx not found");
@@ -32,7 +32,7 @@ fn test_full_vision_pipeline_local() {
     let mut liveness = LivenessDetector::load(&liv_path).expect("Failed to load LivenessDetector");
     println!("[3/5] All 3 AI models instantiated successfully.");
 
-    // 3. Load test face image
+    // 3. Muat gambar wajah uji
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let img_path = manifest.join("test_face.png");
     if !img_path.exists() {
@@ -45,7 +45,7 @@ fn test_full_vision_pipeline_local() {
 
     println!("[4/5] Test face image loaded: {}x{} (RGB bytes: {})", width, height, rgb_bytes.len());
 
-    // 4. Run YuNet face detection
+    // 4. Jalankan deteksi wajah YuNet
     let start_det = std::time::Instant::now();
     let faces = detector
         .detect(&rgb_bytes, width as usize, height as usize, (width * 3) as usize)
@@ -67,7 +67,7 @@ fn test_full_vision_pipeline_local() {
             face.landmarks[2][0], face.landmarks[2][1]
         );
 
-        // 5. Evaluate Liveness
+        // 5. Evaluasi Liveness
         let start_liv = std::time::Instant::now();
         let liv_res = liveness
             .evaluate(&rgb_bytes, width as usize, height as usize, (width * 3) as usize, &face.bbox)
@@ -79,7 +79,7 @@ fn test_full_vision_pipeline_local() {
             liv_res.is_real, liv_res.prob_real * 100.0, liv_res.logit_diff, liv_time
         );
 
-        // 6. Umeyama alignment
+        // 6. Alignment Umeyama
         let aligned = align_face_to_tensor_nchw(
             &rgb_bytes,
             width as usize,
@@ -90,7 +90,7 @@ fn test_full_vision_pipeline_local() {
         .expect("Umeyama face alignment failed");
         assert_eq!(aligned.len(), 3 * 112 * 112);
 
-        // 7. ArcFace feature extraction
+        // 7. Ekstraksi fitur ArcFace
         let start_rec = std::time::Instant::now();
         let embedding = recognizer.extract_embedding(&aligned).expect("Feature extraction failed");
         let rec_time = start_rec.elapsed();

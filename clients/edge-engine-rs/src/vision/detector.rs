@@ -6,11 +6,11 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct FaceDetection {
-    /// Bounding box: [x, y, width, height]
+    /// Kotak pembatas: [x, y, width, height]
     pub bbox: [f32; 4],
-    /// Detection confidence score in range [0.0, 1.0]
+    /// Skor keyakinan deteksi dalam rentang [0.0, 1.0]
     pub score: f32,
-    /// 5 facial landmarks: [right_eye, left_eye, nose, right_mouth, left_mouth]
+    /// 5 landmark wajah: [mata_kanan, mata_kiri, hidung, mulut_kanan, mulut_kiri]
     pub landmarks: [[f32; 2]; 5],
 }
 
@@ -44,8 +44,8 @@ impl FaceDetector {
         })
     }
 
-    /// Detect faces from an RGB image buffer (stride in bytes per row).
-    /// Automatically converts RGB to BGR tensor layout [1, 3, 640, 640] expected by YuNet.
+    /// Deteksi wajah dari buffer gambar RGB (stride dalam byte per baris).
+    /// Otomatis mengonversi RGB ke layout tensor BGR [1, 3, 640, 640] yang diharapkan YuNet.
     pub fn detect(
         &mut self,
         image_rgb: &[u8],
@@ -138,7 +138,7 @@ impl FaceDetector {
                         landmarks[n] = [lx, ly];
                     }
 
-                    // Check bounds against original image dimensions
+                    // Periksa batas terhadap dimensi gambar asli
                     if x1 + w > 0.0 && y1 + h > 0.0 && x1 < width as f32 && y1 < height as f32 {
                         candidates.push(FaceDetection {
                             bbox: [x1, y1, w, h],
@@ -152,7 +152,7 @@ impl FaceDetector {
 
         drop(outputs);
 
-        // Apply Non-Maximum Suppression (NMS)
+        // Terapkan Non-Maximum Suppression (NMS)
         let nms_results = Self::non_max_suppression(candidates, self.nms_threshold, self.top_k);
         Ok(nms_results)
     }

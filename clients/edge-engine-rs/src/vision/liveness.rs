@@ -40,7 +40,7 @@ impl LivenessDetector {
         })
     }
 
-    /// Evaluates liveness on a detected face within an RGB image buffer.
+    /// Evaluasi liveness pada wajah yang terdeteksi di dalam buffer gambar RGB.
     pub fn evaluate(
         &mut self,
         image_rgb: &[u8],
@@ -58,17 +58,17 @@ impl LivenessDetector {
         let cx = bx + bw / 2.0;
         let cy = by + bh / 2.0;
 
-        // 1. Tight crop (scale 1.0) -> [3, 256, 256] RGB / 255.0
+        // 1. Crop ketat (skala 1.0) -> [3, 256, 256] RGB / 255.0
         let tight_crop = Self::crop_and_resize(
             image_rgb, width, height, stride, cx, cy, max_dim, LIVENESS_IMG_SIZE,
         );
 
-        // 2. Context crop (scale 2.0) -> [3, 256, 256] RGB / 255.0
+        // 2. Crop konteks (skala 2.0) -> [3, 256, 256] RGB / 255.0
         let ctx_crop = Self::crop_and_resize(
             image_rgb, width, height, stride, cx, cy, max_dim * 2.0, LIVENESS_IMG_SIZE,
         );
 
-        // 3. Compute 16x16 FFT spectrum on grayscale tight crop
+        // 3. Hitung spektrum FFT 16x16 pada crop ketat grayscale
         let mut gray = vec![0.0f32; LIVENESS_IMG_SIZE * LIVENESS_IMG_SIZE];
         let ch_stride = LIVENESS_IMG_SIZE * LIVENESS_IMG_SIZE;
         for i in 0..ch_stride {
@@ -80,7 +80,7 @@ impl LivenessDetector {
 
         let fft_map = Self::compute_fft_16x16(&gray, LIVENESS_IMG_SIZE, LIVENESS_IMG_SIZE);
 
-        // 4. Run ONNX model
+        // 4. Jalankan model ONNX
         let tight_val = Value::from_array(([1usize, 3, LIVENESS_IMG_SIZE, LIVENESS_IMG_SIZE], tight_crop))
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         let fft_val = Value::from_array(([1usize, 1, FFT_SIZE, FFT_SIZE], fft_map))
@@ -113,8 +113,8 @@ impl LivenessDetector {
         })
     }
 
-    /// Crops square ROI centered at (cx, cy) with size `crop_size`, handles reflection padding,
-    /// and resizes via bilinear interpolation to NCHW [3, target_size, target_size] normalized to [0.0, 1.0].
+    /// Crop ROI persegi berpusat di (cx, cy) berukuran `crop_size`, menangani reflection padding,
+    /// lalu resize dengan interpolasi bilinear ke NCHW [3, target_size, target_size] ternormalisasi [0.0, 1.0].
     #[allow(clippy::too_many_arguments)]
     fn crop_and_resize(
         image_rgb: &[u8],
@@ -139,7 +139,7 @@ impl LivenessDetector {
             for dx in 0..target_size {
                 let sx = x1 + (dx as f32 + 0.5) * scale;
 
-                // Bilinear sampling with reflection padding
+                // Sampling bilinear dengan reflection padding
                 let p00 = Self::sample_reflect(image_rgb, img_w, img_h, stride, sx.floor() as isize, sy.floor() as isize);
                 let p10 = Self::sample_reflect(image_rgb, img_w, img_h, stride, sx.floor() as isize + 1, sy.floor() as isize);
                 let p01 = Self::sample_reflect(image_rgb, img_w, img_h, stride, sx.floor() as isize, sy.floor() as isize + 1);
@@ -199,25 +199,25 @@ impl LivenessDetector {
         }
     }
 
-    /// Computes 2D FFT magnitude spectrum and reduces to 16x16 max-pool grid
+    /// Hitung spektrum magnitudo FFT 2D lalu reduksi ke grid max-pool 16x16
     fn compute_fft_16x16(gray: &[f32], w: usize, h: usize) -> Vec<f32> {
         let mut planner = FftPlanner::new();
         let fft_row = planner.plan_fft_forward(w);
         let fft_col = planner.plan_fft_forward(h);
 
-        // Convert input to complex
+        // Konversi input ke bilangan kompleks
         let mut data = vec![Complex { re: 0.0f32, im: 0.0f32 }; w * h];
         for i in 0..(w * h) {
             data[i].re = gray[i];
         }
 
-        // Row-wise 1D FFT
+        // FFT 1D per baris
         for y in 0..h {
             let row = &mut data[y * w..(y + 1) * w];
             fft_row.process(row);
         }
 
-        // Transpose for col-wise FFT
+        // Transpose untuk FFT per kolom
         let mut transposed = vec![Complex { re: 0.0f32, im: 0.0f32 }; w * h];
         for y in 0..h {
             for x in 0..w {
@@ -225,13 +225,13 @@ impl LivenessDetector {
             }
         }
 
-        // Col-wise 1D FFT
+        // FFT 1D per kolom
         for x in 0..w {
             let col = &mut transposed[x * h..(x + 1) * h];
             fft_col.process(col);
         }
 
-        // FFTShift & Log-magnitude
+        // FFTShift & log-magnitudo
         let mut magnitude = vec![0.0f32; w * h];
         let half_w = w / 2;
         let half_h = h / 2;
@@ -241,7 +241,7 @@ impl LivenessDetector {
             let shifted_y = (y + half_h) % h;
             for x in 0..w {
                 let shifted_x = (x + half_w) % w;
-                // data was in transposed[x * h + y]
+                // data sebelumnya berada di transposed[x * h + y]
                 let c = transposed[x * h + y];
                 let mag = (c.re * c.re + c.im * c.im).sqrt();
                 let log_mag = (mag + 1.0).ln();
@@ -263,7 +263,7 @@ impl LivenessDetector {
             *m = (norm.clamp(-3.0, 3.0) + 3.0) / 6.0;
         }
 
-        // Max pooling to 16x16
+        // Max pooling ke 16x16
         let block_w = w / FFT_SIZE;
         let block_h = h / FFT_SIZE;
         let mut out = vec![0.0f32; FFT_SIZE * FFT_SIZE];

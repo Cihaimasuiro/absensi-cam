@@ -1,4 +1,4 @@
-//! Smart Absensi Edge Engine CLI (`engine-cli`)
+//! CLI Smart Absensi Edge Engine (`engine-cli`)
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

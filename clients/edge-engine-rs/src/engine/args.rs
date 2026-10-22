@@ -11,7 +11,7 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    // Top-level arguments for default sync daemon behavior (backward compatibility)
+    // Argumen level atas untuk perilaku default daemon sync (kompatibilitas mundur)
     #[arg(short, long, default_value = "local_edge.db")]
     pub db: String,
 
@@ -30,7 +30,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Drain local SQLite outbox to Laravel API (default)
+    /// Kirim habis outbox SQLite lokal ke API Laravel (default)
     Sync {
         #[arg(short, long, default_value = "local_edge.db")]
         db: String,
@@ -48,7 +48,7 @@ pub enum Commands {
         model_version: Option<String>,
     },
 
-    /// Run pure libc V4L2 MJPEG Camera capture, HTTP stream server, and native AI Vision
+    /// Jalankan capture kamera MJPEG V4L2 libc murni, server stream HTTP, dan AI Vision native
     Stream {
         #[arg(short, long, default_value = "/dev/video0")]
         device: String,
@@ -123,10 +123,10 @@ pub enum Commands {
         gpio_buzzer: Option<u32>,
     },
 
-    /// Audit flash storage health, tmpfs RAM mounts, read-only status, and database durability
+    /// Audit kesehatan penyimpanan flash, mount RAM tmpfs, status read-only, dan durabilitas database
     Doctor,
 
-    /// Provision Read-Only RootFS (OverlayFS), tmpfs RAM mounts, and persistent /data partition
+    /// Siapkan RootFS Read-Only (OverlayFS), mount RAM tmpfs, dan partisi /data persisten
     HardenStorage {
         #[arg(long, default_value = "/data")]
         data_mount: String,

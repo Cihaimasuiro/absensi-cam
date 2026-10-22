@@ -21,7 +21,7 @@ pub struct ExtractCli {
 }
 
 fn main() {
-    // Route all tracing logs to stderr to keep stdout 100% clean for JSON contract
+    // Arahkan semua log tracing ke stderr agar stdout tetap 100% bersih untuk kontrak JSON
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .init();

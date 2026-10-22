@@ -1,30 +1,30 @@
-//! Vision Metrics Logging Module
+//! Modul Pencatatan Metrik Vision
 //!
-//! Provides passive runtime instrumentation for empirical face guidance threshold calibration:
-//! - Computes average luma across the central 70% ROI of each frame.
-//! - Tracks frame luma distribution (min, avg, max, dark ratio, glare ratio).
-//! - Tracks detected face bounding box dimensions (width, height: min, avg, max).
-//! - Aggregates metrics per minute and emits a single structured `tracing::info!` log line.
-//! - Gated by environment variable `EDGE_VISION_METRICS` (disabled by default, zero overhead when off).
+//! Menyediakan instrumentasi runtime pasif untuk kalibrasi ambang panduan wajah secara empiris:
+//! - Menghitung luma rata-rata pada ROI 70% area tengah setiap frame.
+//! - Melacak distribusi luma frame (min, rata-rata, maks, rasio gelap, rasio silau).
+//! - Melacak dimensi kotak pembatas wajah yang terdeteksi (lebar, tinggi: min, rata-rata, maks).
+//! - Mengagregasi metrik per menit lalu mengeluarkan satu baris log terstruktur `tracing::info!`.
+//! - Dikendalikan variabel environment `EDGE_VISION_METRICS` (nonaktif secara default, tanpa overhead saat mati).
 
 use std::time::{Duration, Instant};
 use tracing::info;
 use crate::vision::FaceDetection;
 
-/// Default baseline constant for dark frame luma (provisional threshold for empirical data collection).
+/// Konstanta baseline default untuk luma frame gelap (ambang sementara untuk pengumpulan data empiris).
 pub const DEFAULT_DARK_LUMA_THRESHOLD: f32 = 40.0;
 
-/// Default baseline constant for glare frame luma (provisional threshold for empirical data collection).
+/// Konstanta baseline default untuk luma frame silau (ambang sementara untuk pengumpulan data empiris).
 pub const DEFAULT_GLARE_LUMA_THRESHOLD: f32 = 220.0;
 
-/// Central ROI coverage factor (70% central area = 15% margins on all sides).
+/// Faktor cakupan ROI tengah (70% area tengah = margin 15% di setiap sisi).
 pub const CENTRAL_ROI_RATIO: f32 = 0.70;
 
-/// Default aggregation window interval (60 seconds = 1 minute).
+/// Interval jendela agregasi default (60 detik = 1 menit).
 pub const DEFAULT_METRICS_WINDOW_SECS: u64 = 60;
 
-/// Calculate average luma across the central 70% ROI of an RGB image buffer.
-/// Returns a value in range [0.0, 255.0].
+/// Hitung luma rata-rata pada ROI 70% area tengah dari buffer gambar RGB.
+/// Mengembalikan nilai dalam rentang [0.0, 255.0].
 pub fn calculate_central_roi_luma(
     image_rgb: &[u8],
     width: usize,
@@ -55,7 +55,7 @@ pub fn calculate_central_roi_luma(
                 let r = image_rgb[px] as u32;
                 let g = image_rgb[px + 1] as u32;
                 let b = image_rgb[px + 2] as u32;
-                // ITU-R BT.601 integer fixed-point: Y = (77*R + 150*G + 29*B) >> 8
+                // ITU-R BT.601 fixed-point integer: Y = (77*R + 150*G + 29*B) >> 8
                 let y_val = (77 * r + 150 * g + 29 * b) >> 8;
                 luma_sum += y_val as u64;
                 pixel_count += 1;
@@ -70,14 +70,14 @@ pub fn calculate_central_roi_luma(
     }
 }
 
-/// Aggregator for runtime vision metrics with 1-minute rollup intervals.
+/// Agregator metrik vision runtime dengan interval rollup 1 menit.
 #[derive(Debug)]
 pub struct VisionMetricsAggregator {
     enabled: bool,
     window_duration: Duration,
     window_start: Instant,
 
-    // Frame metrics
+    // Metrik frame
     frame_count: u32,
     dark_frames: u32,
     glare_frames: u32,
@@ -85,7 +85,7 @@ pub struct VisionMetricsAggregator {
     luma_min: f32,
     luma_max: f32,
 
-    // Face metrics
+    // Metrik wajah
     face_count: u32,
     face_w_sum: f64,
     face_w_min: f32,
@@ -94,7 +94,7 @@ pub struct VisionMetricsAggregator {
     face_h_min: f32,
     face_h_max: f32,
 
-    // Thresholds (data-collection only, non-final)
+    // Ambang batas (hanya untuk pengumpulan data, belum final)
     dark_threshold: f32,
     glare_threshold: f32,
 }
@@ -106,7 +106,7 @@ impl Default for VisionMetricsAggregator {
 }
 
 impl VisionMetricsAggregator {
-    /// Initialize aggregator from environment variable `EDGE_VISION_METRICS` (disabled by default).
+    /// Inisialisasi agregator dari variabel environment `EDGE_VISION_METRICS` (nonaktif secara default).
     pub fn new() -> Self {
         let enabled = std::env::var("EDGE_VISION_METRICS")
             .map(|val| val == "1" || val.eq_ignore_ascii_case("true"))
@@ -115,7 +115,7 @@ impl VisionMetricsAggregator {
         Self::with_enabled(enabled)
     }
 
-    /// Explicitly create aggregator with enabled flag (useful for testing or programmatic wiring).
+    /// Buat agregator secara eksplisit dengan flag enabled (berguna untuk pengujian atau wiring programatik).
     pub fn with_enabled(enabled: bool) -> Self {
         Self {
             enabled,
@@ -150,8 +150,8 @@ impl VisionMetricsAggregator {
         self.window_duration = duration;
     }
 
-    /// Record a processed frame and its detected faces into the accumulator.
-    /// If the window duration has elapsed, automatically flushes summary to `tracing::info!`.
+    /// Catat frame yang telah diproses beserta wajah terdeteksi ke dalam akumulator.
+    /// Jika durasi jendela sudah lewat, ringkasan otomatis di-flush ke `tracing::info!`.
     pub fn record_frame(
         &mut self,
         image_rgb: &[u8],
@@ -164,7 +164,7 @@ impl VisionMetricsAggregator {
             return;
         }
 
-        // Flush previous rollup window if expired before adding new frame data
+        // Flush jendela rollup sebelumnya jika sudah kedaluwarsa sebelum menambah data frame baru
         if self.window_start.elapsed() >= self.window_duration {
             self.flush();
         }
@@ -209,7 +209,7 @@ impl VisionMetricsAggregator {
         }
     }
 
-    /// Emit aggregated metrics to `tracing::info!` and reset state for the next period.
+    /// Keluarkan metrik teragregasi ke `tracing::info!` lalu reset state untuk periode berikutnya.
     pub fn flush(&mut self) {
         if self.frame_count == 0 {
             self.window_start = Instant::now();
@@ -274,7 +274,7 @@ impl VisionMetricsAggregator {
             max_h,
         );
 
-        // Reset accumulators
+        // Reset akumulator
         self.frame_count = 0;
         self.dark_frames = 0;
         self.glare_frames = 0;
@@ -306,7 +306,7 @@ mod tests {
         let image = vec![255u8; stride * height];
 
         let luma = calculate_central_roi_luma(&image, width, height, stride);
-        // BT.601 integer math on 255: (77*255 + 150*255 + 29*255) >> 8 = (65280) >> 8 = 255
+        // Aritmetika integer BT.601 pada 255: (77*255 + 150*255 + 29*255) >> 8 = (65280) >> 8 = 255
         assert!((luma - 255.0).abs() < 1.0);
     }
 
@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn test_metrics_aggregation_counts() {
         let mut agg = VisionMetricsAggregator::with_enabled(true);
-        // Set short window for testing
+        // Set jendela pendek untuk pengujian
         agg.set_window_duration(Duration::from_millis(50));
 
         let width = 100;
@@ -366,11 +366,11 @@ mod tests {
         assert_eq!(agg.face_h_min, 110.0);
         assert_eq!(agg.face_h_max, 140.0);
 
-        // Sleep to trigger auto flush
+        // Tidur sejenak untuk memicu auto flush
         std::thread::sleep(Duration::from_millis(60));
         agg.record_frame(&dark_img, width, height, stride, &[]);
 
-        // After flush, accumulator should reset
+        // Setelah flush, akumulator seharusnya ter-reset
         assert_eq!(agg.frame_count, 1);
         assert_eq!(agg.dark_frames, 1);
         assert_eq!(agg.face_count, 0);

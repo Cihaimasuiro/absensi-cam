@@ -59,7 +59,7 @@ impl TftRleStreamer {
     ) -> Vec<u8> {
         let mut out = Vec::with_capacity((dst_w as usize * dst_h as usize) / 2 + 16);
 
-        // 1. Header (10 bytes): Magic Sync + Window Rect (X, Y, W, H)
+        // 1. Header (10 byte): Magic Sync + Window Rect (X, Y, W, H)
         out.push(MAGIC_SYNC_HI);
         out.push(MAGIC_SYNC_LO);
         out.extend_from_slice(&dst_x.to_be_bytes());
@@ -67,7 +67,7 @@ impl TftRleStreamer {
         out.extend_from_slice(&dst_w.to_be_bytes());
         out.extend_from_slice(&dst_h.to_be_bytes());
 
-        // 2. Scanline RLE Compression
+        // 2. Kompresi RLE per scanline
         let mut current_color: Option<u16> = None;
         let mut current_count: u8 = 0;
 
@@ -120,7 +120,7 @@ impl TftRleStreamer {
             out.push((color & 0xFF) as u8);
         }
 
-        // 3. End of Frame Delimiter (count = 0)
+        // 3. Delimiter Akhir Frame (count = 0)
         out.push(0x00);
 
         out
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(rle[0], MAGIC_SYNC_HI);
         assert_eq!(rle[1], MAGIC_SYNC_LO);
 
-        // Rect: X=10, Y=20, W=4, H=4 (masing-masing 2 bytes big-endian)
+        // Rect: X=10, Y=20, W=4, H=4 (masing-masing 2 byte big-endian)
         assert_eq!(&rle[2..4], &10u16.to_be_bytes());
         assert_eq!(&rle[4..6], &20u16.to_be_bytes());
         assert_eq!(&rle[6..8], &4u16.to_be_bytes());

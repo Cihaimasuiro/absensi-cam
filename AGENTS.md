@@ -2689,6 +2689,55 @@ unless explicitly required.
 
 # 100. Comments
 
+## 100.1 Language: Indonesian
+
+**Every comment in this repository is written in Indonesian.** This is not
+optional and not subject to per-agent preference. It applies to:
+
+- PHP: `//`, `#`, `/* */`, and docblocks (`/** */`)
+- Rust: `//`, `///`, and `//!`
+- JavaScript, Blade, shell scripts, YAML, and SQL
+
+**Not translated:**
+
+- Code identifiers, class names, variable names, function names
+- Log keys and event names (e.g. `'attendance_batch_record_failed'`)
+- Exception messages and user-facing strings
+- Docblock tags: keep `@param`, `@return`, `@throws`, `@var` in English.
+  The prose describing them is Indonesian.
+
+Bad:
+
+```php
+// Get employee
+$employee = Employee::find($id);
+```
+
+Good:
+
+```php
+// Ambil data pegawai
+$employee = Employee::find($id);
+```
+
+Docblock example:
+
+```php
+/**
+ * Ambil roster siswa dengan filter pencarian.
+ *
+ * @param  Request  $request  Filter yang diminta pengguna
+ * @return LengthAwarePaginator
+ */
+```
+
+## 100.2 Documentation: English
+
+All Markdown files (`.md`) are written in **English**. This covers
+`README.md`, `docs/**`, `AGENTS.md`, and `SECURITY.md`.
+
+## 100.3 What to explain
+
 Write comments to explain:
 
 ```text
@@ -2701,18 +2750,11 @@ not:
 what
 ```
 
-Bad:
-
-```php
-// Get employee
-$employee = Employee::find($id);
-```
-
 Good:
 
 ```php
-// Lock the employee record because approval can be triggered
-// concurrently by multiple workers.
+// Kunci record pegawai karena persetujuan bisa dipicu secara
+// bersamaan oleh beberapa worker sekaligus.
 ```
 
 ---

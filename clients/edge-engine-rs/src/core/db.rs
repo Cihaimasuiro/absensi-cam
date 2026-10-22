@@ -99,7 +99,7 @@ impl EdgeDb {
             )
             .await?;
 
-        // Auto-migrate legacy unencrypted templates (2048 bytes) to prevent boot crash loop on upgraded devices
+        // Migrasi otomatis template legacy tanpa enkripsi (2048 byte) agar perangkat hasil upgrade tidak terjebak crash loop saat boot
         if !self.is_plaintext_allowed() {
             let mut rows = self
                 .conn
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn test_aes_gcm_cross_language_python_vector() {
         use base64::Engine;
-        // Key 32 bytes derived dynamically for cross-language test vector
+        // Key 32 byte diturunkan secara dinamis untuk vektor uji lintas bahasa
         let key: Vec<u8> = (0..32).map(|_| b'k').collect();
         let student_id = "std-python-99";
         let model_version = "v1.0-yunet";

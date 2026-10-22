@@ -15,7 +15,7 @@ pub use sync_runner::run_sync;
 pub use tracker::TrackedStudent;
 pub use utils::{find_model_path, model_search_dirs, wait_for_shutdown_signal};
 
-/// Central entrypoint for `engine-cli` and `smart-absensi-sync` binaries.
+/// Titik masuk utama untuk binary `engine-cli` dan `smart-absensi-sync`.
 pub async fn run_cli() -> Result<()> {
     // 1. Muat file .env jika ada (cek CWD, lalu fallback ke /data/config/.env, lalu /opt/smart-absensi/edge-engine/.env)
     dotenvy::dotenv().ok();
@@ -102,7 +102,7 @@ pub async fn run_cli() -> Result<()> {
             crate::core::harden_storage(&data_mount, partition.as_deref(), &fs_type, dry_run)?;
         }
         None => {
-            // Default: run sync using top-level flags (for backward-compatible systemd service)
+            // Default: jalankan sync memakai flag level atas (agar kompatibel dengan service systemd lama)
             run_sync(
                 cli.db,
                 cli.api_url,

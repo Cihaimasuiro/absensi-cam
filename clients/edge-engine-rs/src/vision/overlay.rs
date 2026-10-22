@@ -1,9 +1,9 @@
-//! Built-in pure-Rust 8x8 bitmap font and video overlay primitives (zero external font dependencies).
+//! Font bitmap 8x8 Rust murni bawaan dan primitif overlay video (tanpa dependensi font eksternal).
 
 pub const FONT_WIDTH: usize = 8;
 pub const FONT_HEIGHT: usize = 8;
 
-// Standard 8x8 ASCII font bitmap (ASCII 32 ' ' to 126 '~', 95 characters x 8 bytes each)
+// Bitmap font ASCII 8x8 standar (ASCII 32 ' ' sampai 126 '~', 95 karakter x 8 byte per karakter)
 #[rustfmt::skip]
 static FONT_8X8: [u8; 95 * 8] = [
     // 32 ' '
@@ -205,12 +205,12 @@ fn get_char_bitmap(c: char) -> &'static [u8] {
         let idx = (code - 32) * 8;
         &FONT_8X8[idx..idx + 8]
     } else {
-        // Space fallback
+        // Fallback karakter spasi
         &FONT_8X8[0..8]
     }
 }
 
-/// Draws an ASCII string onto an RGB8 buffer with optional background bounding rectangle
+/// Gambar string ASCII ke buffer RGB8 dengan kotak latar belakang opsional
 #[allow(clippy::too_many_arguments)]
 pub fn draw_text(
     rgb: &mut [u8],
@@ -230,7 +230,7 @@ pub fn draw_text(
     let text_w = len * FONT_WIDTH;
     let text_h = FONT_HEIGHT;
 
-    // Draw background rectangle if requested
+    // Gambar kotak latar belakang jika diminta
     if let Some(bg_color) = bg {
         let pad = 2;
         let x0 = (x - pad).clamp(0, width as i32 - 1) as usize;
@@ -250,7 +250,7 @@ pub fn draw_text(
         }
     }
 
-    // Render characters
+    // Render karakter
     for (i, c) in text.chars().enumerate() {
         let char_x = x + (i * FONT_WIDTH) as i32;
         if char_x + 8 <= 0 || char_x >= width as i32 {
@@ -280,7 +280,7 @@ pub fn draw_text(
     }
 }
 
-/// Draw a rectangle box with configurable thickness
+/// Gambar kotak persegi panjang dengan ketebalan yang dapat diatur
 pub fn draw_rect(
     rgb: &mut [u8],
     width: usize,
@@ -335,7 +335,7 @@ pub fn draw_rect(
     }
 }
 
-/// Parse a hex color string (e.g. "#22c55e" or "22c55e") to RGB (r, g, b)
+/// Parse string warna hex (misalnya "#22c55e" atau "22c55e") menjadi RGB (r, g, b)
 pub fn parse_hex_color(hex: &str) -> (u8, u8, u8) {
     let s = hex.trim_start_matches('#');
     if s.len() == 6 {

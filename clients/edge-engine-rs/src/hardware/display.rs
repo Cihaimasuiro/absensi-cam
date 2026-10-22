@@ -47,7 +47,7 @@ impl FramebufferDisplay {
         #[cfg(target_os = "linux")]
         {
             use std::os::unix::io::AsRawFd;
-            // FBIOGET_VSCREENINFO ioctl magic
+            // Nilai magic ioctl FBIOGET_VSCREENINFO
             const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
 
             #[repr(C)]

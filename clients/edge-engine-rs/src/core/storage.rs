@@ -24,7 +24,7 @@ impl StorageDoctorReport {
     }
 }
 
-/// Audit storage mounts and flash protection status
+/// Audit mount penyimpanan dan status proteksi flash
 pub fn check_storage_health() -> StorageDoctorReport {
     let mut report = StorageDoctorReport {
         tmp_is_tmpfs: false,
@@ -71,7 +71,7 @@ pub fn check_storage_health() -> StorageDoctorReport {
     report
 }
 
-/// Print formatted storage doctor diagnostic report
+/// Cetak laporan diagnostik doctor penyimpanan dalam format rapi
 pub fn run_doctor() -> Result<()> {
     println!("==========================================================");
     println!(" Smart Absensi Edge Storage Doctor                       ");
@@ -102,7 +102,7 @@ pub fn run_doctor() -> Result<()> {
     Ok(())
 }
 
-/// Apply Read-Only RootFS, RAM tmpfs mounts, and /data partition configuration
+/// Terapkan RootFS Read-Only, mount RAM tmpfs, dan konfigurasi partisi /data
 pub fn harden_storage(
     data_mount: &str,
     partition: Option<&str>,
@@ -117,7 +117,7 @@ pub fn harden_storage(
         println!("[DRY RUN MODE] Showing changes without modifying disk.");
     }
 
-    // Step 1: /etc/fstab tmpfs entries
+    // Langkah 1: entri tmpfs pada /etc/fstab
     let fstab_path = Path::new("/etc/fstab");
     if fstab_path.exists() {
         let fstab_content = fs::read_to_string(fstab_path).unwrap_or_default();
@@ -157,7 +157,7 @@ pub fn harden_storage(
         println!("Step 1/5: /etc/fstab not found (skipped on non-Linux hosts).");
     }
 
-    // Step 2: Systemd Journald volatile
+    // Langkah 2: Systemd Journald volatile
     let journal_dir = Path::new("/etc/systemd/journald.conf.d");
     let journal_file = journal_dir.join("00-volatile.conf");
     let journal_conf = "[Journal]\nStorage=volatile\nRuntimeMaxUse=32M\nCompress=yes\nForwardToSyslog=no\n";
@@ -168,7 +168,7 @@ pub fn harden_storage(
         let _ = fs::write(&journal_file, journal_conf);
     }
 
-    // Step 3: Setup /data structure and optional partition format
+    // Langkah 3: Siapkan struktur /data dan format partisi opsional
     println!("Step 3/5: Configuring persistent data directory at {}...", data_mount);
     let data_path = Path::new(data_mount);
     if !dry_run {
@@ -179,7 +179,7 @@ pub fn harden_storage(
             let _ = fs::File::create(&db_file);
         }
 
-        // Migrate older files if found
+        // Pindahkan file lama jika ditemukan
         let old_dir = Path::new("/opt/smart-absensi/edge-engine");
         if old_dir.exists() {
             let old_db = old_dir.join("local_edge.db");
@@ -207,11 +207,11 @@ pub fn harden_storage(
         }
     }
 
-    // Step 4: Configure overlayroot (Read-Only Root)
+    // Langkah 4: Konfigurasi overlayroot (Read-Only Root)
     println!("Step 4/5: Configuring overlayroot for Read-Only RootFS...");
     let overlayroot_conf = "overlayroot=\"tmpfs:swap=0,recurse=0\"\noverlayroot_cfgdisk=\"disabled\"\n";
     if !dry_run {
-        // Attempt installing overlayroot if apt is available
+        // Coba pasang overlayroot jika apt tersedia
         if Path::new("/usr/bin/apt-get").exists() {
             let _ = Command::new("apt-get").args(["update"]).status();
             let _ = Command::new("apt-get").args(["install", "-y", "overlayroot"]).status();
@@ -222,7 +222,7 @@ pub fn harden_storage(
         }
     }
 
-    // Step 5: Helper scripts
+    // Langkah 5: Skrip helper
     println!("Step 5/5: Installing maintenance helper commands (/usr/local/bin/edge-rw)...");
     let edge_rw_content = r#"#!/usr/bin/env bash
 if command -v overlayroot-chroot &>/dev/null; then

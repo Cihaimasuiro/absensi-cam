@@ -62,7 +62,7 @@ impl SerialRfidReader {
                         line_buf.clear();
                         match reader.read_line(&mut line_buf) {
                             Ok(0) => {
-                                // Port closed
+                                // Port ditutup
                                 break;
                             }
                             Ok(_) => {
@@ -71,7 +71,7 @@ impl SerialRfidReader {
                                     continue;
                                 }
 
-                                // Cek apakah format JSON (misal dari Arduino atau reader cerdas)
+                                // Cek apakah formatnya JSON (misalnya dari Arduino atau reader cerdas)
                                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
                                     if let Some(uid) = val.get("uid").or_else(|| val.get("card")).and_then(|v| v.as_str()) {
                                         info!("RFID Terbaca via JSON: UID=[{}]", uid);
@@ -84,7 +84,7 @@ impl SerialRfidReader {
                                     }
                                 }
 
-                                // Format raw text line (standard USB RFID HID/CDC reader)
+                                // Format baris teks mentah (reader USB RFID HID/CDC standar)
                                 let uid = line.trim_matches('\0').to_string();
                                 if uid.len() >= 4 {
                                     info!("RFID Terbaca: UID=[{}]", uid);

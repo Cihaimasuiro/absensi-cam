@@ -373,7 +373,7 @@ pub async fn run_stream(
         }
     }
 
-    // 2. Setup Decoupled AI Pipeline Channel (kapasitas 1, non-blocking)
+    // 2. Siapkan Kanal Pipeline AI Terpisah (kapasitas 1, non-blocking)
     #[allow(dead_code)]
     enum AiFrame {
         Rgb { data: Bytes, width: u32, height: u32 },
@@ -843,12 +843,12 @@ pub async fn run_stream(
                                             history: history_snapshot,
                                         });
 
-                                        // Thermal pacing: allow CPU cores to cool down between neural network inferences
+                                        // Pacing termal: beri jeda CPU antar inferensi jaringan saraf agar tidak panas berlebih
                                         if faces.is_empty() {
-                                            // Idle scanning: 3 FPS is optimal. Gives CPU 300ms cool-down period per cycle
+                                            // Pemindaian idle: 3 FPS sudah optimal. Memberi CPU jeda 300ms per siklus
                                             std::thread::sleep(Duration::from_millis(300));
                                         } else {
-                                            // Active face tracking: fast 20 FPS recognition
+                                            // Pelacakan wajah aktif: pengenalan cepat 20 FPS
                                             std::thread::sleep(Duration::from_millis(50));
                                         }
                                     }

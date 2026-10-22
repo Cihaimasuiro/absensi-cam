@@ -1,11 +1,11 @@
 //! Smart Absensi Edge Engine
 //!
-//! Consolidated native Rust edge engine runtime:
-//! - `core`: SQLite database, attendance outbox, data models, crypto
-//! - `vision`: V4L2 camera capture, face detection (YuNet), recognition (SFace/ArcFace), liveness (MiniFASNet)
-//! - `server`: Axum HTTP MJPEG streamer and SSE overlay vector events
-//! - `sync`: Outbox synchronization worker and REST API client
-//! - `hardware`: RFID serial readers, Arduino bridge, GPIO, framebuffer display
+//! Runtime edge engine Rust native yang terkonsolidasi:
+//! - `core`: database SQLite, outbox absensi, model data, kripto
+//! - `vision`: capture kamera V4L2, deteksi wajah (YuNet), pengenalan (SFace/ArcFace), liveness (MiniFASNet)
+//! - `server`: streamer MJPEG HTTP Axum dan event vektor overlay SSE
+//! - `sync`: worker sinkronisasi outbox dan klien REST API
+//! - `hardware`: pembaca serial RFID, jembatan Arduino, GPIO, display framebuffer
 
 pub mod core;
 pub mod engine;

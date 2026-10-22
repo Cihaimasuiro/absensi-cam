@@ -17,14 +17,14 @@ pub use overlay::{draw_rect, draw_text, parse_hex_color};
 pub use camera::PixelFormat;
 pub use metrics::{VisionMetricsAggregator, calculate_central_roi_luma};
 
-/// Convert a single YUV triplet (BT.601) into RGB8
+/// Konversi satu triplet YUV (BT.601) menjadi RGB8
 #[inline(always)]
 pub fn yuv_to_rgb(y: u8, u: u8, v: u8) -> (u8, u8, u8) {
     let y = y as i32;
     let u = u as i32 - 128;
     let v = v as i32 - 128;
 
-    // BT.601 integer fixed-point (scaled by 1024):
+    // BT.601 fixed-point integer (diskala 1024):
     // R = Y + 1.402 * V
     // G = Y - 0.344136 * U - 0.714136 * V
     // B = Y + 1.772 * U
@@ -39,15 +39,15 @@ pub fn yuv_to_rgb(y: u8, u: u8, v: u8) -> (u8, u8, u8) {
     )
 }
 
-/// Convert a single YUV triplet into BGR8
+/// Konversi satu triplet YUV menjadi BGR8
 #[inline(always)]
 pub fn yuv_to_bgr(y: u8, u: u8, v: u8) -> (u8, u8, u8) {
     let (r, g, b) = yuv_to_rgb(y, u, v);
     (b, g, r)
 }
 
-/// Convert contiguous YUYV (4:2:2 packed) buffer into RGB8 buffer with line stride support.
-/// Returns false if input buffer is too short, avoiding any thread panic.
+/// Konversi buffer YUYV (4:2:2 packed) yang bersambung menjadi buffer RGB8 dengan dukungan line stride.
+/// Mengembalikan false jika buffer masukan terlalu pendek, sehingga tidak memicu panic pada thread.
 pub fn yuyv_to_rgb_stride(
     yuyv: &[u8],
     width: usize,
@@ -89,12 +89,12 @@ pub fn yuyv_to_rgb_stride(
     true
 }
 
-/// Convert contiguous YUYV (4:2:2 packed) buffer into RGB8 buffer (default stride = width * 2).
+/// Konversi buffer YUYV (4:2:2 packed) yang bersambung menjadi buffer RGB8 (stride default = width * 2).
 pub fn yuyv_to_rgb(yuyv: &[u8], width: usize, height: usize, rgb_out: &mut [u8]) -> bool {
     yuyv_to_rgb_stride(yuyv, width, height, width * 2, rgb_out)
 }
 
-/// Convert contiguous YUYV (4:2:2 packed) buffer into BGR8 buffer with line stride support.
+/// Konversi buffer YUYV (4:2:2 packed) yang bersambung menjadi buffer BGR8 dengan dukungan line stride.
 pub fn yuyv_to_bgr_stride(
     yuyv: &[u8],
     width: usize,
@@ -136,12 +136,12 @@ pub fn yuyv_to_bgr_stride(
     true
 }
 
-/// Convert contiguous YUYV (4:2:2 packed) buffer into BGR8 buffer (default stride = width * 2).
+/// Konversi buffer YUYV (4:2:2 packed) yang bersambung menjadi buffer BGR8 (stride default = width * 2).
 pub fn yuyv_to_bgr(yuyv: &[u8], width: usize, height: usize, bgr_out: &mut [u8]) -> bool {
     yuyv_to_bgr_stride(yuyv, width, height, width * 2, bgr_out)
 }
 
-/// Encode RGB8 slice into an existing Vec<u8> buffer.
+/// Encode slice RGB8 ke dalam buffer Vec<u8> yang sudah ada.
 pub fn encode_rgb_to_jpeg_into(
     rgb: &[u8],
     width: u32,
@@ -156,7 +156,7 @@ pub fn encode_rgb_to_jpeg_into(
     Ok(())
 }
 
-/// Encode RGB8 slice into newly allocated JPEG Vec<u8>
+/// Encode slice RGB8 menjadi Vec<u8> JPEG yang baru dialokasikan
 pub fn encode_rgb_to_jpeg(
     rgb: &[u8],
     width: u32,
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_yuyv_to_rgb_neutral_gray() {
-        // Y0=128, U=128, Y1=128, V=128 -> should be R=128, G=128, B=128
+        // Y0=128, U=128, Y1=128, V=128 -> seharusnya menghasilkan R=128, G=128, B=128
         let yuyv = [128u8, 128, 128, 128];
         let mut rgb = [0u8; 6];
         let ok = yuyv_to_rgb(&yuyv, 2, 1, &mut rgb);
@@ -192,8 +192,8 @@ mod tests {
 
     #[test]
     fn test_yuyv_stride_padding() {
-        // 2 pixels width (4 bytes of YUYV), but row stride is 8 bytes (4 bytes padding per row)
-        // 2 rows
+        // Lebar 2 piksel (4 byte YUYV), tetapi row stride 8 byte (4 byte padding per baris)
+        // 2 baris
         let yuyv = [
             128u8, 128, 128, 128, 0, 0, 0, 0, // row 0: 4 bytes data + 4 bytes padding
             128, 128, 128, 128, 0, 0, 0, 0,   // row 1: 4 bytes data + 4 bytes padding
@@ -208,7 +208,7 @@ mod tests {
     fn test_jpeg_encoding() {
         let rgb = [128u8; 16 * 16 * 3];
         let jpeg = encode_rgb_to_jpeg(&rgb, 16, 16, 75).unwrap();
-        // Valid JPEG starts with SOI 0xFF, 0xD8 and ends with EOI 0xFF, 0xD9
+        // JPEG yang valid diawali SOI 0xFF, 0xD8 dan diakhiri EOI 0xFF, 0xD9
         assert!(jpeg.len() > 4);
         assert_eq!(&jpeg[..2], &[0xFF, 0xD8]);
         assert_eq!(&jpeg[jpeg.len() - 2..], &[0xFF, 0xD9]);

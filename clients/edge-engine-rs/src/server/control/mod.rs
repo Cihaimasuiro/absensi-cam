@@ -11,7 +11,7 @@ pub use handlers::*;
 pub use models::*;
 pub use system::*;
 
-// ── Router Registration ──────────────────────────────────────────────────────
+// ── Registrasi Router ────────────────────────────────────────────────────────
 
 pub fn register_control_routes(router: Router<ControlState>) -> Router<ControlState> {
     router
@@ -133,22 +133,22 @@ mod tests {
         let _ = std::fs::create_dir_all(&temp_dir);
         let settings_path = temp_dir.join("edge_settings.json");
 
-        // 1. Initial save with wifi password
+        // 1. Simpan awal dengan password wifi
         let mut initial = FullSettings::default();
         initial.network.wifi_password = Some("SuperSecretWifiPass123!".to_string());
         assert!(save_settings_to_file(&settings_path, &initial).is_ok());
 
-        // 2. Read back: wifi_password exists in file
+        // 2. Baca ulang: wifi_password ada di dalam file
         let loaded1 = load_settings(&settings_path);
         assert_eq!(loaded1.network.wifi_password.as_deref(), Some("SuperSecretWifiPass123!"));
 
-        // 3. New update without wifi_password (None)
+        // 3. Update baru tanpa wifi_password (None)
         let mut updated = loaded1.clone();
         updated.network.wifi_password = None;
         updated.general.device_name = "Renamed Gate".to_string();
         assert!(save_settings_to_file(&settings_path, &updated).is_ok());
 
-        // 4. Verify wifi password was NOT erased
+        // 4. Pastikan password wifi TIDAK terhapus
         let loaded2 = load_settings(&settings_path);
         assert_eq!(loaded2.general.device_name, "Renamed Gate");
         assert_eq!(loaded2.network.wifi_password.as_deref(), Some("SuperSecretWifiPass123!"));

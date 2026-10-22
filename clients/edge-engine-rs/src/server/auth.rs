@@ -16,7 +16,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 const SESSION_TTL: Duration = Duration::from_secs(3600); // 1 hour sliding TTL
 
-/// Manages active sessions and per-IP login rate limiting / lockout
+/// Mengelola sesi aktif serta pembatasan laju / lockout login per-IP
 #[derive(Clone)]
 pub struct AuthManager {
     sessions: Arc<RwLock<HashMap<String, Instant>>>, // token -> expires_at
@@ -37,7 +37,7 @@ impl AuthManager {
         let password_file = db_dir.join("panel_admin.argon2");
         let mut setup_code = None;
 
-        // If no password file exists, generate a physical setup code
+        // Jika file password belum ada, buat kode setup fisik
         if !password_file.exists() {
             let code = format!("{:06}", (Uuid::new_v4().as_u128() % 900_000) + 100_000);
             let code_file = db_dir.join("setup_code.txt");
@@ -66,12 +66,12 @@ impl AuthManager {
         }
     }
 
-    /// Whether the device has an initialized admin password
+    /// Menandakan apakah perangkat sudah memiliki password admin yang terinisialisasi
     pub fn is_initialized(&self) -> bool {
         self.password_file.exists()
     }
 
-    /// Complete first-time setup using the physical verification code
+    /// Selesaikan setup pertama kali memakai kode verifikasi fisik
     pub fn setup_first_password(&self, code: &str, new_password: &str) -> Result<(), &'static str> {
         let current_code = {
             let guard = self.setup_code.read().map_err(|_| "Lock error")?;
@@ -95,7 +95,7 @@ impl AuthManager {
         }
     }
 
-    /// Save new password hashed with Argon2
+    /// Simpan password baru yang di-hash dengan Argon2
     pub fn save_password(&self, password: &str) -> Result<(), &'static str> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -111,7 +111,7 @@ impl AuthManager {
         std::fs::write(&self.password_file, password_hash)
             .map_err(|_| "Failed to write password file")?;
 
-        // Invalidate all existing sessions on password change
+        // Batalkan semua sesi yang ada setiap kali password berubah
         if let Ok(mut sessions) = self.sessions.write() {
             sessions.clear();
         }
@@ -119,11 +119,11 @@ impl AuthManager {
         Ok(())
     }
 
-    /// Verify password with per-IP rate-limiting, exponential delay, and lockout
+    /// Verifikasi password dengan rate-limit per-IP, jeda eksponensial, dan lockout
     pub fn verify_login(&self, ip: &str, password: &str) -> Result<String, (StatusCode, String)> {
         let now = Instant::now();
 
-        // 1. Check IP lockout status
+        // 1. Periksa status lockout IP
         {
             let attempts = self.ip_attempts.read().map_err(|_| {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Lock error".to_string())
@@ -141,7 +141,7 @@ impl AuthManager {
             }
         }
 
-        // 2. Read stored Argon2 hash
+        // 2. Baca hash Argon2 yang tersimpan
         let hash_str = match std::fs::read_to_string(&self.password_file) {
             Ok(h) => h,
             Err(_) => {
@@ -162,11 +162,11 @@ impl AuthManager {
             }
         };
 
-        // 3. Constant-time Argon2 verification
+        // 3. Verifikasi Argon2 dengan waktu konstan
         let argon2 = Argon2::default();
         let valid = argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
-        // 4. Update IP attempt tracker
+        // 4. Perbarui pelacak percobaan per IP
         let mut attempts = self.ip_attempts.write().map_err(|_| {
             (StatusCode::INTERNAL_SERVER_ERROR, "Lock error".to_string())
         })?;
@@ -179,7 +179,7 @@ impl AuthManager {
             entry.failed_count = 0;
             entry.lockout_until = None;
 
-            // Create session with 1-hour TTL
+            // Buat sesi dengan TTL 1 jam
             let token = Uuid::new_v4().to_string();
             if let Ok(mut sessions) = self.sessions.write() {
                 sessions.insert(token.clone(), now + SESSION_TTL);
@@ -211,7 +211,7 @@ impl AuthManager {
         }
     }
 
-    /// Check if request has a valid session (Bearer token or cookie)
+    /// Periksa apakah request memiliki sesi valid (Bearer token atau cookie)
     pub fn check_session(&self, headers: &HeaderMap) -> bool {
         let token = if let Some(auth_val) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
             if let Some(stripped) = auth_val.strip_prefix("Bearer ") {
@@ -231,11 +231,11 @@ impl AuthManager {
 
         let now = Instant::now();
         if let Ok(mut sessions) = self.sessions.write() {
-            // Remove expired sessions
+            // Hapus sesi yang sudah kedaluwarsa
             sessions.retain(|_, &mut exp| exp > now);
 
             if let Some(exp) = sessions.get_mut(&token) {
-                // Refresh sliding TTL
+                // Segarkan TTL geser (sliding)
                 *exp = now + SESSION_TTL;
                 true
             } else {
@@ -246,7 +246,7 @@ impl AuthManager {
         }
     }
 
-    /// Invalidate a session token
+    /// Batalkan token sesi
     pub fn logout(&self, headers: &HeaderMap) {
         let token = if let Some(auth_val) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
             auth_val.strip_prefix("Bearer ").unwrap_or(auth_val).trim().to_string()
@@ -261,7 +261,7 @@ impl AuthManager {
         }
     }
 
-    /// Verify short-lived HMAC signed stream token for read-only routes (/stream, /snapshot.jpg, /events)
+    /// Verifikasi token stream bertanda tangan HMAC berumur pendek untuk route read-only (/stream, /snapshot.jpg, /events)
     pub fn verify_stream_token(&self, token: Option<&str>, expires_str: Option<&str>, device_id: &str) -> bool {
         let (token, expires_str) = match (token, expires_str) {
             (Some(t), Some(e)) if !t.is_empty() && !e.is_empty() => (t, e),
@@ -278,12 +278,12 @@ impl AuthManager {
             Err(_) => return false,
         };
 
-        // Token must not be expired
+        // Token tidak boleh kedaluwarsa
         if current_ts > expires_ts {
             return false;
         }
 
-        // Expected message: "stream:<device_id>:<expires>"
+        // Pesan yang diharapkan: "stream:<device_id>:<expires>"
         let message = format!("stream:{}:{}", device_id, expires_ts);
         let mut mac = match HmacSha256::new_from_slice(self.stream_secret.as_bytes()) {
             Ok(m) => m,
@@ -294,11 +294,11 @@ impl AuthManager {
         let expected_bytes = mac.finalize().into_bytes();
         let expected_hex = hex_encode(&expected_bytes);
 
-        // Constant-time compare
+        // Perbandingan dengan waktu konstan
         constant_time_eq_str(token, &expected_hex)
     }
 
-    /// CSRF Origin verification on POST / PUT / DELETE requests
+    /// Verifikasi Origin CSRF pada request POST / PUT / DELETE
     pub fn verify_origin(&self, headers: &HeaderMap) -> bool {
         let host = match headers.get(header::HOST).and_then(|v| v.to_str().ok()) {
             Some(h) => h,
@@ -319,7 +319,7 @@ impl AuthManager {
             return stripped.starts_with(host);
         }
 
-        // Standard direct curl or non-browser client without origin is accepted
+        // Klien langsung seperti curl atau non-browser tanpa origin tetap diterima
         true
     }
 }
@@ -372,19 +372,19 @@ mod tests {
 
         let code = auth.setup_code.read().unwrap().clone().expect("Setup code should exist");
 
-        // Invalid code should fail
+        // Kode yang salah seharusnya gagal
         assert!(auth.setup_first_password("999999", &test_pwd).is_err());
         assert!(!auth.is_initialized());
 
-        // Correct code initializes password
+        // Kode yang benar menginisialisasi password
         assert!(auth.setup_first_password(&code, &test_pwd).is_ok());
         assert!(auth.is_initialized());
 
-        // Login with correct password
+        // Login dengan password yang benar
         let token = auth.verify_login("192.168.1.50", &test_pwd).expect("Login should succeed");
         assert!(!token.is_empty());
 
-        // Login with wrong password
+        // Login dengan password yang salah
         let err = auth.verify_login("192.168.1.50", &wrong_pwd);
         assert!(err.is_err());
 
@@ -404,17 +404,17 @@ mod tests {
 
         let ip = "192.168.1.99";
 
-        // 4 failed attempts shouldn't lock out completely yet
+        // 4 percobaan gagal seharusnya belum mengunci sepenuhnya
         for _ in 0..4 {
             let res = auth.verify_login(ip, &wrong_pwd);
             assert!(res.is_err());
         }
 
-        // 5th failed attempt triggers lockout
+        // Percobaan gagal ke-5 memicu lockout
         let res5 = auth.verify_login(ip, &wrong_pwd);
         assert!(res5.is_err());
 
-        // Immediate subsequent attempt should get 429 Too Many Requests
+        // Percobaan berikutnya yang langsung dilakukan harus mendapat 429 Too Many Requests
         let res6 = auth.verify_login(ip, &correct_pwd);
         assert_eq!(res6.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
 
@@ -430,23 +430,23 @@ mod tests {
         let future_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 60;
         let expires_str = future_ts.to_string();
 
-        // Generate expected HMAC
+        // Buat HMAC yang diharapkan
         let message = format!("stream:{}:{}", device_id, expires_str);
         let mut mac = HmacSha256::new_from_slice("device_secret_abc123".as_bytes()).unwrap();
         mac.update(message.as_bytes());
         let valid_token = hex_encode(&mac.finalize().into_bytes());
 
-        // Valid token
+        // Token valid
         assert!(auth.verify_stream_token(Some(&valid_token), Some(&expires_str), device_id));
 
-        // Tampered token
+        // Token yang dimanipulasi
         assert!(!auth.verify_stream_token(Some("tampered_token_xyz"), Some(&expires_str), device_id));
 
-        // Expired timestamp
+        // Timestamp yang sudah kedaluwarsa
         let past_ts = (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 10).to_string();
         assert!(!auth.verify_stream_token(Some(&valid_token), Some(&past_ts), device_id));
 
-        // Wrong device ID
+        // ID perangkat yang salah
         assert!(!auth.verify_stream_token(Some(&valid_token), Some(&expires_str), "GATE-02"));
     }
 
@@ -461,7 +461,7 @@ mod tests {
 
         assert!(auth.verify_origin(&headers));
 
-        // Malicious third-party origin
+        // Origin pihak ketiga yang berbahaya
         headers.insert("origin", "http://evil-attacker.com".parse().unwrap());
         assert!(!auth.verify_origin(&headers));
     }

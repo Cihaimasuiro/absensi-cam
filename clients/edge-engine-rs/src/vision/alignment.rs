@@ -1,12 +1,12 @@
 use crate::vision::recognizer::REFERENCE_POINTS;
 
-/// Compute 2D similarity transformation matrix (2x3) using Umeyama algorithm.
-/// Maps source landmarks to reference points.
+/// Hitung matriks transformasi kemiripan 2D (2x3) dengan algoritma Umeyama.
+/// Memetakan landmark sumber ke titik referensi.
 pub fn estimate_similarity_transform(
     src: &[[f32; 2]; 5],
     dst: &[[f32; 2]; 5],
 ) -> Option<[f32; 6]> {
-    // 1. Compute means
+    // 1. Hitung nilai rata-rata
     let mut src_mean = [0.0f32; 2];
     let mut dst_mean = [0.0f32; 2];
     for i in 0..5 {
@@ -20,7 +20,7 @@ pub fn estimate_similarity_transform(
     dst_mean[0] /= 5.0;
     dst_mean[1] /= 5.0;
 
-    // 2. Center points & variance
+    // 2. Pusatkan titik & hitung variance
     let mut src_var = 0.0f32;
     let mut s00 = 0.0f32;
     let mut s01 = 0.0f32;
@@ -34,7 +34,7 @@ pub fn estimate_similarity_transform(
         let qy = dst[i][1] - dst_mean[1];
 
         src_var += px * px + py * py;
-        // Covariance S = (1/N) * sum(q_i * p_i^T)
+        // Kovarians S = (1/N) * sum(q_i * p_i^T)
         s00 += qx * px;
         s01 += qx * py;
         s10 += qy * px;
@@ -45,7 +45,7 @@ pub fn estimate_similarity_transform(
         return None;
     }
 
-    // 3. 2x2 SVD of S
+    // 3. SVD 2x2 dari S
     let mat = nalgebra::Matrix2::new(s00, s01, s10, s11);
     let svd = mat.svd(true, true);
     let u = svd.u?;
@@ -78,8 +78,8 @@ pub fn estimate_similarity_transform(
     Some([a, b, tx, c, d_elem, ty])
 }
 
-/// Warps image according to 2x3 affine matrix and crops to 112x112 NCHW float tensor.
-/// Preprocessing normalization: (pixel - 127.5) / 127.5.
+/// Warp gambar sesuai matriks affine 2x3 lalu crop ke tensor float NCHW 112x112.
+/// Normalisasi prapemrosesan: (piksel - 127.5) / 127.5.
 pub fn align_face_to_tensor_nchw(
     image_rgb: &[u8],
     width: usize,
@@ -89,9 +89,9 @@ pub fn align_face_to_tensor_nchw(
 ) -> Option<Vec<f32>> {
     let m = estimate_similarity_transform(landmarks_5, &REFERENCE_POINTS)?;
 
-    // Compute inverse transform to sample from original image:
+    // Hitung transformasi invers untuk sampling dari gambar asli:
     // [x_dst, y_dst]^T = M * [x_src, y_src, 1]^T
-    // Det of 2x2 part: det = a*d - b*c
+    // Determinan bagian 2x2: det = a*d - b*c
     let a = m[0];
     let b = m[1];
     let tx = m[2];
@@ -112,7 +112,7 @@ pub fn align_face_to_tensor_nchw(
     let inv_tx = (b * ty - d * tx) * inv_det;
     let inv_ty = (c * tx - a * ty) * inv_det;
 
-    // Output buffer for NCHW [1, 3, 112, 112]
+    // Buffer keluaran untuk NCHW [1, 3, 112, 112]
     let mut tensor = vec![0.0f32; 3 * 112 * 112];
     let channel_size = 112 * 112;
 
@@ -121,7 +121,7 @@ pub fn align_face_to_tensor_nchw(
             let src_x = inv_a * (x_dst as f32) + inv_b * (y_dst as f32) + inv_tx;
             let src_y = inv_c * (x_dst as f32) + inv_d * (y_dst as f32) + inv_ty;
 
-            // Bilinear interpolation
+            // Interpolasi bilinear
             let x0 = src_x.floor() as isize;
             let y0 = src_y.floor() as isize;
             let x1 = x0 + 1;
@@ -164,7 +164,7 @@ pub fn align_face_to_tensor_nchw(
                 + wx * wy * p11.2;
 
             let idx = y_dst * 112 + x_dst;
-            // ArcFace normalization: (pixel - 127.5) / 127.5
+            // Normalisasi ArcFace: (piksel - 127.5) / 127.5
             tensor[idx] = (r - 127.5) / 127.5;
             tensor[channel_size + idx] = (g - 127.5) / 127.5;
             tensor[2 * channel_size + idx] = (b - 127.5) / 127.5;
@@ -190,7 +190,7 @@ mod tests {
 
         let m = estimate_similarity_transform(&pts, &REFERENCE_POINTS).expect("Failed transform");
 
-        // OpenCV Python reference values:
+        // Nilai referensi OpenCV Python:
         // [[ 3.68177396e-01,  2.34834360e-03, -3.65019481e+01],
         //  [-2.34834360e-03,  3.68177396e-01, -3.35667641e+00]]
         assert!((m[0] - 0.368177).abs() < 1e-4, "a: {}", m[0]);

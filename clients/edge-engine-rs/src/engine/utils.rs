@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
-/// Resolve model search directories in priority order:
-/// 1. Explicit argument (`--models-dir`)
-/// 2. Environment variable `SMART_ABSENSI_MODELS_DIR` (or `FACE_MODELS_DIR`)
-/// 3. `<executable directory>/models`
+/// Tentukan direktori pencarian model berdasarkan urutan prioritas:
+/// 1. Argumen eksplisit (`--models-dir`)
+/// 2. Variabel environment `SMART_ABSENSI_MODELS_DIR` (atau `FACE_MODELS_DIR`)
+/// 3. `<direktori executable>/models`
 /// 4. `./models`
-/// 5. `../../models` (dev checkout from engine directory)
+/// 5. `../../models` (checkout dev dari direktori engine)
 /// 6. `/opt/smart-absensi/edge-engine/models`
 pub fn model_search_dirs(explicit: Option<&str>) -> Vec<PathBuf> {
     let mut dirs = Vec::new();

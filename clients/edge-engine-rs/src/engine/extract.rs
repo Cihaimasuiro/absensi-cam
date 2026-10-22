@@ -27,8 +27,8 @@ pub enum ExtractError {
     Other(String),
 }
 
-/// Calculate downscale dimensions preserving aspect ratio such that width <= max_dim and height <= max_dim.
-/// Returns (new_width, new_height, scale_factor). If image already fits, returns (width, height, 1.0).
+/// Hitung dimensi pengecilan dengan menjaga rasio aspek agar width <= max_dim dan height <= max_dim.
+/// Mengembalikan (new_width, new_height, scale_factor). Jika gambar sudah muat, kembalikan (width, height, 1.0).
 pub fn compute_downscale_dimensions(width: u32, height: u32, max_dim: u32) -> (u32, u32, f32) {
     if width == 0 || height == 0 {
         return (width, height, 1.0);
@@ -45,7 +45,7 @@ pub fn compute_downscale_dimensions(width: u32, height: u32, max_dim: u32) -> (u
     (new_w, new_h, scale)
 }
 
-/// Convert 512-d f32 embedding into 2048 little-endian bytes and return standard base64 string.
+/// Konversi embedding f32 512-d menjadi 2048 byte little-endian lalu kembalikan string base64 standar.
 pub fn embedding_to_b64(embedding: &[f32]) -> String {
     let mut bytes = Vec::with_capacity(embedding.len() * 4);
     for val in embedding {
@@ -54,7 +54,7 @@ pub fn embedding_to_b64(embedding: &[f32]) -> String {
     base64::engine::general_purpose::STANDARD.encode(&bytes)
 }
 
-/// Open an image with EXIF orientation auto-applied (matching cv2.imread behavior).
+/// Buka gambar dengan orientasi EXIF diterapkan otomatis (menyamai perilaku cv2.imread).
 pub fn load_image_with_exif<P: AsRef<Path>>(path: P) -> Result<DynamicImage, ExtractError> {
     let reader = ImageReader::open(path.as_ref())
         .map_err(|_| ExtractError::CouldNotReadImage)?
@@ -76,16 +76,16 @@ pub fn load_image_with_exif<P: AsRef<Path>>(path: P) -> Result<DynamicImage, Ext
     Ok(img)
 }
 
-/// Extract 512-d normalized face embedding from a photo image.
+/// Ekstrak embedding wajah ternormalisasi 512-d dari sebuah foto.
 ///
-/// Ported behaviours:
-/// 1. Large photos: Downscale so the image fits in 640x640 (never upscale), detect,
-///    scale landmarks back to the original full-resolution space, then align on the
-///    original full-resolution image.
-/// 2. Face count: Exactly one face required (defaults: conf 0.6, NMS 0.3).
+/// Perilaku yang diporting:
+/// 1. Foto besar: perkecil agar gambar muat dalam 640x640 (tidak pernah diperbesar), deteksi,
+///    skala landmark kembali ke ruang resolusi penuh asli, lalu lakukan alignment pada
+///    gambar resolusi penuh asli.
+/// 2. Jumlah wajah: wajib tepat satu wajah (default: conf 0.6, NMS 0.3).
 ///
-/// Note on unported Python behavior:
-/// Low-light gamma preprocessing from Python detector.py was not ported as the edge engine pipeline does not use it.
+/// Catatan tentang perilaku Python yang tidak diporting:
+/// Prapemrosesan gamma low-light dari detector.py Python tidak diporting karena pipeline edge engine tidak memakainya.
 pub fn extract_embedding(
     image: &DynamicImage,
     detector: &mut FaceDetector,
@@ -98,7 +98,7 @@ pub fn extract_embedding(
         return Err(ExtractError::CouldNotReadImage);
     }
 
-    // Downscale for detection if either dimension exceeds 640px
+    // Perkecil untuk deteksi jika salah satu dimensi melebihi 640px
     let (det_w, det_h, scale) = compute_downscale_dimensions(orig_w, orig_h, 640);
 
     let faces = if scale < 1.0 {
@@ -130,7 +130,7 @@ pub fn extract_embedding(
 
     let face = &faces[0];
 
-    // Map landmarks back to full-resolution image coordinates if downscaled
+    // Petakan landmark kembali ke koordinat gambar resolusi penuh jika tadi diperkecil
     let mut landmarks = face.landmarks;
     if scale < 1.0 && scale > 0.0 {
         for pt in &mut landmarks {
@@ -139,7 +139,7 @@ pub fn extract_embedding(
         }
     }
 
-    // Align on original full-resolution image
+    // Lakukan alignment pada gambar resolusi penuh asli
     let rgb_orig = image.to_rgb8();
     let aligned_tensor = align_face_to_tensor_nchw(
         rgb_orig.as_raw(),
@@ -150,7 +150,7 @@ pub fn extract_embedding(
     )
     .ok_or(ExtractError::FaceAlignmentFailed)?;
 
-    // Run recognition model (512-d normalized embedding)
+    // Jalankan model pengenalan (embedding ternormalisasi 512-d)
     let embedding = recognizer
         .extract_embedding(&aligned_tensor)
         .map_err(|e| ExtractError::Other(format!("Recognition inference failed: {e}")))?;
@@ -165,12 +165,12 @@ pub fn extract_embedding(
     Ok(embedding)
 }
 
-/// Run extraction CLI command wrapper.
+/// Wrapper perintah CLI ekstraksi.
 ///
-/// Outputs strictly to stdout:
+/// Keluaran hanya ke stdout:
 /// - Success (exit 0): `{"success":true,"embedding_b64":"..."}`
 ///
-/// Outputs strictly to stderr:
+/// Keluaran hanya ke stderr:
 /// - Failure (exit 1): `{"error":"<message>"}`
 pub fn run_extract(
     image_path: &Path,

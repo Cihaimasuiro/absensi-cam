@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 use tracing::{info, warn};
 
-/// Direct Linux sysfs GPIO controller for LEDs and Buzzer.
-/// Works out-of-the-box on Allwinner H6 (Orange Pi Lite 2) and all Linux SBCs.
+/// Pengendali GPIO sysfs Linux langsung untuk LED dan Buzzer.
+/// Langsung berfungsi pada Allwinner H6 (Orange Pi Lite 2) dan semua SBC Linux.
 #[derive(Clone)]
 pub struct LinuxGpio {
     green_pin: Option<u32>,
@@ -29,7 +29,7 @@ impl LinuxGpio {
             active: Arc::new(AtomicBool::new(true)),
         };
 
-        // Export and set direction for available pins on Linux
+        // Export dan set arah untuk pin yang tersedia di Linux
         #[cfg(target_os = "linux")]
         {
             if let Some(pin) = green_pin {
@@ -86,7 +86,7 @@ impl LinuxGpio {
         self.write_pin(self.buzzer_pin, high);
     }
 
-    /// Trigger asynchronous pattern: 2 short beeps + Green LED (Presensi Sukses)
+    /// Picu pola asinkron: 2 beep pendek + LED Hijau (Presensi Sukses)
     pub fn trigger_success(&self) {
         let gpio = self.clone();
         thread::spawn(move || {
@@ -104,7 +104,7 @@ impl LinuxGpio {
         });
     }
 
-    /// Trigger asynchronous pattern: 1 long beep + Red LED (Presensi Gagal / Tidak Dikenal / Spoof)
+    /// Picu pola asinkron: 1 beep panjang + LED Merah (Presensi Gagal / Tidak Dikenal / Spoof)
     pub fn trigger_rejected(&self) {
         let gpio = self.clone();
         thread::spawn(move || {

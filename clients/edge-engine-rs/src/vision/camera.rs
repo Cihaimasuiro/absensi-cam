@@ -1,8 +1,8 @@
-//! Pure libc V4L2 Camera Capture Module
+//! Modul Capture Kamera V4L2 libc Murni
 //!
-//! Gated with #[cfg(target_os = "linux")].
-//! Uses native libc::ioctl with #[repr(C)] structs and compile-time size assertions.
-//! Supports MJPEG and YUYV 4:2:2 formats. Runs capture on a dedicated thread with mmap buffers.
+//! Dibatasi dengan #[cfg(target_os = "linux")].
+//! Memakai libc::ioctl native dengan struct #[repr(C)] dan assertion ukuran saat kompilasi.
+//! Mendukung format MJPEG dan YUYV 4:2:2. Capture berjalan pada thread khusus dengan buffer mmap.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
@@ -23,7 +23,7 @@ pub mod linux {
     use crate::vision::{encode_rgb_to_jpeg_into, yuyv_to_rgb_stride};
     pub use super::PixelFormat;
 
-    // ── V4L2 Constants ──────────────────────────────────────────────────────────
+    // ── Konstanta V4L2 ──────────────────────────────────────────────────────────
     pub const V4L2_BUF_TYPE_VIDEO_CAPTURE: u32 = 1;
     pub const V4L2_MEMORY_MMAP: u32 = 1;
     pub const V4L2_FIELD_ANY: u32 = 0;
@@ -31,7 +31,7 @@ pub mod linux {
     pub const V4L2_PIX_FMT_YUYV: u32 = 0x56595559;  // 'YUYV'
     pub const V4L2_BUF_FLAG_ERROR: u32 = 0x00000040;
 
-    // Linux ioctl magic definitions for 64-bit architectures
+    // Definisi magic ioctl Linux untuk arsitektur 64-bit
     pub const VIDIOC_REQBUFS: libc::c_ulong = 0xc0145608;
     pub const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0585609;
     pub const VIDIOC_G_FMT: libc::c_ulong = 0xc0d05604;
@@ -41,7 +41,7 @@ pub mod linux {
     pub const VIDIOC_STREAMON: libc::c_ulong = 0x40045612;
     pub const VIDIOC_STREAMOFF: libc::c_ulong = 0x40045613;
 
-    // ── 64-bit V4L2 Struct Layouts ──────────────────────────────────────────────
+    // ── Layout Struct V4L2 64-bit ───────────────────────────────────────────────
 
     #[repr(C)]
     #[derive(Copy, Clone, Default)]
@@ -91,12 +91,12 @@ pub mod linux {
 
     impl V4l2Format {
         pub fn pix(&self) -> &V4l2PixFormat {
-            // SAFETY: V4l2Format raw buffer has 200 bytes, which exceeds the 48 bytes of V4l2PixFormat.
+            // SAFETY: buffer mentah V4l2Format berukuran 200 byte, melebihi 48 byte milik V4l2PixFormat.
             unsafe { &*(self.raw.as_ptr() as *const V4l2PixFormat) }
         }
 
         pub fn pix_mut(&mut self) -> &mut V4l2PixFormat {
-            // SAFETY: V4l2Format raw buffer has 200 bytes, which exceeds the 48 bytes of V4l2PixFormat.
+            // SAFETY: buffer mentah V4l2Format berukuran 200 byte, melebihi 48 byte milik V4l2PixFormat.
             unsafe { &mut *(self.raw.as_mut_ptr() as *mut V4l2PixFormat) }
         }
     }
@@ -128,16 +128,16 @@ pub mod linux {
         pub _pad1: u32,
     }
 
-    // ── Compile-time 64-bit Layout Assertions ───────────────────────────────────
+    // ── Assertion Layout 64-bit Saat Kompilasi ──────────────────────────────────
     const _: () = assert!(std::mem::size_of::<V4l2Requestbuffers>() == 20, "V4l2Requestbuffers must be 20 bytes on 64-bit");
     const _: () = assert!(std::mem::size_of::<V4l2Format>() == 208, "V4l2Format must be 208 bytes on 64-bit");
     const _: () = assert!(std::mem::size_of::<V4l2Buffer>() == 88, "V4l2Buffer must be 88 bytes on 64-bit");
 
-    /// Wrapped ioctl helper that handles EINTR retries.
+    /// Helper ioctl terbungkus yang menangani retry EINTR.
     ///
     /// # Safety
-    /// Caller must guarantee that `fd` is an open, valid file descriptor and `arg` points
-    /// to valid, correctly sized/aligned memory suitable for the given ioctl `request`.
+    /// Pemanggil wajib menjamin `fd` adalah file descriptor yang terbuka dan valid, serta `arg`
+    /// menunjuk ke memori valid dengan ukuran/alignment tepat untuk `request` ioctl tersebut.
     #[inline]
     unsafe fn xioctl<T>(fd: RawFd, request: libc::c_ulong, arg: &mut T) -> std::io::Result<i32> {
         loop {
@@ -188,7 +188,7 @@ pub mod linux {
                 pixel_format: PixelFormat::Mjpeg,
             };
 
-            // If init() fails, Drop for Camera will close self.fd cleanly (no double-close)
+            // Jika init() gagal, Drop untuk Camera akan menutup self.fd dengan bersih (tanpa double-close)
             cam.init(prefer_yuyv)?;
 
             Ok(cam)
@@ -239,7 +239,7 @@ pub mod linux {
                 }
             }
 
-            // If neither was confirmed via S_FMT, query what the driver is actually using
+            // Jika keduanya tidak terkonfirmasi lewat S_FMT, tanyakan format yang benar-benar dipakai driver
             if configured_format.is_none() {
                 let mut get_fmt = V4l2Format {
                     buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -276,7 +276,7 @@ pub mod linux {
                 self.fd, self.width, self.height, self.bytesperline, self.pixel_format
             );
 
-            // 2. Request 4 MMAP buffers
+            // 2. Minta 4 buffer MMAP
             let mut req = V4l2Requestbuffers {
                 count: 4,
                 buf_type: V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -292,7 +292,7 @@ pub mod linux {
                 bail!("Insufficient V4L2 buffer memory (got {} buffers)", req.count);
             }
 
-            // 3. Query and mmap each buffer
+            // 3. Query dan mmap setiap buffer
             for i in 0..req.count {
                 let mut buf = V4l2Buffer {
                     index: i,
@@ -305,7 +305,7 @@ pub mod linux {
                     bail!("VIDIOC_QUERYBUF failed for buffer {}: {}", i, e);
                 }
 
-                // SAFETY: Kernel validated buf.length and buf.m_offset in VIDIOC_QUERYBUF.
+                // SAFETY: Kernel sudah memvalidasi buf.length dan buf.m_offset pada VIDIOC_QUERYBUF.
                 let ptr = unsafe {
                     libc::mmap(
                         ptr::null_mut(),
@@ -326,13 +326,13 @@ pub mod linux {
                     len: buf.length as usize,
                 });
 
-                // Enqueue buffer
+                // Masukkan buffer ke antrean
                 if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_QBUF, &mut buf) } {
                     bail!("VIDIOC_QBUF initial enqueue failed for buffer {}: {}", i, e);
                 }
             }
 
-            // 4. Start streaming
+            // 4. Mulai streaming
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_STREAMON, &mut stream_type) } {
                 bail!("VIDIOC_STREAMON failed: {}", e);
@@ -351,7 +351,7 @@ pub mod linux {
                 revents: 0,
             };
 
-            // SAFETY: Calling poll on valid open fd with valid pollfd struct.
+            // SAFETY: Memanggil poll pada fd terbuka yang valid dengan struct pollfd yang valid.
             let poll_res = unsafe { libc::poll(&mut pfd, 1, timeout_ms) };
             if poll_res < 0 {
                 let err = std::io::Error::last_os_error();
@@ -361,7 +361,7 @@ pub mod linux {
                 bail!("poll() on camera failed: {}", err);
             }
             if poll_res == 0 {
-                // Timeout, no frame ready
+                // Timeout, belum ada frame yang siap
                 return Ok(None);
             }
 
@@ -382,19 +382,19 @@ pub mod linux {
             let mmap_buf = &self.buffers[idx];
             let bytes_used = buf.bytesused as usize;
 
-            // Check if frame was flagged with hardware capture error
+            // Periksa apakah frame ditandai error capture hardware
             let result = if (buf.flags & V4L2_BUF_FLAG_ERROR) != 0 {
                 warn!("Frame flagged with V4L2_BUF_FLAG_ERROR, skipping corrupted frame");
                 None
             } else {
-                // SAFETY: mmap_buf.ptr is valid and points to a mapped buffer of at least mmap_buf.len bytes.
+                // SAFETY: mmap_buf.ptr valid dan menunjuk buffer ter-map minimal sebesar mmap_buf.len byte.
                 let frame_slice = unsafe {
                     std::slice::from_raw_parts(mmap_buf.ptr as *const u8, bytes_used.min(mmap_buf.len))
                 };
                 Some(f(frame_slice))
             };
 
-            // Re-queue buffer AFTER caller finishes processing/copying frame data!
+            // Masukkan ulang buffer SETELAH pemanggil selesai memproses/menyalin data frame!
             if let Err(e) = unsafe { xioctl(self.fd, VIDIOC_QBUF, &mut buf) } {
                 warn!("VIDIOC_QBUF re-queue failed: {}", e);
             }
@@ -407,7 +407,7 @@ pub mod linux {
         fn drop(&mut self) {
             let mut stream_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             let _ = unsafe { xioctl(self.fd, VIDIOC_STREAMOFF, &mut stream_type) };
-            // SAFETY: munmap unmaps all successfully mapped buffers, and libc::close releases the camera fd.
+            // SAFETY: munmap melepas semua buffer yang berhasil di-map, dan libc::close melepas fd kamera.
             unsafe {
                 for buf in &self.buffers {
                     libc::munmap(buf.ptr, buf.len);
@@ -417,11 +417,11 @@ pub mod linux {
         }
     }
 
-    /// Spawns camera capture thread in decoupled mode:
-    /// - Always negotiates MJPEG for maximum hardware frame rates if supported.
-    /// - For YUYV: converts to RGB once, passes raw RGB directly to AI worker (0% JPEG decoding overhead),
-    ///   and encodes JPEG on-demand (only when stream viewers are connected, paced to ~15 FPS to cut CPU load by 50%).
-    ///   When idle, only encodes 1 frame every 2s for snapshot preview.
+    /// Menjalankan thread capture kamera dalam mode terpisah:
+    /// - Selalu menegosiasikan MJPEG demi frame rate hardware maksimal jika didukung.
+    /// - Untuk YUYV: konversi ke RGB sekali, teruskan RGB mentah langsung ke worker AI (0% overhead decode JPEG),
+    ///   lalu encode JPEG sesuai permintaan (hanya saat ada penonton stream, dibatasi ~15 FPS untuk memangkas beban CPU 50%).
+    ///   Saat idle, hanya meng-encode 1 frame tiap 2 detik untuk preview snapshot.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_capture_thread_decoupled<F, A, V, O>(
         device_path: String,
@@ -443,7 +443,7 @@ pub mod linux {
             .name("v4l2-capture".to_string())
             .spawn(move || {
                 info!("Starting V4L2 capture thread on {}", device_path);
-                // ALWAYS prefer MJPEG: camera hardware compression runs at 30 FPS with ~0% CPU
+                // SELALU utamakan MJPEG: kompresi hardware kamera berjalan 30 FPS dengan ~0% CPU
                 let mut camera = match Camera::open_with_format(&device_path, width, height, false) {
                     Ok(cam) => cam,
                     Err(e) => {
@@ -485,10 +485,10 @@ pub mod linux {
                     let capture_res = camera.capture_frame(500, |frame| {
                         match pixel_format {
                             PixelFormat::Mjpeg => {
-                                // 1. Direct hardware MJPEG pass-through to HTTP stream (0% CPU decoding)
+                                // 1. Pass-through MJPEG hardware langsung ke stream HTTP (0% decode CPU)
                                 on_stream_frame(frame, PixelFormat::Mjpeg, w, h);
 
-                                // 2. Pass raw JPEG bytes to AI worker (no decoding on capture thread!)
+                                // 2. Teruskan byte JPEG mentah ke worker AI (tanpa decode di thread capture!)
                                 if let Some(ref mut ai_cb) = on_ai_frame {
                                     ai_cb(frame, PixelFormat::Mjpeg, w, h);
                                 }
@@ -499,23 +499,23 @@ pub mod linux {
                                     return;
                                 }
 
-                                // 1. Pass raw RGB slice directly to AI worker (ZERO JPEG decoding in AI worker!)
+                                // 1. Teruskan slice RGB mentah langsung ke worker AI (NOL decode JPEG di worker AI!)
                                 if let Some(ref mut ai_cb) = on_ai_frame {
                                     ai_cb(&rgb_buf, PixelFormat::Yuyv, w, h);
                                 }
 
-                                // 2. Stream JPEG encoding (on-demand & paced):
+                                // 2. Encoding JPEG untuk stream (sesuai permintaan & dibatasi):
                                 let viewers_active = has_viewers();
                                 let now = std::time::Instant::now();
                                 let elapsed_since_last_encode = now.duration_since(last_stream_encode);
 
                                 let should_encode = if viewers_active {
-                                    // When active viewers on /stream: pace to ~10 FPS (100ms interval) with quality 60
-                                    // Cuts software JPEG CPU load to ~20% while delivering crisp, fluid video
+                                    // Saat ada penonton aktif di /stream: batasi ~10 FPS (interval 100ms) dengan kualitas 60
+                                    // Memangkas beban CPU JPEG software ke ~20% sambil tetap memberi video tajam dan lancar
                                     elapsed_since_last_encode >= Duration::from_millis(100)
                                 } else {
-                                    // When NO viewers on /stream: encode 1 frame every 2.0s so /snapshot.jpg stays fresh
-                                    // Reduces idle CPU load to <2%
+                                    // Saat TIDAK ada penonton di /stream: encode 1 frame tiap 2.0 detik agar /snapshot.jpg tetap segar
+                                    // Menurunkan beban CPU saat idle menjadi <2%
                                     elapsed_since_last_encode >= Duration::from_millis(2000)
                                 };
 
@@ -557,8 +557,8 @@ pub mod linux {
             .expect("Failed to spawn camera capture thread")
     }
 
-    /// Spawns a dedicated OS capture thread that owns the Camera raw pointers
-    /// Spawns camera capture thread feeding JPEG frames into on_frame callback.
+    /// Menjalankan thread capture OS khusus yang memegang pointer mentah Camera
+    /// Menjalankan thread capture kamera yang mengalirkan frame JPEG ke callback on_frame.
     pub fn spawn_capture_thread<F>(
         device_path: String,
         width: u32,
@@ -574,7 +574,7 @@ pub mod linux {
         )
     }
 
-    /// Spawns camera capture thread feeding JPEG, raw RGB (for AI), and optional RGB overlay (for UI).
+    /// Menjalankan thread capture kamera yang mengalirkan JPEG, RGB mentah (untuk AI), dan overlay RGB opsional (untuk UI).
     pub fn spawn_capture_thread_with_rgb<F, R, O>(
         device_path: String,
         width: u32,
@@ -616,7 +616,7 @@ pub mod linux {
                     device_path, w, h, pixel_format, stride
                 );
 
-                // Preallocated buffers for transcoding and AI pipeline
+                // Buffer yang dialokasikan lebih awal untuk transcoding dan pipeline AI
                 let mut rgb_buf = vec![0u8; (w * h * 3) as usize];
                 let mut jpeg_buf = Vec::with_capacity((w * h / 4) as usize);
 
@@ -686,7 +686,7 @@ pub mod linux {
                             }
                         }
                         Ok(None) => {
-                            // Timeout or skipped corrupted frame
+                            // Timeout atau frame rusak yang dilewati
                         }
                         Err(e) => {
                             error!("Error capturing frame: {:#}", e);

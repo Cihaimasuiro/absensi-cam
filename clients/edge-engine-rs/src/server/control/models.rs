@@ -58,7 +58,7 @@ pub struct ControlState {
     pub network_rollback: Arc<tokio::sync::Mutex<NetworkRollbackState>>,
 }
 
-// ── Settings Data Models ─────────────────────────────────────────────────────
+// ── Model Data Pengaturan ────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneralSettings {
@@ -141,7 +141,7 @@ impl Default for FullSettings {
     }
 }
 
-// ── Request / Response Payloads ──────────────────────────────────────────────
+// ── Payload Request / Response ───────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 pub struct SetupRequest {
@@ -199,7 +199,7 @@ pub struct ControlInfoResponse {
     pub camera_resolution: String,
     pub is_streaming: bool,
     pub serial_connected: bool,
-    // ── Extended telemetry ──────────────────────────────────────────────
+    // ── Telemetri tambahan ───────────────────────────────────────────────
     pub cpu_usage_pct: f64,
     pub cpu_cores: usize,
     pub cpu_model: String,
@@ -232,7 +232,7 @@ pub struct ControlInfoResponse {
     pub power_volts: Option<f64>,
 }
 
-// ── Persistence Helpers ──────────────────────────────────────────────────────
+// ── Helper Persistensi ───────────────────────────────────────────────────────
 
 pub fn load_settings(path: &Path) -> FullSettings {
     if path.exists() {
@@ -250,7 +250,7 @@ pub fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Re
         std::fs::create_dir_all(parent)?;
     }
     let mut to_save = settings.clone();
-    // Preserve existing wifi_password if the new settings did not provide one
+    // Pertahankan wifi_password yang sudah ada jika pengaturan baru tidak menyediakannya
     if to_save.network.wifi_password.as_deref().unwrap_or("").is_empty() {
         let existing = load_settings(path);
         if let Some(pwd) = existing.network.wifi_password {

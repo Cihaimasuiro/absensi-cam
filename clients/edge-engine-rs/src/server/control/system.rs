@@ -39,8 +39,8 @@ pub fn read_soc_temp() -> f64 {
     0.0
 }
 
-/// Runs a command and reports whether it actually succeeded.
-/// Replaces fire-and-forget calls that always reported success.
+/// Jalankan perintah dan laporkan apakah benar-benar berhasil.
+/// Menggantikan pemanggilan fire-and-forget yang selalu melaporkan sukses.
 pub fn run_verified(program: &str, args: &[&str]) -> Result<String, String> {
     match std::process::Command::new(program).args(args).output() {
         Ok(out) if out.status.success() => {
@@ -60,8 +60,8 @@ pub fn run_verified(program: &str, args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// Compares two dotted version strings. Returns true when `candidate` is
-/// strictly newer than `current`. Non-numeric segments compare as strings.
+/// Bandingkan dua string versi bertitik. Mengembalikan true jika `candidate`
+/// lebih baru secara ketat daripada `current`. Segmen non-numerik dibandingkan sebagai string.
 pub fn is_newer_version(candidate: &str, current: &str) -> bool {
     let parse = |v: &str| -> Vec<String> {
         v.trim()
@@ -112,7 +112,7 @@ pub fn read_memory_info() -> MemoryInfo {
     }
 
     if avail_kb == 0 {
-        // Fallback for kernels without MemAvailable
+        // Fallback untuk kernel tanpa MemAvailable
         if let Ok(c) = std::fs::read_to_string("/proc/meminfo") {
             for line in c.lines() {
                 if line.starts_with("MemFree:") {
@@ -146,13 +146,13 @@ pub fn read_disk_info() -> DiskInfo {
         let mount = if Path::new("/data").exists() { "/data" } else { "/" };
         let path = CString::new(mount).unwrap_or_else(|_| CString::new("/").unwrap());
         let mut stat: MaybeUninit<libc::statvfs> = MaybeUninit::uninit();
-        // SAFETY: statvfs writes to valid path pointer and uninit statvfs buffer.
+        // SAFETY: statvfs menulis ke pointer path yang valid dan buffer statvfs yang belum diinisialisasi.
         let ok = unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 };
         if ok {
-            // SAFETY: statvfs returned 0 (success), meaning stat is fully populated.
+            // SAFETY: statvfs mengembalikan 0 (sukses), berarti struct stat sudah terisi penuh.
             let s = unsafe { stat.assume_init() };
-            // Note: statvfs fields (f_frsize, f_blocks, f_bavail) are u32 on 32-bit architectures (e.g. armv7),
-            // so u64 casts are required for cross-platform portability.
+            // Catatan: field statvfs (f_frsize, f_blocks, f_bavail) bertipe u32 pada arsitektur 32-bit (misalnya armv7),
+            // sehingga cast ke u64 diperlukan agar portabel lintas platform.
             #[allow(clippy::unnecessary_cast)]
             let frsize = s.f_frsize as u64;
             #[allow(clippy::unnecessary_cast)]
@@ -185,7 +185,7 @@ pub fn read_load_average() -> (f64, f64, f64) {
     (0.0, 0.0, 0.0)
 }
 
-/// CPU usage sampled over 200ms from /proc/stat deltas.
+/// Penggunaan CPU yang diambil selama 200ms dari selisih /proc/stat.
 pub fn read_cpu_usage_pct() -> f64 {
     fn sample() -> Option<(u64, u64)> {
         let c = std::fs::read_to_string("/proc/stat").ok()?;
@@ -232,7 +232,7 @@ pub fn read_cpu_model() -> String {
     "Unknown CPU".to_string()
 }
 
-/// (RSS in MB, CPU percent) for the current process.
+/// (RSS dalam MB, persen CPU) untuk proses saat ini.
 pub fn read_process_stats() -> (i64, f64) {
     let pid = std::process::id();
     let mut rss_mb = 0i64;
@@ -251,10 +251,10 @@ pub fn read_process_stats() -> (i64, f64) {
     }
 
     if let Ok(c) = std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
-        // Fields after the comm field (which may contain spaces, so split on last ')')
+        // Field setelah field comm (yang bisa mengandung spasi, jadi pecah pada ')' terakhir)
         if let Some(idx) = c.rfind(')') {
             let rest: Vec<&str> = c[idx + 1..].split_whitespace().collect();
-            // utime=14, stime=15 (1-indexed incl. pid+comm) => rest[11], rest[12]
+            // utime=14, stime=15 (indeks-1 termasuk pid+comm) => rest[11], rest[12]
             if rest.len() > 12 {
                 let utime = rest[11].parse::<f64>().unwrap_or(0.0);
                 let stime = rest[12].parse::<f64>().unwrap_or(0.0);
@@ -272,7 +272,7 @@ pub fn read_process_stats() -> (i64, f64) {
 pub fn read_network_stats(preferred: &str) -> NetworkStats {
     let mut iface = preferred.trim().to_string();
     if iface.is_empty() || !Path::new(&format!("/sys/class/net/{}", iface)).exists() {
-        // Pick the first non-loopback interface with an IPv4 address
+        // Pilih interface non-loopback pertama yang memiliki alamat IPv4
         if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
             for e in entries.flatten() {
                 let name = e.file_name().to_string_lossy().to_string();
@@ -321,8 +321,8 @@ pub fn read_interface_ip(iface: &str) -> String {
             return "—".to_string();
         }
 
-        // SAFETY: Invokes socket(AF_INET, SOCK_DGRAM) and ioctl(SIOCGIFADDR) to query interface IP.
-        // File descriptor is closed before returning.
+        // SAFETY: Memanggil socket(AF_INET, SOCK_DGRAM) dan ioctl(SIOCGIFADDR) untuk menanyakan IP interface.
+        // File descriptor ditutup sebelum kembali.
         unsafe {
             let mut ifr: libc::ifreq = std::mem::zeroed();
             for (i, b) in bytes.iter().enumerate() {
@@ -392,7 +392,7 @@ pub fn read_wifi_signal_dbm() -> Option<i32> {
     None
 }
 
-/// Reads the Pi firmware throttle flags. Returns None when not a Raspberry Pi.
+/// Baca flag throttle firmware Pi. Mengembalikan None jika bukan Raspberry Pi.
 pub fn read_throttled_status() -> Option<String> {
     let out = std::process::Command::new("vcgencmd").arg("get_throttled").output().ok()?;
     if !out.status.success() {

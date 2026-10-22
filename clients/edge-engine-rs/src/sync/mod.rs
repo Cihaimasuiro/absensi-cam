@@ -71,9 +71,9 @@ impl SyncWorker {
     /// Mengikuti spesifikasi PRD FR-E10, FR-E11, FR-E12:
     /// - Watchdog dedicated: ping tiap 20s independen dari jaringan
     /// - Outbox check: tiap 15s (FR-E10) dengan non-blocking backoff timestamp
-    /// - Template & config sync: tiap 60s (FR-E11)
+    /// - Sinkronisasi template & config: tiap 60s (FR-E11)
     /// - Heartbeat: tiap 60s (FR-E12)
-    /// - Backoff schedule: 5s, 30s, 120s (2m), 600s (10m), 900s (15m)
+    /// - Jadwal backoff: 5s, 30s, 120s (2m), 600s (10m), 900s (15m)
     pub async fn run_loop(&self) {
         let mut watchdog_interval = tokio::time::interval(Duration::from_secs(20));
         let mut outbox_interval = tokio::time::interval(Duration::from_secs(15));
@@ -91,12 +91,12 @@ impl SyncWorker {
 
         loop {
             tokio::select! {
-                // 1. Dedicated Watchdog Ping (TIDAK BOLEH TERHALANG OUTAGE JARINGAN)
+                // 1. Ping Watchdog Khusus (TIDAK BOLEH TERHALANG OUTAGE JARINGAN)
                 _ = watchdog_interval.tick() => {
                     notify_systemd("WATCHDOG=1\n");
                 }
 
-                // 2. Outbox Drain dengan Non-blocking Backoff (FR-E10)
+                // 2. Kuras Outbox dengan Backoff Non-blocking (FR-E10)
                 _ = outbox_interval.tick() => {
                     if tokio::time::Instant::now() < next_outbox_attempt {
                         // Masih dalam cooldown backoff; lewati tanpa memblokir task loop lain!
@@ -125,14 +125,14 @@ impl SyncWorker {
                     }
                 }
 
-                // 3. Template & Config Delta Sync (FR-E11)
+                // 3. Sinkronisasi Delta Template & Config (FR-E11)
                 _ = template_interval.tick() => {
                     if let Err(e) = self.pull_templates().await {
                         warn!("Gagal pull templates wajah: {:?}", e);
                     }
                 }
 
-                // 4. Heartbeat Telemetry (FR-E12)
+                // 4. Telemetri Heartbeat (FR-E12)
                 _ = heartbeat_interval.tick() => {
                     if let Err(e) = self.send_heartbeat().await {
                         warn!("Gagal mengirim heartbeat: {:?}", e);
@@ -142,7 +142,7 @@ impl SyncWorker {
         }
     }
 
-    /// Push pending rows from outbox_attendance to Laravel /api/v1/attendance/batch
+    /// Kirim baris tertunda dari outbox_attendance ke Laravel /api/v1/attendance/batch
     /// - Parsir hasil per-record: hanya tandai status 'created' dan 'duplicate' sebagai synced.
     /// - Jika menerima HTTP 4xx (misal 422 Unprocessable Entity karena record beracun):
     ///   pecah batch menjadi pengiriman individual agar baris yang valid tetap tersinkron
@@ -270,7 +270,7 @@ impl SyncWorker {
                         self.db.quarantine_records(&[r.id.clone()]).await?;
                         quarantined_count += 1;
                     } else {
-                        // 5xx server error, hentikan loop individual agar retry batch nanti
+                        // Error server 5xx, hentikan loop individual agar batch dicoba ulang nanti
                         anyhow::bail!(
                             "Server error HTTP {} saat pengiriman individual record {}",
                             st.as_u16(),
@@ -291,7 +291,7 @@ impl SyncWorker {
         Ok((synced_count, quarantined_count))
     }
 
-    /// Pull updated face templates from Laravel /api/v1/templates
+    /// Tarik template wajah terbaru dari Laravel /api/v1/templates
     /// Menolak template dengan model_version berbeda (FR-E11)
     pub async fn pull_templates(&self) -> Result<()> {
         let last_sync = self.db.get_last_template_sync_time().await?;
@@ -352,7 +352,7 @@ impl SyncWorker {
         Ok(())
     }
 
-    /// Kirim heartbeat telemetry ke Laravel /api/v1/devices/heartbeat
+    /// Kirim telemetri heartbeat ke Laravel /api/v1/devices/heartbeat
     pub async fn send_heartbeat(&self) -> Result<()> {
         let unsynced_len = self.db.get_unsynced_count().await.unwrap_or(0);
         let (tmpl_count, tmpl_hash) = match self.db.get_templates_hash().await {
@@ -517,13 +517,13 @@ fn read_free_disk_mb() -> i64 {
         use std::mem::MaybeUninit;
         let path = CString::new("/").unwrap();
         let mut stat: MaybeUninit<libc::statvfs> = MaybeUninit::uninit();
-        // SAFETY: statvfs writes to valid C string path and uninit statvfs buffer.
-        // If 0 (success) is returned, buffer is fully populated by kernel.
+        // SAFETY: statvfs menulis ke path string C yang valid dan buffer statvfs yang belum diinisialisasi.
+        // Jika mengembalikan 0 (sukses), buffer sudah terisi penuh oleh kernel.
         unsafe {
             if libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0 {
                 let s = stat.assume_init();
-                // Note: statvfs fields (f_bavail, f_frsize) are u32 on 32-bit architectures (e.g. armv7),
-                // so u64 casts are required for cross-platform portability.
+                // Catatan: field statvfs (f_bavail, f_frsize) bertipe u32 pada arsitektur 32-bit (misalnya armv7),
+                // sehingga cast ke u64 diperlukan agar portabel lintas platform.
                 #[allow(clippy::unnecessary_cast)]
                 let free_bytes = (s.f_bavail as u64) * (s.f_frsize as u64);
                 return (free_bytes / (1024 * 1024)) as i64;
@@ -578,7 +578,7 @@ pub fn notify_systemd(state: &str) {
 #[cfg(not(unix))]
 pub fn notify_systemd(_state: &str) {}
 
-// ── Device-Initiated Pairing (TV / IoT Style) ────────────────────────────────
+// ── Pairing Diprakarsai Perangkat (Gaya TV / IoT) ────────────────────────────
 
 #[derive(Debug, Serialize)]
 pub struct PairingInitRequest {
@@ -680,7 +680,7 @@ pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Resul
         creds.model_version.as_deref().unwrap_or("v1.0-yunet")
     );
 
-    // Remove any stale tmp file from a previous crash so permissions/inode are not reused
+    // Hapus file tmp sisa crash sebelumnya agar permission/inode tidak dipakai ulang
     let _ = std::fs::remove_file(&tmp_path);
 
     #[cfg(unix)]
@@ -902,7 +902,7 @@ pub async fn ensure_authenticated_or_pair(
     Ok((current_token, current_embed_key))
 }
 
-// ── Unit & Integration Tests ─────────────────────────────────────────────────
+// ── Unit & Integration Test ──────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -968,10 +968,10 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let api_url = format!("http://127.0.0.1:{}", port);
 
-        // Server handler:
+        // Handler server:
         // - Panggilan 1: Batch berisi 2 record -> return 422 Unprocessable Entity
-        // - Panggilan 2: Individual record 'att-poison' -> return 422 Unprocessable Entity
-        // - Panggilan 3: Individual record 'att-good' -> return 200 OK
+        // - Panggilan 2: Record individual 'att-poison' -> return 422 Unprocessable Entity
+        // - Panggilan 3: Record individual 'att-good' -> return 200 OK
         tokio::spawn(async move {
             let mut call_count = 0;
             while let Ok((mut socket, _)) = listener.accept().await {
@@ -1115,7 +1115,7 @@ mod tests {
         let api_url = format!("http://127.0.0.1:{}", port);
 
         tokio::spawn(async move {
-            // 1. Accept request for init
+            // 1. Terima request untuk init
             if let Ok((mut socket, _)) = listener.accept().await {
                 let mut buf = [0u8; 2048];
                 let _ = socket.read(&mut buf).await;
@@ -1128,7 +1128,7 @@ mod tests {
                 let _ = socket.write_all(response.as_bytes()).await;
             }
 
-            // 2. Accept poll -> return approved
+            // 2. Terima poll -> kembalikan approved
             if let Ok((mut socket, _)) = listener.accept().await {
                 let mut buf = [0u8; 2048];
                 let _ = socket.read(&mut buf).await;

@@ -1,4 +1,4 @@
-//! Serial Benchmark Tool (SBC -> Arduino Uno)
+//! Alat Benchmark Serial (SBC -> Arduino Uno)
 //! Mengukur throughput riil, latensi round-trip, frame rate, dan stabilitas hardware (DOR0/FE0).
 
 use clap::Parser;

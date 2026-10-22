@@ -27,7 +27,7 @@ fn test_python_rust_extraction_parity() {
 
     let mut found_fixture = false;
 
-    // When fixtures directory exists, models and ORT must be present and valid
+    // Jika direktori fixture tersedia, model dan ORT wajib ada serta valid
     let det_path = find_model(&["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"])
         .expect("detector.onnx model is required to run extract_parity_test");
 

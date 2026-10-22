@@ -15,14 +15,14 @@ use super::system::*;
 const UI_HTML: &str = include_str!("../ui.html");
 const ALPINE_JS: &str = include_str!("../vendor/alpine.min.js");
 
-// ── HTML Page Handler ────────────────────────────────────────────────────────
+// ── Handler Halaman HTML ─────────────────────────────────────────────────────
 
 pub async fn ui_page_handler() -> Html<String> {
     let rendered = UI_HTML.replace("__ALPINE_VENDORED_BUNDLE__", ALPINE_JS);
     Html(rendered)
 }
 
-// ── Auth Handlers ────────────────────────────────────────────────────────────
+// ── Handler Autentikasi ──────────────────────────────────────────────────────
 
 pub async fn setup_handler(
     State(state): State<ControlState>,
@@ -54,7 +54,7 @@ pub async fn login_handler(
 
     match state.auth.verify_login(&ip, &payload.password) {
         Ok(token) => {
-            // HttpOnly, SameSite=Strict cookie with 1h TTL, no Secure flag (device serves plain HTTP)
+            // Cookie HttpOnly, SameSite=Strict dengan TTL 1 jam, tanpa flag Secure (perangkat melayani HTTP biasa)
             let cookie_header = format!(
                 "control_session={}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600",
                 token
@@ -95,7 +95,7 @@ pub async fn logout_handler(
     )
 }
 
-// ── Settings Handlers ────────────────────────────────────────────────────────
+// ── Handler Pengaturan ───────────────────────────────────────────────────────
 
 pub async fn get_settings_handler(
     State(state): State<ControlState>,
@@ -163,8 +163,8 @@ pub async fn get_camera_devices_handler(
         }
     }
 
-    // No fabricated fallback: an empty list is honest and lets the UI say
-    // "no camera found" instead of offering a device that does not exist.
+    // Tanpa fallback buatan: daftar kosong lebih jujur dan membuat UI menampilkan
+    // "kamera tidak ditemukan" alih-alih menawarkan perangkat yang tidak ada.
     Json(serde_json::json!({
         "devices": devices,
         "count": devices.len()
@@ -377,7 +377,7 @@ pub async fn change_password_handler(
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "success": false, "message": "New password must be at least 8 characters" }))).into_response();
     }
 
-    // Verify current password first
+    // Verifikasi password saat ini terlebih dahulu
     let ip = "127.0.0.1";
     if state.auth.verify_login(ip, &payload.current).is_err() {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "success": false, "message": "Current password incorrect" }))).into_response();
@@ -390,7 +390,7 @@ pub async fn change_password_handler(
     Json(serde_json::json!({ "success": true, "message": "Password changed successfully" })).into_response()
 }
 
-// ── Telemetry & Actions ──────────────────────────────────────────────────────
+// ── Telemetri & Aksi ─────────────────────────────────────────────────────────
 
 pub async fn info_handler(
     State(state): State<ControlState>,
@@ -526,8 +526,8 @@ pub async fn repair_handler(
 
     warn!("Device repair triggered: clearing pairing credentials.");
 
-    // Resolve .env next to the settings file rather than relying on the
-    // process CWD, which differs depending on how the service was started.
+    // Cari .env di sebelah file pengaturan, bukan bergantung pada CWD proses
+    // yang bisa berbeda tergantung cara service dijalankan.
     let settings_dir = state.config.settings_path.parent().unwrap_or(Path::new("."));
     let candidates = [
         settings_dir.join(".env"),
@@ -586,11 +586,11 @@ pub async fn download_logs_handler(
         return (StatusCode::FORBIDDEN, "CSRF origin mismatch").into_response();
     }
 
-    // Read recent system or local log, redacting tokens and UUIDs
+    // Baca log sistem atau lokal terbaru, dengan token dan UUID disamarkan
     let log_content = std::fs::read_to_string("engine.log")
         .unwrap_or_else(|_| "=== Smart Absensi Engine Log ===\nNo local log file found.".to_string());
 
-    // Redaction: tokens & bearer headers
+    // Penyamaran: token & header bearer
     let redacted = log_content
         .lines()
         .map(|line| {
@@ -683,8 +683,8 @@ pub async fn check_update_handler(
     let current = env!("CARGO_PKG_VERSION");
     let settings = load_settings(&state.config.settings_path);
 
-    // The manifest lives on the central Laravel server so a fleet can be
-    // updated by publishing one file, without reflashing each device.
+    // Manifest berada di server Laravel pusat sehingga seluruh armada dapat
+    // diperbarui cukup dengan menerbitkan satu file, tanpa flash ulang tiap perangkat.
     let manifest_url = format!(
         "{}/api/firmware/latest",
         settings.server.url.trim_end_matches('/')
@@ -761,9 +761,9 @@ pub async fn check_update_handler(
     }
 }
 
-/// Unauthenticated liveness probe. Deliberately exposes nothing sensitive:
-/// no server URL, no device code, no counts. Lets the Laravel dashboard poll
-/// per-device status without storing edge credentials.
+/// Probe liveness tanpa autentikasi. Sengaja tidak mengekspos apa pun yang sensitif:
+/// tanpa URL server, tanpa kode perangkat, tanpa hitungan. Memungkinkan dashboard Laravel
+/// memantau status tiap perangkat tanpa menyimpan kredensial edge.
 pub async fn health_handler(State(state): State<ControlState>) -> Response {
     Json(serde_json::json!({
         "ok": true,
@@ -775,8 +775,8 @@ pub async fn health_handler(State(state): State<ControlState>) -> Response {
     .into_response()
 }
 
-/// Surfaces the outbox backlog so an operator can see sync is stuck before
-/// it becomes a support ticket.
+/// Menampilkan tumpukan outbox agar operator bisa melihat sinkronisasi macet
+/// sebelum berubah menjadi tiket dukungan.
 pub async fn pending_attendance_handler(
     State(state): State<ControlState>,
     headers: HeaderMap,
@@ -874,7 +874,7 @@ pub async fn action_handler(
                 )
                     .into_response();
             }
-            // Verify the reboot binary is reachable before promising a reboot.
+            // Pastikan binary reboot dapat dijangkau sebelum menjanjikan reboot.
             if let Err(e) = run_verified("which", &["reboot"]) {
                 warn!("Reboot unavailable: {}", e);
                 return Json(ActionResponse {

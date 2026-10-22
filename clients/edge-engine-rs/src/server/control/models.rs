@@ -99,12 +99,74 @@ pub struct ServerSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpioSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub green_pin: Option<u32>,
+    #[serde(default)]
+    pub red_pin: Option<u32>,
+    #[serde(default)]
+    pub buzzer_pin: Option<u32>,
+    #[serde(default = "default_active_high")]
+    pub active_high: bool,
+}
+
+fn default_active_high() -> bool {
+    true
+}
+
+impl Default for GpioSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            green_pin: None,
+            red_pin: None,
+            buzzer_pin: None,
+            active_high: true,
+        }
+    }
+}
+
+/// Selesaikan prioritas pin GPIO: CLI flags > Environment variables > edge_settings.json.
+pub fn resolve_gpio_pins(
+    cli_green: Option<u32>,
+    cli_red: Option<u32>,
+    cli_buzzer: Option<u32>,
+    env_green: Option<u32>,
+    env_red: Option<u32>,
+    env_buzzer: Option<u32>,
+    env_active_high: Option<bool>,
+    settings: &GpioSettings,
+) -> (Option<u32>, Option<u32>, Option<u32>, bool) {
+    let resolved_active_high = env_active_high.unwrap_or(settings.active_high);
+
+    let (green, red, buzzer) = if settings.enabled {
+        (
+            cli_green.or(env_green).or(settings.green_pin),
+            cli_red.or(env_red).or(settings.red_pin),
+            cli_buzzer.or(env_buzzer).or(settings.buzzer_pin),
+        )
+    } else {
+        (
+            cli_green.or(env_green),
+            cli_red.or(env_red),
+            cli_buzzer.or(env_buzzer),
+        )
+    };
+
+    (green, red, buzzer, resolved_active_high)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FullSettings {
     pub general: GeneralSettings,
     pub camera: CameraSettings,
     pub network: NetworkSettings,
     pub time: TimeSettings,
     pub server: ServerSettings,
+    #[serde(default)]
+    pub gpio: GpioSettings,
 }
 
 impl Default for FullSettings {
@@ -137,6 +199,7 @@ impl Default for FullSettings {
             server: ServerSettings {
                 url: env::var("SMART_ABSENSI_URL").unwrap_or_else(|_| "http://192.168.10.66:8000".to_string()),
             },
+            gpio: GpioSettings::default(),
         }
     }
 }
@@ -179,6 +242,19 @@ pub struct ActionResponse {
     pub message: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GpioTestRequest {
+    pub pin: u32,
+    #[serde(default = "default_active_high")]
+    pub active_high: bool,
+    #[serde(default = "default_test_duration")]
+    pub duration_ms: u64,
+}
+
+fn default_test_duration() -> u64 {
+    1000
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ControlInfoResponse {
     pub device_code: String,
@@ -197,6 +273,7 @@ pub struct ControlInfoResponse {
     pub quarantined_count: i64,
     pub camera_device: String,
     pub camera_resolution: String,
+    pub camera_is_simulated: bool,
     pub is_streaming: bool,
     pub serial_connected: bool,
     // ── Telemetri tambahan ───────────────────────────────────────────────
@@ -324,6 +401,33 @@ pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
     let url = settings.server.url.trim();
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("Server URL must begin with http:// or https://".to_string());
+    }
+
+    if settings.gpio.enabled {
+        let mut assigned = Vec::new();
+        if let Some(pin) = settings.gpio.green_pin {
+            if pin > 255 {
+                return Err("Green LED pin must be between 0 and 255".to_string());
+            }
+            assigned.push(("Green LED", pin));
+        }
+        if let Some(pin) = settings.gpio.red_pin {
+            if pin > 255 {
+                return Err("Red LED pin must be between 0 and 255".to_string());
+            }
+            if assigned.iter().any(|(_, p)| *p == pin) {
+                return Err("Red LED pin cannot duplicate Green LED pin".to_string());
+            }
+            assigned.push(("Red LED", pin));
+        }
+        if let Some(pin) = settings.gpio.buzzer_pin {
+            if pin > 255 {
+                return Err("Buzzer pin must be between 0 and 255".to_string());
+            }
+            if assigned.iter().any(|(_, p)| *p == pin) {
+                return Err("Buzzer pin cannot duplicate an existing LED pin".to_string());
+            }
+        }
     }
 
     Ok(())

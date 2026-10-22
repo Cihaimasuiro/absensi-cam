@@ -142,26 +142,22 @@ pub async fn run_stream(
             })
         });
 
-    let resolved_gpio_green = gpio_green_opt
-        .or_else(|| {
-            env::var("GPIO_GREEN_PIN")
-                .ok()
-                .and_then(|v| v.parse::<u32>().ok())
-        });
+    let env_green = env::var("GPIO_GREEN_PIN").ok().and_then(|v| v.parse::<u32>().ok());
+    let env_red = env::var("GPIO_RED_PIN").ok().and_then(|v| v.parse::<u32>().ok());
+    let env_buzzer = env::var("GPIO_BUZZER_PIN").ok().and_then(|v| v.parse::<u32>().ok());
+    let env_active_high = env::var("GPIO_ACTIVE_HIGH").ok().map(|v| v == "1" || v == "true");
 
-    let resolved_gpio_red = gpio_red_opt
-        .or_else(|| {
-            env::var("GPIO_RED_PIN")
-                .ok()
-                .and_then(|v| v.parse::<u32>().ok())
-        });
-
-    let resolved_gpio_buzzer = gpio_buzzer_opt
-        .or_else(|| {
-            env::var("GPIO_BUZZER_PIN")
-                .ok()
-                .and_then(|v| v.parse::<u32>().ok())
-        });
+    let (resolved_gpio_green, resolved_gpio_red, resolved_gpio_buzzer, resolved_gpio_active_high) =
+        server::control::resolve_gpio_pins(
+            gpio_green_opt,
+            gpio_red_opt,
+            gpio_buzzer_opt,
+            env_green,
+            env_red,
+            env_buzzer,
+            env_active_high,
+            &persisted_settings.gpio,
+        );
 
     println!("--------------------------------------------------");
     println!(" Smart Absensi MJPEG Stream & AI Engine (Rust)");
@@ -186,8 +182,11 @@ pub async fn run_stream(
     }
     if resolved_gpio_green.is_some() || resolved_gpio_red.is_some() || resolved_gpio_buzzer.is_some() {
         println!(
-            " GPIO Sysfs     : Green={:?}, Red={:?}, Buzzer={:?}",
-            resolved_gpio_green, resolved_gpio_red, resolved_gpio_buzzer
+            " GPIO Sysfs     : Green={:?}, Red={:?}, Buzzer={:?} (Active-{})",
+            resolved_gpio_green,
+            resolved_gpio_red,
+            resolved_gpio_buzzer,
+            if resolved_gpio_active_high { "HIGH" } else { "LOW" }
         );
     }
     println!("--------------------------------------------------");
@@ -196,6 +195,7 @@ pub async fn run_stream(
         resolved_gpio_green,
         resolved_gpio_red,
         resolved_gpio_buzzer,
+        resolved_gpio_active_high,
     ));
 
     let arduino_bridge: Option<Arc<ArduinoBridge>> = if let Some(ref port) = resolved_arduino_port {
@@ -907,6 +907,8 @@ pub async fn run_stream(
         }
     }
 
+    let camera_simulated = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
     #[cfg(target_os = "linux")]
     {
         let tx_frame_clone = tx_frame.clone();
@@ -1036,6 +1038,7 @@ pub async fn run_stream(
         let running_mock = running_clone.clone();
         let cam_fps_mock = cam_fps_shared.clone();
         let overlay_hub_draw = overlay_hub.clone();
+        let camera_simulated_tracker = camera_simulated.clone();
 
         let cam_idx: u32 = if device.starts_with("/dev/video") {
             device.trim_start_matches("/dev/video").parse().unwrap_or(0)
@@ -1044,15 +1047,30 @@ pub async fn run_stream(
         };
 
         let py_script = format!(
-            "import cv2, sys\n\
+            "import cv2, sys, time\n\
 cap = cv2.VideoCapture({0}, cv2.CAP_DSHOW)\n\
 if not cap.isOpened(): cap = cv2.VideoCapture({0})\n\
 if not cap.isOpened(): sys.exit(1)\n\
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, {1})\n\
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, {2})\n\
+ready = False\n\
+for _ in range(10):\n\
+\x20   ret, frame = cap.read()\n\
+\x20   if ret and frame is not None:\n\
+\x20       ready = True\n\
+\x20       if frame.shape[1] != {1} or frame.shape[0] != {2}:\n\
+\x20           frame = cv2.resize(frame, ({1}, {2}))\n\
+\x20       rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n\
+\x20       sys.stdout.buffer.write(rgb.tobytes())\n\
+\x20       sys.stdout.buffer.flush()\n\
+\x20       break\n\
+\x20   time.sleep(0.05)\n\
+if not ready:\n\
+\x20   cap.release()\n\
+\x20   sys.exit(1)\n\
 while True:\n\
 \x20   ret, frame = cap.read()\n\
-\x20   if not ret: break\n\
+\x20   if not ret or frame is None: break\n\
 \x20   if frame.shape[1] != {1} or frame.shape[0] != {2}:\n\
 \x20       frame = cv2.resize(frame, ({1}, {2}))\n\
 \x20   rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n\
@@ -1207,6 +1225,7 @@ cap.release()",
             }
         }
 
+        camera_simulated_tracker.store(!webcam_active, Ordering::Relaxed);
         if !webcam_active {
             info!("Platform non-Linux: Mengaktifkan simulated camera feeder untuk pengujian lokal.");
             let test_img_candidates = [
@@ -1254,7 +1273,7 @@ cap.release()",
                     height as usize,
                     20,
                     50,
-                    "Pasang webcam USB atau tambahkan test_face.png",
+                    "Pasang webcam USB",
                     (148, 163, 184),
                     Some((0, 0, 0)),
                 );
@@ -1325,7 +1344,7 @@ cap.release()",
     };
 
     tokio::select! {
-        res = server::start_stream_server(port, hub, overlay_hub, server_config) => {
+        res = server::start_stream_server(port, hub, overlay_hub, server_config, camera_simulated) => {
             if let Err(e) = res {
                 error!("Stream server error: {:#}", e);
             }

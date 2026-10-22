@@ -710,6 +710,29 @@
         toast_check_update_fail: 'Check update failed: ',
         toast_pwd_error: 'Password error: ',
         toast_action_success: 'Action completed',
+        sec_hardware: 'Hardware & GPIO',
+        label_gpio_enabled: 'Enable Panel GPIO Pinout',
+        help_gpio_enabled: 'Enable sysfs GPIO control for status LEDs and feedback buzzer (requires engine restart). CLI flags and environment variables take precedence.',
+        label_gpio_active_level: 'Active Output Level',
+        gpio_active_high: 'HIGH / 3.3V ON (Active-High / NPN)',
+        gpio_active_low: 'LOW / 0V ON (Active-Low / Relay / PNP)',
+        label_gpio_green: 'Green LED Pin',
+        help_gpio_green: 'Sysfs GPIO pin number for check-in success indicator.',
+        label_gpio_red: 'Red LED Pin',
+        help_gpio_red: 'Sysfs GPIO pin number for unknown face / rejection indicator.',
+        label_gpio_buzzer: 'Buzzer Pin',
+        help_gpio_buzzer: 'Sysfs GPIO pin number for acoustic feedback beeps.',
+        btn_test: 'TEST',
+        btn_testing: 'TESTING...',
+        toast_gpio_pin_empty: 'Please specify a GPIO pin number first',
+        toast_gpio_pin_invalid: 'Invalid pin number (must be 0-255)',
+        toast_gpio_test_success: 'Test signal pulsed successfully',
+        toast_gpio_test_fail: 'GPIO test failed: ',
+        toast_gpio_test_error: 'GPIO test error: ',
+        label_camera_index: 'Camera',
+        camera_simulated_alert_title: 'SIMULATED CAMERA ACTIVE:',
+        camera_simulated_alert_desc: 'Physical webcam was not detected or failed to read. Running with synthetic test feed.',
+        btn_configure_camera: 'CONFIGURE',
         confirm_apply_network: 'Apply network configuration? You will have 60 seconds to confirm the change.',
         confirm_repair: 'Re-pairing will clear local pairing credentials. Are you sure?',
         confirm_restart_engine: 'Restart Rust AI Vision engine?',
@@ -853,6 +876,29 @@
         toast_check_update_fail: 'Gagal memeriksa pembaruan: ',
         toast_pwd_error: 'Kesalahan kata sandi: ',
         toast_action_success: 'Tindakan selesai',
+        sec_hardware: 'Perangkat Keras & GPIO',
+        label_gpio_enabled: 'Aktifkan Pinout GPIO Panel',
+        help_gpio_enabled: 'Aktifkan kontrol GPIO sysfs untuk LED status dan buzzer (memerlukan restart engine). Argumen CLI dan variabel environment diprioritaskan.',
+        label_gpio_active_level: 'Tingkat Logika Aktif',
+        gpio_active_high: 'HIGH / 3.3V ON (Aktif-Tinggi / NPN)',
+        gpio_active_low: 'LOW / 0V ON (Aktif-Rendah / Relay / PNP)',
+        label_gpio_green: 'Pin LED Hijau',
+        help_gpio_green: 'Nomor pin GPIO sysfs untuk indikator presensi sukses.',
+        label_gpio_red: 'Pin LED Merah',
+        help_gpio_red: 'Nomor pin GPIO sysfs untuk indikator wajah tak dikenal / ditolak.',
+        label_gpio_buzzer: 'Pin Buzzer',
+        help_gpio_buzzer: 'Nomor pin GPIO sysfs untuk bunyi umpan balik akustik.',
+        btn_test: 'UJI',
+        btn_testing: 'MENGUJI...',
+        toast_gpio_pin_empty: 'Harap tentukan nomor pin GPIO terlebih dahulu',
+        toast_gpio_pin_invalid: 'Nomor pin tidak valid (harus 0-255)',
+        toast_gpio_test_success: 'Sinyal uji berhasil dikirim',
+        toast_gpio_test_fail: 'Uji GPIO gagal: ',
+        toast_gpio_test_error: 'Kesalahan uji GPIO: ',
+        label_camera_index: 'Kamera',
+        camera_simulated_alert_title: 'KAMERA SIMULASI AKTIF:',
+        camera_simulated_alert_desc: 'Webcam fisik tidak terdeteksi atau gagal dibaca. Berjalan dengan umpan sintetis.',
+        btn_configure_camera: 'ATUR KAMERA',
         confirm_apply_network: 'Terapkan konfigurasi jaringan? Anda memiliki waktu 60 detik untuk konfirmasi.',
         confirm_repair: 'Menghubungkan ulang akan menghapus kredensial pairing lokal. Lanjutkan?',
         confirm_restart_engine: 'Restart engine AI Vision Rust?',
@@ -906,15 +952,19 @@
           cpu_temp_c: 0,
           outbox_count: 0,
           is_paired: false,
+          camera_is_simulated: false,
         },
 
         settings: {
           general: { language: 'auto', device_name: '' },
           camera: { source: '/dev/video0', resolution: '640x480', fps_cap: 15, mirror_preview: false },
+          gpio: { enabled: false, green_pin: null, red_pin: null, buzzer_pin: null, active_high: true },
           network: { interface: 'eth0', mode: 'dhcp', wifi_ssid: '', wifi_password: '', static_ip: '', subnet: '', gateway: '', dns: '' },
           time: { timezone: 'Asia/Jakarta', ntp_enabled: true },
           server: { url: '' }
         },
+
+        gpioTesting: { green: false, red: false, buzzer: false },
 
         pwdForm: { current: '', new_pwd: '', confirm_pwd: '' },
         toasts: [],
@@ -1146,7 +1196,8 @@
           try {
             const res = await fetch('/api/control/camera/devices');
             if (res.ok) {
-              this.availableCameras = await res.json();
+              const data = await res.json();
+              this.availableCameras = data.devices || [];
             }
           } catch (e) {
             console.warn('Could not query cameras:', e);
@@ -1224,6 +1275,49 @@
 
         async syncRtc() {
           await this.triggerAction('sync_rtc');
+        },
+
+        async testGpio(target) {
+          if (!this.settings.gpio) return;
+          let pin = null;
+          if (target === 'green') pin = this.settings.gpio.green_pin;
+          if (target === 'red') pin = this.settings.gpio.red_pin;
+          if (target === 'buzzer') pin = this.settings.gpio.buzzer_pin;
+
+          if (pin === null || pin === undefined || pin === '') {
+            this.showToast(this.t('toast_gpio_pin_empty'), 'error');
+            return;
+          }
+          pin = parseInt(pin, 10);
+          if (isNaN(pin) || pin < 0 || pin > 255) {
+            this.showToast(this.t('toast_gpio_pin_invalid'), 'error');
+            return;
+          }
+
+          this.gpioTesting[target] = true;
+          try {
+            const res = await fetch('/api/control/gpio/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pin: pin,
+                active_high: this.settings.gpio.active_high !== false,
+                duration_ms: 1000
+              })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.showToast(this.t('toast_gpio_test_success') + ` (GPIO ${pin})`);
+            } else {
+              this.showToast(data.error || data.message || this.t('toast_gpio_test_fail'), 'error');
+            }
+          } catch (e) {
+            this.showToast(this.t('toast_gpio_test_error') + e, 'error');
+          } finally {
+            setTimeout(() => {
+              this.gpioTesting[target] = false;
+            }, 1000);
+          }
         },
 
         async testServerConnection() {
@@ -1410,6 +1504,26 @@
 
   <!-- 2. Main Live Viewport -->
   <main>
+    <!-- Camera Simulated / Hardware Error Alert Banner -->
+    <template x-if="info.camera_is_simulated">
+      <div
+        style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; padding: 10px 16px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+        <div style="color: #ef4444; display: flex; align-items: center; gap: 8px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div>
+            <strong x-text="t('camera_simulated_alert_title')">SIMULATED CAMERA ACTIVE:</strong>
+            <span x-text="t('camera_simulated_alert_desc')">Physical webcam was not detected or failed to read. Running with synthetic test feed.</span>
+          </div>
+        </div>
+        <button class="btn-square" style="padding: 4px 10px; font-size: 10px; border-color: #ef4444; color: #ef4444;"
+          @click="openSettings()" x-text="t('btn_configure_camera')">CONFIGURE CAMERA</button>
+      </div>
+    </template>
+
     <div class="video-card">
       <div class="video-viewport">
         <img :src="feedUrl" alt="Live Gate Preview" x-show="feedUrl && streamConnected" @error="handleStreamError()"
@@ -1427,6 +1541,9 @@
         <div>
           <span x-text="t('overlay_device') + ': '">DEVICE: </span><span style="color: var(--text);" x-text="info.device_code || 'STANDALONE'"></span> |
           FPS: <span style="color: var(--text);" x-text="settings.camera.fps_cap || 15"></span>
+          <template x-if="info.camera_is_simulated">
+            <span style="color: #ef4444; margin-left: 6px; font-weight: bold;">[SIMULATED]</span>
+          </template>
         </div>
         <div>
           <span x-text="t('overlay_outbox') + ': '">OUTBOX: </span><span style="color: var(--text);" x-text="info.outbox_count || 0"></span> <span x-text="t('overlay_pending')">PENDING</span>
@@ -1527,7 +1644,7 @@
                   <label class="row-label" x-text="t('label_source')">Source Device</label>
                   <select x-model="settings.camera.source">
                     <template x-for="dev in availableCameras" :key="dev">
-                      <option :value="dev" x-text="dev"></option>
+                      <option :value="dev" x-text="dev.startsWith('/dev/video') ? dev : (t('label_camera_index') + ' ' + dev)"></option>
                     </template>
                     <template x-if="availableCameras.length === 0">
                       <option value="/dev/video0" x-text="t('default_v4l2')">/dev/video0 (Default V4L2)</option>
@@ -1574,7 +1691,70 @@
               </div>
             </div>
 
-            <!-- 4. CENTRAL SERVER -->
+            <!-- 4. HARDWARE & GPIO -->
+            <div class="settings-section">
+              <span class="section-label" x-text="t('sec_hardware')">Hardware & GPIO</span>
+
+              <div class="setting-row">
+                <div class="row-main">
+                  <label class="checkbox-label">
+                    <input type="checkbox" x-model="settings.gpio.enabled" />
+                    <span class="checkbox-custom"></span>
+                    <span x-text="t('label_gpio_enabled')">Enable GPIO Peripherals</span>
+                  </label>
+                </div>
+                <div class="row-help" x-text="t('help_gpio_enabled')">Enable direct Linux sysfs GPIO control for status LEDs and feedback buzzer (requires engine restart).</div>
+              </div>
+
+              <template x-if="settings.gpio && settings.gpio.enabled">
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label" x-text="t('label_gpio_active_level')">Active Output Level</label>
+                      <select x-model="settings.gpio.active_high">
+                        <option :value="true" x-text="t('gpio_active_high')">HIGH / 3.3V ON (Active-High / NPN)</option>
+                        <option :value="false" x-text="t('gpio_active_low')">LOW / 0V ON (Active-Low / Relay / PNP)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label" x-text="t('label_gpio_green')">Green LED Pin</label>
+                      <div style="display: flex; gap: 6px; width: 60%;">
+                        <input type="number" min="0" max="255" x-model.number="settings.gpio.green_pin" placeholder="e.g. 12" style="flex: 1;" />
+                        <button type="button" class="btn-square" :disabled="gpioTesting.green" @click="testGpio('green')" style="padding: 4px 8px; font-size: 10px;" x-text="gpioTesting.green ? t('btn_testing') : t('btn_test')">TEST</button>
+                      </div>
+                    </div>
+                    <div class="row-help" x-text="t('help_gpio_green')">Sysfs GPIO pin number for check-in success indicator.</div>
+                  </div>
+
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label" x-text="t('label_gpio_red')">Red LED Pin</label>
+                      <div style="display: flex; gap: 6px; width: 60%;">
+                        <input type="number" min="0" max="255" x-model.number="settings.gpio.red_pin" placeholder="e.g. 13" style="flex: 1;" />
+                        <button type="button" class="btn-square" :disabled="gpioTesting.red" @click="testGpio('red')" style="padding: 4px 8px; font-size: 10px;" x-text="gpioTesting.red ? t('btn_testing') : t('btn_test')">TEST</button>
+                      </div>
+                    </div>
+                    <div class="row-help" x-text="t('help_gpio_red')">Sysfs GPIO pin number for unknown face / rejection indicator.</div>
+                  </div>
+
+                  <div class="setting-row">
+                    <div class="row-main">
+                      <label class="row-label" x-text="t('label_gpio_buzzer')">Buzzer Pin</label>
+                      <div style="display: flex; gap: 6px; width: 60%;">
+                        <input type="number" min="0" max="255" x-model.number="settings.gpio.buzzer_pin" placeholder="e.g. 14" style="flex: 1;" />
+                        <button type="button" class="btn-square" :disabled="gpioTesting.buzzer" @click="testGpio('buzzer')" style="padding: 4px 8px; font-size: 10px;" x-text="gpioTesting.buzzer ? t('btn_testing') : t('btn_test')">TEST</button>
+                      </div>
+                    </div>
+                    <div class="row-help" x-text="t('help_gpio_buzzer')">Sysfs GPIO pin number for acoustic feedback beeps.</div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- 5. CENTRAL SERVER -->
             <div class="settings-section">
               <span class="section-label" x-text="t('sec_server')">Central Server</span>
 

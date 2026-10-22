@@ -156,15 +156,39 @@ pub async fn get_camera_devices_handler(
     }
 
     let mut devices = Vec::new();
-    for i in 0..10 {
-        let path = format!("/dev/video{}", i);
-        if Path::new(&path).exists() {
-            devices.push(path);
+
+    #[cfg(target_os = "linux")]
+    {
+        for i in 0..10 {
+            let path = format!("/dev/video{}", i);
+            if Path::new(&path).exists() {
+                devices.push(path);
+            }
         }
     }
 
-    // Tanpa fallback buatan: daftar kosong lebih jujur dan membuat UI menampilkan
-    // "kamera tidak ditemukan" alih-alih menawarkan perangkat yang tidak ada.
+    #[cfg(not(target_os = "linux"))]
+    {
+        let output = std::process::Command::new("python")
+            .args(["-c", "import cv2; print(','.join(str(i) for i in range(4) if cv2.VideoCapture(i, cv2.CAP_DSHOW).isOpened()))"])
+            .output();
+
+        if let Ok(out) = output {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                for part in s.split(',') {
+                    let trimmed = part.trim();
+                    if !trimmed.is_empty() {
+                        devices.push(trimmed.to_string());
+                    }
+                }
+            }
+        }
+        if devices.is_empty() {
+            devices.push("0".to_string());
+        }
+    }
+
     Json(serde_json::json!({
         "devices": devices,
         "count": devices.len()
@@ -445,6 +469,7 @@ pub async fn info_handler(
         quarantined_count: quarantined,
         camera_device: state.config.camera_device.clone(),
         camera_resolution: format!("{}x{}", state.config.width, state.config.height),
+        camera_is_simulated: state.app_state.camera_simulated.load(std::sync::atomic::Ordering::Relaxed),
         is_streaming: state.app_state.frame_hub.has_viewers(),
         serial_connected: Path::new("/dev/ttyACM0").exists() || Path::new("/dev/ttyUSB0").exists(),
 
@@ -967,3 +992,69 @@ pub async fn action_handler(
             .into_response(),
     }
 }
+
+pub async fn test_gpio_handler(
+    State(state): State<ControlState>,
+    headers: HeaderMap,
+    Json(payload): Json<GpioTestRequest>,
+) -> Response {
+    if !state.auth.check_session(&headers) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Unauthorized" }))).into_response();
+    }
+    if !state.auth.verify_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "CSRF origin mismatch" }))).into_response();
+    }
+
+    if payload.pin > 255 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "Pin number must be between 0 and 255" })),
+        )
+            .into_response();
+    }
+
+    let duration = std::time::Duration::from_millis(payload.duration_ms.clamp(100, 5000));
+
+    #[cfg(target_os = "linux")]
+    {
+        match crate::hardware::pulse_test_pin(payload.pin, payload.active_high, duration) {
+            Ok(()) => {
+                info!("GPIO test pulse triggered for pin {}", payload.pin);
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "success": true,
+                        "message": format!("Pulsed GPIO pin {} for {}ms", payload.pin, duration.as_millis()),
+                        "pin": payload.pin
+                    })),
+                )
+                    .into_response()
+            }
+            Err(e) => {
+                warn!("GPIO test pulse failed on pin {}: {}", payload.pin, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": format!("Failed to pulse pin {}: {}", payload.pin, e)
+                    })),
+                )
+                    .into_response()
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (payload, duration);
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "GPIO hardware control is only available on Linux targets"
+            })),
+        )
+            .into_response()
+    }
+}
+

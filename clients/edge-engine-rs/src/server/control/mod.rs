@@ -37,6 +37,7 @@ pub fn register_control_routes(router: Router<ControlState>) -> Router<ControlSt
         .route("/api/control/attendance/pending", get(pending_attendance_handler))
         .route("/api/control/health", get(health_handler))
         .route("/api/control/action", post(action_handler))
+        .route("/api/control/gpio/test", post(test_gpio_handler))
 }
 
 #[cfg(test)]
@@ -47,6 +48,94 @@ mod tests {
     fn test_validate_settings_success() {
         let s = FullSettings::default();
         assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_settings_gpio_valid() {
+        let mut s = FullSettings::default();
+        s.gpio.enabled = true;
+        s.gpio.green_pin = Some(12);
+        s.gpio.red_pin = Some(13);
+        s.gpio.buzzer_pin = Some(14);
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_settings_gpio_rejects_duplicate_pins() {
+        let mut s = FullSettings::default();
+        s.gpio.enabled = true;
+        s.gpio.green_pin = Some(12);
+        s.gpio.red_pin = Some(12);
+        assert!(validate_settings(&s).is_err());
+    }
+
+    #[test]
+    fn test_validate_settings_gpio_rejects_out_of_range_pin() {
+        let mut s = FullSettings::default();
+        s.gpio.enabled = true;
+        s.gpio.green_pin = Some(300);
+        assert!(validate_settings(&s).is_err());
+    }
+
+    #[test]
+    fn test_resolve_gpio_pins_precedence_cli_over_env_and_json() {
+        let mut s = GpioSettings::default();
+        s.enabled = true;
+        s.green_pin = Some(30);
+        s.red_pin = Some(31);
+        s.buzzer_pin = Some(32);
+
+        let (g, r, b, active_high) = resolve_gpio_pins(
+            Some(10), // CLI green wins
+            None,
+            None,
+            Some(20), // Env red wins over JSON
+            Some(21),
+            None,
+            None,
+            &s,
+        );
+
+        assert_eq!(g, Some(10));
+        assert_eq!(r, Some(21));
+        assert_eq!(b, Some(32)); // JSON buzzer fallback
+        assert!(active_high);
+    }
+
+    #[test]
+    fn test_resolve_gpio_pins_disabled_branch_preserves_active_high() {
+        let mut s = GpioSettings::default();
+        s.enabled = false;
+        s.active_high = false; // Active-low relay
+        s.green_pin = Some(50); // should NOT be used because enabled = false
+
+        let (g, r, b, active_high) = resolve_gpio_pins(
+            None,
+            None,
+            None,
+            Some(12), // env pin provided
+            None,
+            None,
+            None,
+            &s,
+        );
+
+        assert_eq!(g, Some(12));
+        assert_eq!(r, None);
+        assert_eq!(b, None);
+        assert!(!active_high, "Active-low polarity must be preserved even when disabled");
+    }
+
+    #[test]
+    fn test_resolve_gpio_pins_disabled_branch_ignores_json_pins() {
+        let mut s = GpioSettings::default();
+        s.enabled = false;
+        s.green_pin = Some(12);
+
+        let (g, r, b, _) = resolve_gpio_pins(None, None, None, None, None, None, None, &s);
+        assert_eq!(g, None);
+        assert_eq!(r, None);
+        assert_eq!(b, None);
     }
 
     #[test]

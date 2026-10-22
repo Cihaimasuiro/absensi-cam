@@ -147,6 +147,7 @@ impl OverlayHub {
 pub struct AppState {
     pub frame_hub: FrameHub,
     pub overlay_hub: OverlayHub,
+    pub camera_simulated: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -320,10 +321,12 @@ pub async fn start_stream_server(
     hub: FrameHub,
     overlay_hub: OverlayHub,
     config: ServerConfig,
+    camera_simulated: Arc<std::sync::atomic::AtomicBool>,
 ) -> anyhow::Result<()> {
     let state = AppState {
         frame_hub: hub,
         overlay_hub,
+        camera_simulated,
     };
 
     let stream_secret = std::env::var("SMART_ABSENSI_TOKEN")

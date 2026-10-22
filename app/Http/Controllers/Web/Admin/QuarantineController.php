@@ -167,7 +167,7 @@ class QuarantineController extends Controller
         }
 
         if (!$student->hasActiveConsent()) {
-            return back()->with('error', "Gagal mendaftarkan ulang: Siswa {$student->name} tidak memiliki persetujuan biometrik aktif (UU PDP No. 27/2022).");
+            return back()->with('error', "Gagal mendaftarkan ulang: Siswa {$student->name} tidak memiliki persetujuan biometrik aktif.");
         }
 
         $template = $student->faceTemplate;

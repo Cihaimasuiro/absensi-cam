@@ -88,7 +88,7 @@ Route::middleware('auth')->group(function () {
         Route::post('quarantine/{quarantine}/re-enroll', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'reEnroll'])->name('quarantine.re-enroll');
         Route::post('quarantine/{quarantine}/resolve', [\App\Http\Controllers\Web\Admin\QuarantineController::class, 'resolve'])->name('quarantine.resolve');
 
-        // Manajemen persetujuan (UU PDP No. 27/2022)
+        // Manajemen persetujuan
         Route::get('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'index'])->name('consents.index');
         Route::post('consents', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'store'])->name('consents.store');
         Route::post('consents/{consent}/withdraw', [\App\Http\Controllers\Web\Admin\ConsentController::class, 'withdraw'])->name('consents.withdraw');

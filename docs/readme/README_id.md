@@ -24,7 +24,7 @@
 > Embedding wajah adalah data biometrik. Data ini dienkripsi saat disimpan dengan AES-256-GCM dan
 > tidak pernah dikirim ke edge dalam bentuk plaintext. Penarikan persetujuan akan melakukan
 > soft-delete pada template, yang menyebar ke setiap perangkat terpasang sebagai tombstone
-> `op=delete` pada delta sync berikutnya (UU PDP No. 27/2022, GDPR Art. 17).
+> `op=delete` pada delta sync berikutnya
 
 ---
 

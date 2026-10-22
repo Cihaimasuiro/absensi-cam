@@ -3,7 +3,7 @@
 
 @section('header-actions')
     <button type="button" @click="$dispatch('open-add-device')" onclick="window.dispatchEvent(new CustomEvent('open-add-device'))" class="btn btn-primary">
-        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah Perangkat
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah
     </button>
 @endsection
 
@@ -170,7 +170,7 @@
             @click="$event.target === $refs.addModal && closeAdd()"
             class="w-[min(420px,92vw)] m-auto">
         <div class="modal-head">
-            <h2 class="modal-title"><i data-lucide="plus-circle" class="w-4 h-4 text-primary"></i> Tambah Perangkat</h2>
+            <h2 class="modal-title"><i data-lucide="plus-circle" class="w-4 h-4 text-primary"></i> Tambah</h2>
             <button type="button" @click="closeAdd" aria-label="Tutup" class="btn-icon">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
@@ -200,7 +200,7 @@
             </div>
             <div class="modal-foot">
                 <button type="button" class="btn btn-secondary" @click="closeAdd">Batal</button>
-                <button type="submit" class="btn btn-primary">Tambah Perangkat</button>
+                <button type="submit" class="btn btn-primary">Tambah</button>
             </div>
         </form>
     </dialog>

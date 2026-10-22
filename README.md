@@ -24,7 +24,6 @@
 > Face embeddings are biometric data. They are encrypted at rest with AES-256-GCM and are
 > never transmitted to the edge in plaintext. Consent withdrawal soft-deletes the template,
 > which propagates to every paired device as an `op=delete` tombstone on the next delta sync
-> (UU PDP No. 27/2022, GDPR Art. 17).
 
 ---
 

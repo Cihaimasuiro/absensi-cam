@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Log;
  * Di Laravel: siswa tetap memakai SoftDeletes pada face_templates.
  * Soft-delete pada face_templates berperan sebagai tombstone → perangkat edge
  * melihat op=delete pada delta sync berikutnya lalu menghapus embedding lokalnya.
- *
- * PRD §12.3 — template wajah dihapus saat persetujuan ditarik (UU PDP / GDPR Art.17).
  */
 class TombstoneRevokedConsent extends Command
 {

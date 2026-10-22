@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Persetujuan Biometrik (UU PDP)')
+@section('title', 'Persetujuan Biometrik')
 
 @section('header-actions')
     <div class="flex items-center gap-xs">
@@ -124,7 +124,7 @@
                             <td class="text-right whitespace-nowrap">
                                 @if($consent->isActive())
                                     <form method="POST" action="{{ route('admin.consents.withdraw', $consent) }}" class="inline"
-                                          onsubmit="return confirm('Peringatan: Penarikan persetujuan akan otomatis menghapus (men-tombstone) template biometrik anggota dari seluruh terminal sesuai UU PDP No. 27/2022. Lanjutkan penarikan untuk {{ $consent->student?->name }}?');">
+                                          onsubmit="return confirm('Peringatan:Lanjutkan penarikan untuk {{ $consent->student?->name }}?');">
                                         @csrf
                                         <button type="submit" class="btn btn-danger text-xs py-0.5 px-2">
                                             Tarik Persetujuan

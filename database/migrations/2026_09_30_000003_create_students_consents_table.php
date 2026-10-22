@@ -27,7 +27,7 @@ return new class extends Migration
             $table->index(['classroom_id', 'is_active']);
         });
 
-        // Consent biometrik (WAJIB per UU PDP No. 27/2022 pasal data biometrik) — FR-S04
+        // Consent biometrik
         Schema::create('consents', function (Blueprint $table) {
             $table->id();
             $table->uuid('student_id');

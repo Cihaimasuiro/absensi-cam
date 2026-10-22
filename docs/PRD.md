@@ -987,7 +987,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 - Pemberitahuan tujuan pemrosesan (absensi saja) dan papan informasi di lokasi terminal.
 - Hak penarikan persetujuan dan penghapusan: dijalankan lewat FR-S04, tersebar ke seluruh perangkat (AC-37).
 - Penilaian dampak pelindungan data (DPIA) dan penunjukan penanggung jawab data.
-- Prosedur insiden: UU PDP mensyaratkan pemberitahuan kegagalan pelindungan data paling lambat 3x24 jam.
+- Prosedur insiden: mensyaratkan pemberitahuan kegagalan pelindungan data paling lambat 3x24 jam.
 - Kartu RFID (UID) dan catatan presensi QR bukan data biometrik, tetapi tetap data pribadi anggota; tujuan pemrosesan (absensi) dan masa retensi mengikuti 12.3 dan dicantumkan pada pemberitahuan privasi (konfirmasikan dengan penasihat hukum).
 
 ### 12.3 Retensi Data
@@ -1026,7 +1026,7 @@ Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang
 | Q3 | Satu pintu = satu terminal (masuk+keluar) atau dua terminal (masuk dan keluar terpisah)? | Logika `direction`, jumlah perangkat |
 | Q4 | Model dan tipe kamera yang dipakai? | Validasi MJPEG/720p, lensa (FOV) |
 | Q5 | Lokasi hosting Server Pusat dan kebijakan backup? | Keamanan dan operasional |
-| Q6 | Kebijakan retensi absensi dan penunjukan DPO? | Kepatuhan UU PDP |
+| Q6 | Kebijakan retensi absensi dan penunjukan DPO? | - |
 | Q7 | Strategi lisensi: open source (AGPL) atau proprietary (implementasi independen)? | Lisensi seluruh monorepo |
 | Q8 | Perlu integrasi langsung ke HRMS/Payroll atau cukup ekspor CSV? | Cakupan API |
 | Q9 | Jika spike M0 gagal pada 1 GB RAM / Cortex-A53, apakah boleh beralih ke SBC dengan RAM/CPU lebih besar? | Anggaran, BOM, desain V2 |

@@ -38,7 +38,7 @@ class GenerateFaceEmbedding implements ShouldQueue
             return;
         }
 
-        // Pengaman privasi: Pastikan consent biometrik aktif ada sebelum pemrosesan (UU PDP No. 27/2022)
+        // Pengaman privasi: Pastikan consent biometrik aktif ada sebelum pemrosesan
         $student = \App\Domain\Student\Models\Student::find($this->studentId);
         if (!$student || !$student->hasActiveConsent()) {
             Log::warning('GenerateFaceEmbedding aborted: Active biometric consent not found or withdrawn', [

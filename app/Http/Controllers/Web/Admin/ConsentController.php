@@ -103,7 +103,7 @@ class ConsentController extends Controller
             $consent->update(['withdrawn_at' => now()]);
             $student = $consent->student;
 
-            // Soft delete berantai ke face template agar tombstone terkirim ke terminal edge (UU PDP No. 27/2022)
+            // Soft delete berantai ke face template agar tombstone terkirim ke terminal edge
             if ($student && $student->faceTemplate && !$student->faceTemplate->trashed()) {
                 $student->faceTemplate->delete();
             }

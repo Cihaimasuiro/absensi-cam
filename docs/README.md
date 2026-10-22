@@ -13,7 +13,7 @@ document answers which question.
 > Face templates are biometric data. They are encrypted at rest with AES-256-GCM and travel to
 > edge devices only as ciphertext. Withdrawing consent soft-deletes the template, which reaches
 > every paired device as an `op=delete` tombstone on the next delta sync
-> (UU PDP No. 27/2022, GDPR Art. 17). See [ENCRYPTION.md](ENCRYPTION.md).
+> See [ENCRYPTION.md](ENCRYPTION.md).
 
 ---
 

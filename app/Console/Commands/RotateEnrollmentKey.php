@@ -13,16 +13,25 @@ class RotateEnrollmentKey extends Command
     protected $signature = 'app:rotate-enrollment-key
                             {--old-key= : The current/previous 32-byte base64 key if different from .env}
                             {--new-key= : Custom 32-byte base64-encoded key}
+                            {--env-path= : Custom path to .env file}
+                            {--edge-env-path= : Custom path to edge engine .env file}
                             {--show-key : Display the unmasked key in console output}
+                            {--verify : Verify that all database templates can be decrypted with active key}
                             {--dry-run : Test decryption and re-encryption without persisting}';
 
     protected $description = 'Rotate the ENROLLMENT_EMBED_KEY and re-encrypt all existing biometric face templates';
 
     public function handle(): int
     {
+        if ($this->option('verify')) {
+            return $this->verifyTemplates();
+        }
+
+        $envPath = $this->option('env-path') ?: config('app.env_file_path', base_path('.env'));
+        $edgeEnvPath = $this->option('edge-env-path') ?: config('app.edge_env_file_path', base_path('clients/edge-engine-rs/.env'));
+
         $oldKeyRaw = $this->option('old-key') ?: config('app.enrollment_embed_key');
         if (empty($oldKeyRaw)) {
-            $envPath = base_path('.env');
             if (File::exists($envPath)) {
                 preg_match('/^ENROLLMENT_EMBED_KEY=(.*)$/m', File::get($envPath), $matches);
                 $oldKeyRaw = trim($matches[1] ?? '');
@@ -60,13 +69,11 @@ class RotateEnrollmentKey extends Command
         }
 
         // Pre-flight check file writability
-        $envPath = base_path('.env');
-        if (!File::exists($envPath) || !is_writable($envPath)) {
+        if (File::exists($envPath) && !is_writable($envPath)) {
             $this->error("Cannot write to .env file at {$envPath}. Aborting.");
             return self::FAILURE;
         }
 
-        $edgeEnvPath = base_path('clients/edge-engine-rs/.env');
         if (File::exists($edgeEnvPath) && !is_writable($edgeEnvPath)) {
             $this->error("Cannot write to edge engine .env at {$edgeEnvPath}. Aborting.");
             return self::FAILURE;
@@ -245,5 +252,48 @@ class RotateEnrollmentKey extends Command
         }
 
         File::put($path, $content);
+    }
+
+    private function verifyTemplates(): int
+    {
+        $templates = FaceTemplate::withTrashed()->get();
+        $this->info("Verifying {$templates->count()} face templates against active key...");
+
+        $encryptionService = app(\App\Domain\Enrollment\Services\FaceEncryptionService::class);
+        $ok = 0;
+        $failed = 0;
+
+        foreach ($templates as $template) {
+            if (empty($template->embedding_enc)) {
+                continue;
+            }
+
+            try {
+                $raw = $encryptionService->decrypt(
+                    base64_decode($template->embedding_enc),
+                    (string) $template->student_id,
+                    (string) $template->model_version
+                );
+
+                if (strlen($raw) === 2048) {
+                    $this->line("  ✓ Template ID {$template->id} (student: {$template->student_id}) OK");
+                    $ok++;
+                } else {
+                    $this->error("  ✗ Template ID {$template->id} invalid raw length: " . strlen($raw));
+                    $failed++;
+                }
+            } catch (\Throwable $e) {
+                $this->error("  ✗ Template ID {$template->id} failed: " . $e->getMessage());
+                $failed++;
+            }
+        }
+
+        if ($failed === 0) {
+            $this->info("Verification PASSED: all {$ok} templates decrypted successfully.");
+            return self::SUCCESS;
+        }
+
+        $this->error("Verification FAILED: {$failed} templates could not be decrypted.");
+        return self::FAILURE;
     }
 }

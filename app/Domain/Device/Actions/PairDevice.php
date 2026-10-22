@@ -60,11 +60,16 @@ class PairDevice
                 ->performedOn($device)
                 ->log('Device paired successfully');
 
+            $embedKey = config('app.enrollment_embed_key');
+            if (empty($embedKey)) {
+                throw new \RuntimeException('ENROLLMENT_EMBED_KEY is not configured in app config.');
+            }
+
             return [
                 'device_id' => $device->device_code,
                 'token'     => $token->plainTextToken, // shown once
                 'building_id' => $device->building_id,
-                'embed_key' => config('app.enrollment_embed_key', ''),
+                'embed_key' => $embedKey,
                 'model_version' => config('app.model_version'),
             ];
         });

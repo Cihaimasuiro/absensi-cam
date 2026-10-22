@@ -7,11 +7,38 @@ use App\Domain\Enrollment\Services\FaceEncryptionService;
 use App\Domain\Student\Models\Student;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class RotateEnrollmentKeyTest extends TestCase
 {
     use RefreshDatabase;
+
+    private string $tempEnvPath;
+    private string $tempEdgeEnvPath;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tempEnvPath = tempnam(sys_get_temp_dir(), 'env_root_');
+        $this->tempEdgeEnvPath = tempnam(sys_get_temp_dir(), 'env_edge_');
+
+        File::put($this->tempEnvPath, "APP_NAME=Test\nENROLLMENT_EMBED_KEY=\n");
+        File::put($this->tempEdgeEnvPath, "SMART_ABSENSI_URL=http://localhost\nENROLLMENT_EMBED_KEY=\n");
+    }
+
+    protected function tearDown(): void
+    {
+        if (File::exists($this->tempEnvPath)) {
+            File::delete($this->tempEnvPath);
+        }
+        if (File::exists($this->tempEdgeEnvPath)) {
+            File::delete($this->tempEdgeEnvPath);
+        }
+
+        parent::tearDown();
+    }
 
     public function test_can_rotate_enrollment_key_and_reencrypt_face_templates(): void
     {
@@ -33,16 +60,24 @@ class RotateEnrollmentKeyTest extends TestCase
             'embedding_hash' => hash('sha256', $rawVector),
         ]);
 
-        // Run dry-run
+        // Run dry-run using isolated temporary env files
         $this->artisan('app:rotate-enrollment-key', [
-            '--new-key' => $newKeyRaw,
-            '--dry-run' => true,
+            '--new-key'       => $newKeyRaw,
+            '--env-path'      => $this->tempEnvPath,
+            '--edge-env-path' => $this->tempEdgeEnvPath,
+            '--dry-run'       => true,
         ])->assertSuccessful();
 
-        // Run actual rotation
+        // Run actual rotation using isolated temporary env files
         $this->artisan('app:rotate-enrollment-key', [
-            '--new-key' => $newKeyRaw,
+            '--new-key'       => $newKeyRaw,
+            '--env-path'      => $this->tempEnvPath,
+            '--edge-env-path' => $this->tempEdgeEnvPath,
         ])->assertSuccessful();
+
+        // Verify the temporary env file was updated with the new key
+        $this->assertStringContainsString("ENROLLMENT_EMBED_KEY={$newKeyRaw}", File::get($this->tempEnvPath));
+        $this->assertStringContainsString("ENROLLMENT_EMBED_KEY={$newKeyRaw}", File::get($this->tempEdgeEnvPath));
 
         // Now set the app config to the new key and verify decryption succeeds
         Config::set('app.enrollment_embed_key', $newKeyRaw);

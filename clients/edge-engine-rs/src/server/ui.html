@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="id">
+<html :lang="currentLang" lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Absensi - Gate Engine</title>
   <script>
-    (function() {
+    (function () {
       try {
         const saved = localStorage.getItem('theme_preference') || 'dark';
         const isDark = saved === 'system'
@@ -14,16 +15,19 @@
         if (!isDark) {
           document.documentElement.setAttribute('data-theme', 'light');
         }
-      } catch(e) {}
+      } catch (e) { }
     })();
   </script>
   <style>
     /* Reset & Base System Typography */
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      border-radius: 0px !important; /* ZERO border radius strict */
+      border-radius: 0px !important;
+      /* ZERO border radius strict */
     }
 
     :root {
@@ -107,8 +111,14 @@
       display: inline-block;
       background: var(--success);
     }
-    .status-dot.connecting { background: #f59e0b; }
-    .status-dot.offline { background: var(--danger); }
+
+    .status-dot.connecting {
+      background: #f59e0b;
+    }
+
+    .status-dot.offline {
+      background: var(--danger);
+    }
 
     .header-actions {
       display: flex;
@@ -133,10 +143,12 @@
       gap: 6px;
       transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     }
+
     .btn-square:hover {
       border-color: var(--text-faint);
       background: rgba(125, 125, 125, 0.08);
     }
+
     .btn-square:active {
       background: rgba(125, 125, 125, 0.16);
     }
@@ -146,6 +158,7 @@
       color: var(--accent-black);
       border: 1px solid var(--accent-white);
     }
+
     .btn-square-primary:hover {
       opacity: 0.88;
       background: var(--accent-white);
@@ -157,6 +170,7 @@
       border-color: rgba(239, 68, 68, 0.4);
       color: var(--danger);
     }
+
     .btn-square-danger:hover {
       border-color: var(--danger);
       background: rgba(239, 68, 68, 0.1);
@@ -280,12 +294,15 @@
       scrollbar-width: thin;
       scrollbar-color: #38383e var(--surface);
     }
+
     .modal-body::-webkit-scrollbar {
       width: 6px;
     }
+
     .modal-body::-webkit-scrollbar-track {
       background: var(--surface);
     }
+
     .modal-body::-webkit-scrollbar-thumb {
       background: #38383e;
     }
@@ -297,11 +314,13 @@
       gap: 14px;
       align-items: start;
     }
+
     .settings-col {
       display: flex;
       flex-direction: column;
       gap: 14px;
     }
+
     @media (max-width: 768px) {
       .settings-grid {
         grid-template-columns: 1fr;
@@ -373,12 +392,14 @@
       width: 100%;
       max-width: 210px;
     }
+
     input[type="text"]:focus,
     input[type="password"]:focus,
     input[type="number"]:focus,
     select:focus {
       border-color: var(--border-focus);
     }
+
     input[type="text"]::placeholder,
     input[type="password"]::placeholder,
     input[type="number"]::placeholder {
@@ -401,6 +422,14 @@
       padding: 5px 8px;
     }
 
+    input:disabled,
+    select:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background-color: var(--surface-elevated);
+      color: var(--text-muted);
+    }
+
     /* Square Checkbox */
     .checkbox-label {
       display: inline-flex;
@@ -411,6 +440,7 @@
       color: var(--text);
       user-select: none;
     }
+
     .checkbox-custom {
       width: 15px;
       height: 15px;
@@ -422,14 +452,17 @@
       flex-shrink: 0;
       transition: border-color 0.15s, background-color 0.15s;
     }
+
     input[type="checkbox"] {
       display: none;
     }
-    input[type="checkbox"]:checked + .checkbox-custom {
+
+    input[type="checkbox"]:checked+.checkbox-custom {
       background: var(--text);
       border-color: var(--text);
     }
-    input[type="checkbox"]:checked + .checkbox-custom::after {
+
+    input[type="checkbox"]:checked+.checkbox-custom::after {
       content: "";
       width: 3.5px;
       height: 7px;
@@ -446,6 +479,7 @@
       background: var(--surface-elevated);
       width: fit-content;
     }
+
     .segment-btn {
       padding: 5px 10px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -460,13 +494,16 @@
       border-right: 1px solid var(--border);
       transition: background 0.15s, color 0.15s;
     }
+
     .segment-btn:hover {
       color: var(--text);
       background: rgba(125, 125, 125, 0.08);
     }
+
     .segment-btn:last-child {
       border-right: none;
     }
+
     .segment-btn.active {
       background: var(--accent-white);
       color: var(--accent-black);
@@ -493,6 +530,7 @@
       flex-direction: column;
       gap: 8px;
     }
+
     .toast {
       padding: 10px 16px;
       background: var(--surface-elevated);
@@ -504,8 +542,14 @@
       align-items: center;
       gap: 8px;
     }
-    .toast.success { border-left: 3px solid var(--success); }
-    .toast.error { border-left: 3px solid var(--danger); }
+
+    .toast.success {
+      border-left: 3px solid var(--success);
+    }
+
+    .toast.error {
+      border-left: 3px solid var(--danger);
+    }
 
     [x-cloak] {
       display: none !important;
@@ -528,6 +572,295 @@
 
   <!-- Component Logic registered on alpine:init BEFORE Alpine.start -->
   <script>
+    const I18N = {
+      en: {
+        btn_logout: 'LOGOUT',
+        title_refresh_feed: 'Refresh Feed',
+        title_open_settings: 'Open Settings (Esc to close)',
+        title_logout: 'Log out from admin session',
+        feed_connecting: 'Connecting to camera feed...',
+        feed_setup_required: 'First-time setup required',
+        feed_auth_required: 'Authentication required to view stream',
+        overlay_device: 'DEVICE',
+        overlay_outbox: 'OUTBOX',
+        overlay_pending: 'PENDING',
+        modal_title_settings: 'Settings',
+        firmware_version_label: 'FIRMWARE VERSION',
+        net_staged_title: 'NETWORK STAGED:',
+        net_staged_confirm_in: 'Confirm in',
+        net_staged_tail: 's or settings will automatically revert.',
+        btn_confirm_now: 'CONFIRM NOW',
+        btn_revert_now: 'REVERT NOW',
+        sec_general: 'General',
+        label_language: 'Language',
+        help_language: 'Interface display language for the edge terminal and control panel.',
+        lang_auto: 'Auto (System)',
+        lang_id: 'Bahasa Indonesia',
+        lang_en: 'English (US)',
+        label_device_name: 'Device Name',
+        help_device_name: 'Descriptive label shown in local logs, pairing requests, and network identifier.',
+        sec_appearance: 'Appearance',
+        label_theme: 'Theme Mode',
+        help_theme: 'Preferences are saved locally in browser storage.',
+        theme_system: 'MATCH SYSTEM',
+        theme_dark: 'DARK',
+        theme_light: 'LIGHT',
+        sec_camera: 'Camera Hardware',
+        label_source: 'Source Device',
+        help_source: 'Active Linux V4L2 camera capture node (requires engine restart).',
+        default_v4l2: '/dev/video0 (Default V4L2)',
+        label_resolution: 'Capture Resolution',
+        help_resolution: 'Takes effect on restart. Detector uses letterbox scaling to maintain full-frame coverage.',
+        res_vga: '640 x 480 (Recommended 4:3)',
+        res_720p: '1280 x 720 (720p HD)',
+        res_1080p: '1920 x 1080 (1080p FHD)',
+        label_fps: 'FPS Cap',
+        help_fps: 'Throttles AI inference pacing when face tracking is active (requires engine restart).',
+        fps_10: '10 FPS (Low thermal profile)',
+        fps_15: '15 FPS (Standard optimal)',
+        fps_20: '20 FPS (High speed gate)',
+        fps_30: '30 FPS (Maximum)',
+        label_mirror: 'Mirror live preview',
+        help_mirror: 'Flips the preview feed horizontally for natural user alignment (hot toggle).',
+        sec_server: 'Central Server',
+        label_server_url: 'Laravel API URL',
+        help_server_url: 'Base URL of the central Laravel attendance server.',
+        label_status: 'Status',
+        status_paired: 'PAIRED & ACTIVE',
+        status_unpaired: 'UNPAIRED',
+        btn_test_conn: 'TEST CONNECTION',
+        btn_repair: 'RE-PAIR DEVICE',
+        sec_network: 'Network',
+        label_interface: 'Active Interface',
+        help_interface: 'Primary network connection interface.',
+        label_wifi_ssid: 'Wi-Fi SSID',
+        label_wifi_pwd: 'Wi-Fi Password',
+        label_mode: 'Addressing Mode',
+        mode_dhcp: 'DHCP (Automatic)',
+        mode_static: 'Static IP Configuration',
+        label_ip: 'IP Address',
+        label_subnet: 'Subnet Mask',
+        label_gateway: 'Gateway',
+        label_dns: 'DNS Server',
+        help_network_watchdog: 'Note: Applying network settings triggers a 60-second rollback watchdog.',
+        btn_apply_network: 'APPLY NETWORK SETTINGS',
+        sec_time: 'Time & Synchronization',
+        label_timezone: 'Timezone',
+        help_timezone: 'System timezone used for attendance timestamps and local display.',
+        label_ntp: 'Synchronize network clock via NTP',
+        label_rtc: 'Hardware RTC',
+        help_rtc: 'Synchronizes the onboard DS3231 I2C real-time clock chip.',
+        btn_sync_rtc: 'SYNC RTC',
+        sec_security: 'Security & Authentication',
+        label_current_pwd: 'Current Password',
+        label_new_pwd: 'New Password',
+        label_confirm_pwd: 'Confirm Password',
+        btn_update_pwd: 'UPDATE PASSWORD',
+        sec_system: 'System Operations',
+        btn_restart_engine: 'RESTART ENGINE',
+        btn_restart_sync: 'RESTART SYNC',
+        btn_backup_config: 'BACKUP CONFIG',
+        btn_restore_config: 'RESTORE CONFIG',
+        btn_download_logs: 'DOWNLOAD LOGS',
+        btn_check_update: 'CHECK UPDATE',
+        btn_reboot_device: 'REBOOT DEVICE',
+        btn_done: 'DONE',
+        login_dialog_title: 'Admin Authentication',
+        setup_notice: 'First-time setup: Enter the 6-digit verification code printed on device console or TFT screen.',
+        label_setup_code: 'Setup Code',
+        label_admin_pwd: 'New Admin Password',
+        btn_init_pwd: 'INITIALIZE PASSWORD',
+        label_password: 'Password',
+        btn_login: 'LOG IN',
+        toast_login_success: 'Login successful',
+        toast_login_fail: 'Login failed',
+        toast_conn_fail: 'Connection failed: ',
+        toast_settings_load_fail: 'Failed to load settings',
+        toast_settings_saved: 'Settings saved successfully',
+        toast_settings_restart: 'Settings saved. Restart engine for camera changes to take effect.',
+        toast_settings_save_fail: 'Failed to save settings',
+        toast_pwd_mismatch: 'New passwords do not match',
+        toast_pwd_min_len: 'Password must be at least 8 characters',
+        toast_pwd_success: 'Password updated successfully',
+        toast_pwd_fail: 'Password change failed',
+        toast_check_update: 'Checking for firmware updates...',
+        toast_testing_conn: 'Testing server connection...',
+        toast_conn_error: 'Connection test error: ',
+        toast_repair_fail: 'Repair failed: ',
+        toast_network_applied: 'Network applied. Countdown started.',
+        toast_network_fail: 'Network apply failed',
+        toast_confirm_fail: 'Confirm failed: ',
+        toast_revert_fail: 'Revert failed: ',
+        toast_restore_success: 'Configuration restored successfully',
+        toast_restore_fail: 'Restore failed',
+        toast_invalid_json: 'Invalid JSON file format',
+        toast_reboot_cancelled: 'Reboot cancelled (mismatch)',
+        toast_action_fail: 'Action failed: ',
+        toast_setup_success: 'Password initialized. Logging in...',
+        toast_setup_fail: 'Setup failed',
+        toast_setup_error: 'Setup error: ',
+        toast_logged_out: 'Logged out',
+        toast_settings_save_error: 'Error saving settings: ',
+        toast_network_error: 'Network apply error: ',
+        toast_confirm_success: 'Network configuration confirmed',
+        toast_revert_success: 'Network configuration reverted',
+        toast_conn_success: 'Connection test successful',
+        toast_repair_success: 'Device re-pairing initiated',
+        toast_update_none: 'Firmware is up to date',
+        toast_check_update_fail: 'Check update failed: ',
+        toast_pwd_error: 'Password error: ',
+        toast_action_success: 'Action completed',
+        confirm_apply_network: 'Apply network configuration? You will have 60 seconds to confirm the change.',
+        confirm_repair: 'Re-pairing will clear local pairing credentials. Are you sure?',
+        confirm_restart_engine: 'Restart Rust AI Vision engine?',
+        confirm_restart_sync: 'Restart Smart Absensi sync daemon?',
+        prompt_reboot: "Reboot entire gate device?\nType 'REBOOT' to confirm:"
+      },
+      id: {
+        btn_logout: 'KELUAR',
+        title_refresh_feed: 'Segarkan Pratinjau',
+        title_open_settings: 'Buka Pengaturan (Esc untuk menutup)',
+        title_logout: 'Keluar dari sesi admin',
+        feed_connecting: 'Menghubungkan ke umpan kamera...',
+        feed_setup_required: 'Diperlukan penyiapan awal',
+        feed_auth_required: 'Autentikasi diperlukan untuk melihat streaming',
+        overlay_device: 'PERANGKAT',
+        overlay_outbox: 'ANTREAN',
+        overlay_pending: 'TERTUNDA',
+        modal_title_settings: 'Pengaturan',
+        firmware_version_label: 'VERSI FIRMWARE',
+        net_staged_title: 'JARINGAN DITERAPKAN:',
+        net_staged_confirm_in: 'Konfirmasi dalam',
+        net_staged_tail: 'dtk atau pengaturan akan otomatis dikembalikan.',
+        btn_confirm_now: 'KONFIRMASI SEKARANG',
+        btn_revert_now: 'KEMBALIKAN SEKARANG',
+        sec_general: 'Umum',
+        label_language: 'Bahasa',
+        help_language: 'Bahasa tampilan antarmuka untuk terminal edge dan panel kontrol.',
+        lang_auto: 'Otomatis (Sistem)',
+        lang_id: 'Bahasa Indonesia',
+        lang_en: 'English (US)',
+        label_device_name: 'Nama Perangkat',
+        help_device_name: 'Label deskriptif di log lokal, permintaan pairing, dan pengenal jaringan.',
+        sec_appearance: 'Tampilan',
+        label_theme: 'Tema Tampilan',
+        help_theme: 'Preferensi tema disimpan di penyimpanan browser lokal.',
+        theme_system: 'SESUAI SISTEM',
+        theme_dark: 'GELAP',
+        theme_light: 'TERANG',
+        sec_camera: 'Perangkat Kamera',
+        label_source: 'Sumber Perangkat',
+        help_source: 'Node tangkapan kamera Linux V4L2 aktif (memerlukan restart engine).',
+        default_v4l2: '/dev/video0 (Default V4L2)',
+        label_resolution: 'Resolusi Tangkapan',
+        help_resolution: 'Berlaku setelah restart. Detektor menggunakan letterbox scaling agar mencakup seluruh frame.',
+        res_vga: '640 x 480 (Direkomendasikan 4:3)',
+        res_720p: '1280 x 720 (720p HD)',
+        res_1080p: '1920 x 1080 (1080p FHD)',
+        label_fps: 'Batas FPS AI',
+        help_fps: 'Membatasi kecepatan inferensi saat pelacakan wajah aktif (memerlukan restart engine).',
+        fps_10: '10 FPS (Profil termal rendah)',
+        fps_15: '15 FPS (Standar optimal)',
+        fps_20: '20 FPS (Gerbang kecepatan tinggi)',
+        fps_30: '30 FPS (Maksimum)',
+        label_mirror: 'Cerminkan pratinjau langsung',
+        help_mirror: 'Membalikkan pratinjau secara horizontal untuk penyesuaian posisi alami (langsung aktif).',
+        sec_server: 'Server Pusat',
+        label_server_url: 'URL API Laravel',
+        help_server_url: 'Alamat URL dasar tempat backend Smart Absensi terpasang.',
+        label_status: 'Status',
+        status_paired: 'TERHUBUNG & AKTIF',
+        status_unpaired: 'BELUM TERHUBUNG',
+        btn_test_conn: 'UJI KONEKSI',
+        btn_repair: 'HUBUNGKAN ULANG',
+        sec_network: 'Jaringan',
+        label_interface: 'Antarmuka Aktif',
+        help_interface: 'Antarmuka koneksi jaringan utama pada perangkat.',
+        label_wifi_ssid: 'Nama Wi-Fi (SSID)',
+        label_wifi_pwd: 'Kata Sandi Wi-Fi',
+        label_mode: 'Mode Pengalamatan',
+        mode_dhcp: 'DHCP (Otomatis)',
+        mode_static: 'Konfigurasi IP Statis',
+        label_ip: 'Alamat IP',
+        label_subnet: 'Subnet Mask',
+        label_gateway: 'Gateway Default',
+        label_dns: 'Server DNS',
+        help_network_watchdog: 'Catatan: Menerapkan pengaturan jaringan memicu watchdog rollback 60 detik.',
+        btn_apply_network: 'TERAPKAN PENGATURAN JARINGAN',
+        sec_time: 'Waktu & Sinkronisasi',
+        label_timezone: 'Zona Waktu',
+        help_timezone: 'Zona waktu sistem untuk timestamp absensi dan tampilan lokal.',
+        label_ntp: 'Sinkronisasikan jam jaringan via NTP',
+        label_rtc: 'RTC Perangkat Keras',
+        help_rtc: 'Menyinkronkan chip jam real-time DS3231 I2C pada papan terminal.',
+        btn_sync_rtc: 'SINKRON RTC',
+        sec_security: 'Keamanan & Autentikasi',
+        label_current_pwd: 'Kata Sandi Saat Ini',
+        label_new_pwd: 'Kata Sandi Baru',
+        label_confirm_pwd: 'Konfirmasi Kata Sandi',
+        btn_update_pwd: 'PERBARUI KATA SANDI',
+        sec_system: 'Operasi Sistem',
+        btn_restart_engine: 'RESTART ENGINE',
+        btn_restart_sync: 'RESTART SINKRONISASI',
+        btn_backup_config: 'CADANGKAN KONFIGURASI',
+        btn_restore_config: 'PULIHKAN KONFIGURASI',
+        btn_download_logs: 'UNDUH LOG',
+        btn_check_update: 'PERIKSA PEMBARUAN',
+        btn_reboot_device: 'REBOOT PERANGKAT',
+        btn_done: 'SELESAI',
+        login_dialog_title: 'Autentikasi Admin',
+        setup_notice: 'Penyiapan awal: Masukkan kode verifikasi 6 digit yang tertera di konsol atau layar TFT.',
+        label_setup_code: 'Kode Penyiapan',
+        label_admin_pwd: 'Kata Sandi Admin Baru',
+        btn_init_pwd: 'INISIALISASI KATA SANDI',
+        label_password: 'Kata Sandi',
+        btn_login: 'MASUK',
+        toast_login_success: 'Berhasil masuk',
+        toast_login_fail: 'Gagal masuk',
+        toast_conn_fail: 'Koneksi gagal: ',
+        toast_settings_load_fail: 'Gagal memuat pengaturan',
+        toast_settings_saved: 'Pengaturan berhasil disimpan',
+        toast_settings_restart: 'Pengaturan disimpan. Restart engine agar perubahan kamera diterapkan.',
+        toast_settings_save_fail: 'Gagal menyimpan pengaturan',
+        toast_pwd_mismatch: 'Kata sandi baru tidak cocok',
+        toast_pwd_min_len: 'Kata sandi minimal 8 karakter',
+        toast_pwd_success: 'Kata sandi berhasil diperbarui',
+        toast_pwd_fail: 'Gagal memperbarui kata sandi',
+        toast_check_update: 'Memeriksa pembaruan firmware...',
+        toast_testing_conn: 'Menguji koneksi server...',
+        toast_conn_error: 'Kesalahan uji koneksi: ',
+        toast_repair_fail: 'Gagal menghubungkan ulang: ',
+        toast_network_applied: 'Pengaturan jaringan diterapkan. Hitung mundur dimulai.',
+        toast_network_fail: 'Gagal menerapkan jaringan',
+        toast_confirm_fail: 'Konfirmasi gagal: ',
+        toast_revert_fail: 'Pengembalian gagal: ',
+        toast_restore_success: 'Konfigurasi berhasil dipulihkan',
+        toast_restore_fail: 'Gagal memulihkan',
+        toast_invalid_json: 'Format file JSON tidak valid',
+        toast_reboot_cancelled: 'Reboot dibatalkan (kode tidak cocok)',
+        toast_action_fail: 'Tindakan gagal: ',
+        toast_setup_success: 'Kata sandi diinisialisasi. Sedang masuk...',
+        toast_setup_fail: 'Penyiapan awal gagal',
+        toast_setup_error: 'Kesalahan penyiapan: ',
+        toast_logged_out: 'Berhasil keluar',
+        toast_settings_save_error: 'Kesalahan menyimpan pengaturan: ',
+        toast_network_error: 'Kesalahan menerapkan jaringan: ',
+        toast_confirm_success: 'Konfigurasi jaringan dikonfirmasi',
+        toast_revert_success: 'Konfigurasi jaringan dikembalikan',
+        toast_conn_success: 'Uji koneksi berhasil',
+        toast_repair_success: 'Pemasangan ulang perangkat dimulai',
+        toast_update_none: 'Firmware sudah versi terbaru',
+        toast_check_update_fail: 'Gagal memeriksa pembaruan: ',
+        toast_pwd_error: 'Kesalahan kata sandi: ',
+        toast_action_success: 'Tindakan selesai',
+        confirm_apply_network: 'Terapkan konfigurasi jaringan? Anda memiliki waktu 60 detik untuk konfirmasi.',
+        confirm_repair: 'Menghubungkan ulang akan menghapus kredensial pairing lokal. Lanjutkan?',
+        confirm_restart_engine: 'Restart engine AI Vision Rust?',
+        confirm_restart_sync: 'Restart daemon sinkronisasi Smart Absensi?',
+        prompt_reboot: "Reboot seluruh perangkat gerbang?\nKetik 'REBOOT' untuk konfirmasi:"
+      }
+    };
+
     document.addEventListener('alpine:init', () => {
       Alpine.data('edgePanel', () => ({
         showSettings: false,
@@ -539,6 +872,30 @@
         streamConnected: false,
         feedUrl: '',
         theme: localStorage.getItem('theme_preference') || 'dark',
+        savedLang: localStorage.getItem('edge_language') || 'auto',
+
+        get currentLang() {
+          const chosen = (this.settings && this.settings.general && this.settings.general.language) || this.savedLang || 'auto';
+          if (chosen === 'auto') {
+            const nav = (navigator.language || navigator.userLanguage || '').toLowerCase();
+            return nav.startsWith('id') ? 'id' : 'en';
+          }
+          return chosen === 'id' ? 'id' : 'en';
+        },
+
+        t(key) {
+          const lang = this.currentLang;
+          return (I18N[lang] && I18N[lang][key]) || (I18N.en && I18N.en[key]) || key;
+        },
+
+        setLanguage(val) {
+          if (!this.settings.general) this.settings.general = {};
+          this.settings.general.language = val;
+          this.savedLang = val;
+          localStorage.setItem('edge_language', val);
+          document.documentElement.setAttribute('lang', this.currentLang);
+        },
+
 
         availableCameras: [],
         networkRollback: { active: false, remaining: 0, timer: null },
@@ -563,6 +920,7 @@
         toasts: [],
 
         init() {
+          document.documentElement.setAttribute('lang', this.currentLang);
           this.applyTheme(this.theme);
           if (window.matchMedia) {
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -687,14 +1045,14 @@
               this.isAuthenticated = true;
               this.showLogin = false;
               this.loginPassword = '';
-              this.showToast('Login successful');
+              this.showToast(this.t('toast_login_success'));
               await this.fetchInfo();
               this.refreshFeed();
             } else {
-              this.showToast(data.message || 'Login failed', 'error');
+              this.showToast(data.message || this.t('toast_login_fail'), 'error');
             }
           } catch (e) {
-            this.showToast('Connection failed: ' + e, 'error');
+            this.showToast(this.t('toast_conn_fail') + e, 'error');
           }
         },
 
@@ -708,13 +1066,13 @@
             const data = await res.json();
             if (res.ok && data.success) {
               this.needsSetup = false;
-              this.showToast('Password initialized. Logging in...');
+              this.showToast(this.t('toast_setup_success'));
               await this.submitLogin();
             } else {
-              this.showToast(data.message || 'Setup failed', 'error');
+              this.showToast(data.message || this.t('toast_setup_fail'), 'error');
             }
           } catch (e) {
-            this.showToast('Setup error: ' + e, 'error');
+            this.showToast(this.t('toast_setup_error') + e, 'error');
           }
         },
 
@@ -722,7 +1080,7 @@
           try {
             await fetch('/api/control/logout', { method: 'POST' });
             this.isAuthenticated = false;
-            this.showToast('Logged out');
+            this.showToast(this.t('toast_logged_out'));
             location.reload();
           } catch (e) {
             console.warn(e);
@@ -747,9 +1105,14 @@
             if (res.ok) {
               const data = await res.json();
               this.settings = Object.assign(this.settings, data);
+              if (this.settings.general && this.settings.general.language) {
+                this.savedLang = this.settings.general.language;
+                localStorage.setItem('edge_language', this.settings.general.language);
+                document.documentElement.setAttribute('lang', this.currentLang);
+              }
             }
           } catch (e) {
-            this.showToast('Failed to load settings', 'error');
+            this.showToast(this.t('toast_settings_load_fail'), 'error');
           }
         },
 
@@ -762,12 +1125,20 @@
             });
             const data = await res.json();
             if (res.ok) {
-              this.showToast('Settings saved successfully');
+              const needsRestart = this.info && (
+                (this.settings.camera.resolution && this.settings.camera.resolution !== this.info.camera_resolution) ||
+                (this.settings.camera.source && this.settings.camera.source !== this.info.camera_device)
+              );
+              if (needsRestart) {
+                this.showToast(this.t('toast_settings_restart'), 'info');
+              } else {
+                this.showToast(this.t('toast_settings_saved'));
+              }
             } else {
-              this.showToast(data.error || 'Failed to save settings', 'error');
+              this.showToast(data.error || this.t('toast_settings_save_fail'), 'error');
             }
           } catch (e) {
-            this.showToast('Error saving settings: ' + e, 'error');
+            this.showToast(this.t('toast_settings_save_error') + e, 'error');
           }
         },
 
@@ -783,7 +1154,7 @@
         },
 
         async applyNetwork() {
-          if (!confirm('Apply network configuration? You will have 60 seconds to confirm the change.')) return;
+          if (!confirm(this.t('confirm_apply_network'))) return;
           try {
             const res = await fetch('/api/control/network/apply', {
               method: 'POST',
@@ -792,13 +1163,13 @@
             });
             const d = await res.json();
             if (res.ok) {
-              this.showToast('Network applied. Countdown started.');
+              this.showToast(this.t('toast_network_applied'));
               this.checkRollbackStatus();
             } else {
-              this.showToast(d.message || d.error || 'Network apply failed', 'error');
+              this.showToast(d.message || d.error || this.t('toast_network_fail'), 'error');
             }
           } catch (e) {
-            this.showToast('Network apply error: ' + e, 'error');
+            this.showToast(this.t('toast_network_error') + e, 'error');
           }
         },
 
@@ -806,11 +1177,11 @@
           try {
             const res = await fetch('/api/control/network/confirm', { method: 'POST' });
             const d = await res.json();
-            this.showToast(d.message);
+            this.showToast(d.message || this.t('toast_confirm_success'));
             this.networkRollback.active = false;
             clearInterval(this.networkRollback.timer);
           } catch (e) {
-            this.showToast('Confirm failed: ' + e, 'error');
+            this.showToast(this.t('toast_confirm_fail') + e, 'error');
           }
         },
 
@@ -818,12 +1189,12 @@
           try {
             const res = await fetch('/api/control/network/cancel', { method: 'POST' });
             const d = await res.json();
-            this.showToast(d.message);
+            this.showToast(d.message || this.t('toast_revert_success'));
             this.networkRollback.active = false;
             clearInterval(this.networkRollback.timer);
             this.fetchSettings();
           } catch (e) {
-            this.showToast('Revert failed: ' + e, 'error');
+            this.showToast(this.t('toast_revert_fail') + e, 'error');
           }
         },
 
@@ -857,38 +1228,38 @@
 
         async testServerConnection() {
           try {
-            this.showToast('Testing server connection...', 'info');
+            this.showToast(this.t('toast_testing_conn'), 'info');
             const res = await fetch('/api/control/server/test', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ url: this.settings.server.url })
             });
             const d = await res.json();
-            this.showToast(d.message, d.success ? 'success' : 'error');
+            this.showToast(d.message || (d.success ? this.t('toast_conn_success') : this.t('toast_conn_fail')), d.success ? 'success' : 'error');
           } catch (e) {
-            this.showToast('Connection test error: ' + e, 'error');
+            this.showToast(this.t('toast_conn_error') + e, 'error');
           }
         },
 
         async confirmRepair() {
-          if (!confirm('Re-pairing will clear local pairing credentials. Are you sure?')) return;
+          if (!confirm(this.t('confirm_repair'))) return;
           try {
             const res = await fetch('/api/control/server/repair', { method: 'POST' });
             const d = await res.json();
-            this.showToast(d.message);
+            this.showToast(d.message || this.t('toast_repair_success'));
             this.fetchInfo();
           } catch (e) {
-            this.showToast('Repair failed: ' + e, 'error');
+            this.showToast(this.t('toast_repair_fail') + e, 'error');
           }
         },
 
         async restartEngine() {
-          if (!confirm('Restart Rust AI Vision engine?')) return;
+          if (!confirm(this.t('confirm_restart_engine'))) return;
           await this.triggerAction('restart_engine');
         },
 
         async restartSync() {
-          if (!confirm('Restart Smart Absensi sync daemon?')) return;
+          if (!confirm(this.t('confirm_restart_sync'))) return;
           await this.triggerAction('restart_sync');
         },
 
@@ -902,22 +1273,22 @@
 
         async checkUpdate() {
           try {
-            this.showToast('Checking for firmware updates...', 'info');
+            this.showToast(this.t('toast_check_update'), 'info');
             const res = await fetch('/api/control/system/check-update', { method: 'POST' });
             const d = await res.json();
-            this.showToast(d.message);
+            this.showToast(d.message || this.t('toast_update_none'));
           } catch (e) {
-            this.showToast('Check update failed: ' + e, 'error');
+            this.showToast(this.t('toast_check_update_fail') + e, 'error');
           }
         },
 
         async changePassword() {
           if (this.pwdForm.new_pwd !== this.pwdForm.confirm_pwd) {
-            this.showToast('New passwords do not match', 'error');
+            this.showToast(this.t('toast_pwd_mismatch'), 'error');
             return;
           }
           if (this.pwdForm.new_pwd.length < 8) {
-            this.showToast('Password must be at least 8 characters', 'error');
+            this.showToast(this.t('toast_pwd_min_len'), 'error');
             return;
           }
           try {
@@ -928,13 +1299,13 @@
             });
             const d = await res.json();
             if (res.ok && d.success) {
-              this.showToast('Password updated successfully');
+              this.showToast(this.t('toast_pwd_success'));
               this.pwdForm = { current: '', new_pwd: '', confirm_pwd: '' };
             } else {
-              this.showToast(d.message || 'Password change failed', 'error');
+              this.showToast(d.message || this.t('toast_pwd_fail'), 'error');
             }
           } catch (e) {
-            this.showToast('Password error: ' + e, 'error');
+            this.showToast(this.t('toast_pwd_error') + e, 'error');
           }
         },
 
@@ -952,13 +1323,13 @@
               });
               const d = await res.json();
               if (res.ok && d.success) {
-                this.showToast('Configuration restored successfully');
+                this.showToast(this.t('toast_restore_success'));
                 this.fetchSettings();
               } else {
-                this.showToast(d.message || 'Restore failed', 'error');
+                this.showToast(d.message || this.t('toast_restore_fail'), 'error');
               }
             } catch (err) {
-              this.showToast('Invalid JSON file format', 'error');
+              this.showToast(this.t('toast_invalid_json'), 'error');
             }
             event.target.value = '';
           };
@@ -966,9 +1337,9 @@
         },
 
         async confirmReboot() {
-          const code = prompt("Reboot entire gate device?\nType 'REBOOT' to confirm:");
+          const code = prompt(this.t('prompt_reboot'));
           if (code !== 'REBOOT') {
-            if (code !== null) this.showToast('Reboot cancelled (mismatch)', 'error');
+            if (code !== null) this.showToast(this.t('toast_reboot_cancelled'), 'error');
             return;
           }
           await this.triggerAction('reboot', 'REBOOT');
@@ -982,9 +1353,9 @@
               body: JSON.stringify({ action, confirm_code })
             });
             const d = await res.json();
-            this.showToast(d.message);
+            this.showToast(d.message || this.t('toast_action_success'));
           } catch (e) {
-            this.showToast('Action failed: ' + e, 'error');
+            this.showToast(this.t('toast_action_fail') + e, 'error');
           }
         }
       }));
@@ -996,6 +1367,7 @@
     __ALPINE_VENDORED_BUNDLE__
   </script>
 </head>
+
 <body x-data="edgePanel" @keydown.escape.window="closeSettings()">
 
   <!-- 1. Top Command Header -->
@@ -1008,26 +1380,28 @@
 
     <div class="header-actions">
       <!-- Telemetry Quick Indicator -->
-      <span class="font-mono text-[11px]" style="color: var(--text-muted); margin-right: 8px;" x-text="info.cpu_temp_c ? info.cpu_temp_c + '°C' : ''"></span>
-      
+      <span class="font-mono text-[11px]" style="color: var(--text-muted); margin-right: 8px;"
+        x-text="info.cpu_temp_c ? info.cpu_temp_c + '°C' : ''"></span>
+
       <!-- Refresh Snapshot / Status -->
-      <button class="btn-square btn-icon" @click="refreshFeed()" title="Refresh Feed">
+      <button class="btn-square btn-icon" @click="refreshFeed()" :title="t('title_refresh_feed')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
         </svg>
       </button>
 
       <!-- Settings Modal Toggle Button (Gear Icon) -->
-      <button class="btn-square btn-icon" @click="openSettings()" title="Open Settings (Esc to close)">
+      <button class="btn-square btn-icon" @click="openSettings()" :title="t('title_open_settings')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
       </button>
 
       <!-- Authenticated / Logout Button -->
       <template x-if="isAuthenticated">
-        <button class="btn-square" @click="logout()" title="Log out from admin session">
+        <button class="btn-square" @click="logout()" :title="t('title_logout')" x-text="t('btn_logout')">
           LOGOUT
         </button>
       </template>
@@ -1038,22 +1412,24 @@
   <main>
     <div class="video-card">
       <div class="video-viewport">
-        <img :src="feedUrl" alt="Live Gate Preview" x-show="feedUrl && streamConnected" @error="handleStreamError()" @load="streamConnected = true" />
+        <img :src="feedUrl" alt="Live Gate Preview" x-show="feedUrl && streamConnected" @error="handleStreamError()"
+          @load="streamConnected = true" />
         <div class="feed-placeholder font-mono" x-show="!feedUrl || !streamConnected" x-cloak>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
           </svg>
-          <span x-text="isAuthenticated ? 'Connecting to camera feed...' : (needsSetup ? 'First-time setup required' : 'Authentication required to view stream')"></span>
+          <span
+            x-text="isAuthenticated ? t('feed_connecting') : (needsSetup ? t('feed_setup_required') : t('feed_auth_required'))"></span>
         </div>
       </div>
       <div class="video-overlay-bar font-mono">
         <div>
-          DEVICE: <span style="color: var(--text);" x-text="info.device_code || 'STANDALONE'"></span> |
+          <span x-text="t('overlay_device') + ': '">DEVICE: </span><span style="color: var(--text);" x-text="info.device_code || 'STANDALONE'"></span> |
           FPS: <span style="color: var(--text);" x-text="settings.camera.fps_cap || 15"></span>
         </div>
         <div>
-          OUTBOX: <span style="color: var(--text);" x-text="info.outbox_count || 0"></span> PENDING
+          <span x-text="t('overlay_outbox') + ': '">OUTBOX: </span><span style="color: var(--text);" x-text="info.outbox_count || 0"></span> <span x-text="t('overlay_pending')">PENDING</span>
         </div>
       </div>
     </div>
@@ -1062,27 +1438,30 @@
   <!-- 3. Settings Modal Dialog (Visual Reference Spec) -->
   <div class="modal-backdrop" x-show="showSettings" x-cloak @click.self="closeSettings()">
     <div class="modal-dialog">
-      
+
       <!-- Fixed Header -->
       <div class="modal-header">
-        <svg width="26" height="26" viewBox="0 0 28 28" fill="none" style="flex-shrink: 0;">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M14 2.5L25.5 25.5H19.5L16 18H12L8.5 25.5H2.5L14 2.5zm0 6L17.5 15.5H10.5L14 8.5z" fill="#2563eb"/>
-        </svg>
         <div class="modal-header-text">
-          <div class="modal-title">Settings</div>
-          <div class="modal-subtitle font-mono" x-text="(info.device_code || 'SMART-ABSENSI') + ' FIRMWARE VERSION: V' + (info.firmware_version || '0.1.0')"></div>
+          <div class="modal-title" x-text="t('modal_title_settings')">Settings</div>
+          <div class="modal-subtitle font-mono"
+            x-text="(info.device_code || 'SMART-ABSENSI') + ' ' + t('firmware_version_label') + ': V' + (info.firmware_version || '0.1.0')">
+          </div>
         </div>
       </div>
 
       <!-- Network Rollback Floating Alert Banner -->
       <template x-if="networkRollback.active">
-        <div style="background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid #f59e0b; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+        <div
+          style="background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid #f59e0b; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
           <div style="color: var(--warning-text, #f59e0b);">
-            <strong>NETWORK STAGED:</strong> Confirm in <span class="font-mono font-bold" x-text="networkRollback.remaining"></span>s or settings will automatically revert.
+            <strong x-text="t('net_staged_title')">NETWORK STAGED:</strong> <span x-text="t('net_staged_confirm_in')">Confirm in</span> <span class="font-mono font-bold"
+              x-text="networkRollback.remaining"></span><span x-text="t('net_staged_tail')">s or settings will automatically revert.</span>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button class="btn-square btn-square-primary" style="padding: 4px 10px; font-size: 10px;" @click="confirmNetwork()">CONFIRM NOW</button>
-            <button class="btn-square btn-square-danger" style="padding: 4px 10px; font-size: 10px;" @click="cancelNetwork()">REVERT NOW</button>
+            <button class="btn-square btn-square-primary" style="padding: 4px 10px; font-size: 10px;"
+              @click="confirmNetwork()" x-text="t('btn_confirm_now')">CONFIRM NOW</button>
+            <button class="btn-square btn-square-danger" style="padding: 4px 10px; font-size: 10px;"
+              @click="cancelNetwork()" x-text="t('btn_revert_now')">REVERT NOW</button>
           </div>
         </div>
       </template>
@@ -1090,94 +1469,97 @@
       <!-- Independently Scrollable Body -->
       <div class="modal-body">
         <div class="settings-grid">
-          
+
           <!-- Column 1 (Left) -->
           <div class="settings-col">
 
             <!-- 1. GENERAL -->
             <div class="settings-section">
-              <span class="section-label">General</span>
-              
+              <span class="section-label" x-text="t('sec_general')">General</span>
+
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Language</label>
-                  <select x-model="settings.general.language">
-                    <option value="auto">Auto (System)</option>
-                    <option value="id">Bahasa Indonesia</option>
-                    <option value="en">English (US)</option>
+                  <label class="row-label" x-text="t('label_language')">Language</label>
+                  <select x-model="settings.general.language" @change="setLanguage($event.target.value)">
+                    <option value="auto" x-text="t('lang_auto')">Auto (System)</option>
+                    <option value="id" x-text="t('lang_id')">Bahasa Indonesia</option>
+                    <option value="en" x-text="t('lang_en')">English (US)</option>
                   </select>
                 </div>
-                <div class="row-help">Interface display language for the edge terminal and control panel.</div>
+                <div class="row-help" x-text="t('help_language')">Interface display language for the edge terminal and control panel.</div>
               </div>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Device Name</label>
+                  <label class="row-label" x-text="t('label_device_name')">Device Name</label>
                   <input type="text" x-model="settings.general.device_name" placeholder="Gate Terminal 01" />
                 </div>
-                <div class="row-help">Descriptive label shown in local logs, pairing requests, and network identifier.</div>
+                <div class="row-help" x-text="t('help_device_name')">Local display label in header and logs (does not alter network hostname or sync ID).</div>
               </div>
             </div>
 
             <!-- 2. APPEARANCE -->
             <div class="settings-section">
-              <span class="section-label">Appearance</span>
+              <span class="section-label" x-text="t('sec_appearance')">Appearance</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <span class="row-label">Theme Mode</span>
+                  <span class="row-label" x-text="t('label_theme')">Theme Mode</span>
                   <div class="segmented-control">
-                    <button type="button" class="segment-btn" :class="theme === 'system' ? 'active' : ''" @click="setTheme('system')">MATCH SYSTEM</button>
-                    <button type="button" class="segment-btn" :class="theme === 'dark' ? 'active' : ''" @click="setTheme('dark')">DARK</button>
-                    <button type="button" class="segment-btn" :class="theme === 'light' ? 'active' : ''" @click="setTheme('light')">LIGHT</button>
+                    <button type="button" class="segment-btn" :class="theme === 'system' ? 'active' : ''"
+                      @click="setTheme('system')" x-text="t('theme_system')">MATCH SYSTEM</button>
+                    <button type="button" class="segment-btn" :class="theme === 'dark' ? 'active' : ''"
+                      @click="setTheme('dark')" x-text="t('theme_dark')">DARK</button>
+                    <button type="button" class="segment-btn" :class="theme === 'light' ? 'active' : ''"
+                      @click="setTheme('light')" x-text="t('theme_light')">LIGHT</button>
                   </div>
                 </div>
-                <div class="row-help">Preferences are saved locally in browser storage.</div>
+                <div class="row-help" x-text="t('help_theme')">Preferences are saved locally in browser storage.</div>
               </div>
             </div>
 
             <!-- 3. CAMERA -->
             <div class="settings-section">
-              <span class="section-label">Camera</span>
+              <span class="section-label" x-text="t('sec_camera')">Camera</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Source Device</label>
+                  <label class="row-label" x-text="t('label_source')">Source Device</label>
                   <select x-model="settings.camera.source">
                     <template x-for="dev in availableCameras" :key="dev">
                       <option :value="dev" x-text="dev"></option>
                     </template>
                     <template x-if="availableCameras.length === 0">
-                      <option value="/dev/video0">/dev/video0 (Default V4L2)</option>
+                      <option value="/dev/video0" x-text="t('default_v4l2')">/dev/video0 (Default V4L2)</option>
                     </template>
                   </select>
                 </div>
-                <div class="row-help">Active Linux V4L2 camera capture node.</div>
+                <div class="row-help" x-text="t('help_source')">Active Linux V4L2 camera capture node (requires engine restart).</div>
               </div>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Capture Resolution</label>
+                  <label class="row-label" x-text="t('label_resolution')">Capture Resolution</label>
                   <select x-model="settings.camera.resolution">
-                    <option value="640x480">640 x 480 (Recommended 4:3)</option>
-                    <option value="1280x720">1280 x 720 (720p HD)</option>
-                    <option value="1920x1080">1920 x 1080 (1080p FHD)</option>
+                    <option value="640x480" x-text="t('res_vga')">640 x 480 (Recommended 4:3)</option>
+                    <option value="1280x720" x-text="t('res_720p')">1280 x 720 (720p HD)</option>
+                    <option value="1920x1080" x-text="t('res_1080p')">1920 x 1080 (1080p FHD)</option>
                   </select>
                 </div>
-                <div class="row-help">Higher resolutions increase NPU/CPU processing latency per frame.</div>
+                <div class="row-help" x-text="t('help_resolution')">Takes effect on restart. Detector uses letterbox scaling to maintain full-frame coverage.</div>
               </div>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">FPS Cap</label>
+                  <label class="row-label" x-text="t('label_fps')">FPS Cap</label>
                   <select x-model.number="settings.camera.fps_cap">
-                    <option value="10">10 FPS (Low thermal profile)</option>
-                    <option value="15">15 FPS (Standard optimal)</option>
-                    <option value="20">20 FPS (High speed gate)</option>
-                    <option value="30">30 FPS (Maximum)</option>
+                    <option value="10" x-text="t('fps_10')">10 FPS (Low thermal profile)</option>
+                    <option value="15" x-text="t('fps_15')">15 FPS (Standard optimal)</option>
+                    <option value="20" x-text="t('fps_20')">20 FPS (High speed gate)</option>
+                    <option value="30" x-text="t('fps_30')">30 FPS (Maximum)</option>
                   </select>
                 </div>
-                <div class="row-help">Throttles frame inference rate to prevent SoC thermal throttling.</div>
+                <div class="row-help" x-text="t('help_fps')">Throttles AI inference pacing when face tracking is active (requires engine restart).</div>
               </div>
 
               <div class="setting-row">
@@ -1185,35 +1567,37 @@
                   <label class="checkbox-label">
                     <input type="checkbox" x-model="settings.camera.mirror_preview" />
                     <span class="checkbox-custom"></span>
-                    <span>Mirror live preview</span>
+                    <span x-text="t('label_mirror')">Mirror live preview</span>
                   </label>
                 </div>
-                <div class="row-help">Flips the preview feed horizontally for natural user alignment.</div>
+                <div class="row-help" x-text="t('help_mirror')">Flips the preview feed horizontally for natural user alignment (hot toggle).</div>
               </div>
             </div>
 
             <!-- 4. CENTRAL SERVER -->
             <div class="settings-section">
-              <span class="section-label">Central Server</span>
+              <span class="section-label" x-text="t('sec_server')">Central Server</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Laravel API URL</label>
+                  <label class="row-label" x-text="t('label_server_url')">Laravel API URL</label>
                   <input type="text" x-model="settings.server.url" placeholder="http://192.168.10.66:8000" />
                 </div>
-                <div class="row-help">Base URL of the central Laravel attendance server.</div>
+                <div class="row-help" x-text="t('help_server_url')">Base URL of the central Laravel attendance server.</div>
               </div>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <span class="row-label">Status</span>
-                  <span class="font-mono text-[11px]" :style="{ color: info.is_paired ? 'var(--success)' : 'var(--danger)' }" x-text="info.is_paired ? 'PAIRED & ACTIVE' : 'UNPAIRED'"></span>
+                  <span class="row-label" x-text="t('label_status')">Status</span>
+                  <span class="font-mono text-[11px]"
+                    :style="{ color: info.is_paired ? 'var(--success)' : 'var(--danger)' }"
+                    x-text="info.is_paired ? t('status_paired') : t('status_unpaired')"></span>
                 </div>
               </div>
 
               <div style="display: flex; gap: 8px; margin-top: 4px;">
-                <button type="button" class="btn-square" @click="testServerConnection()">TEST CONNECTION</button>
-                <button type="button" class="btn-square btn-square-danger" @click="confirmRepair()">RE-PAIR DEVICE</button>
+                <button type="button" class="btn-square" @click="testServerConnection()" x-text="t('btn_test_conn')">TEST CONNECTION</button>
+                <button type="button" class="btn-square btn-square-danger" @click="confirmRepair()" x-text="t('btn_repair')">RE-PAIR DEVICE</button>
               </div>
             </div>
 
@@ -1224,30 +1608,30 @@
 
             <!-- 5. NETWORK -->
             <div class="settings-section">
-              <span class="section-label">Network</span>
+              <span class="section-label" x-text="t('sec_network')">Network</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Active Interface</label>
+                  <label class="row-label" x-text="t('label_interface')">Active Interface</label>
                   <select x-model="settings.network.interface">
                     <option value="eth0">Ethernet (eth0)</option>
                     <option value="wlan0">Wi-Fi (wlan0)</option>
                   </select>
                 </div>
-                <div class="row-help">Primary network connection interface.</div>
+                <div class="row-help" x-text="t('help_interface')">Primary network connection interface.</div>
               </div>
 
               <template x-if="settings.network.interface === 'wlan0'">
                 <div>
                   <div class="setting-row">
                     <div class="row-main">
-                      <label class="row-label">Wi-Fi SSID</label>
+                      <label class="row-label" x-text="t('label_wifi_ssid')">Wi-Fi SSID</label>
                       <input type="text" x-model="settings.network.wifi_ssid" placeholder="Office-WiFi" />
                     </div>
                   </div>
                   <div class="setting-row" style="margin-top: 6px;">
                     <div class="row-main">
-                      <label class="row-label">Wi-Fi Password</label>
+                      <label class="row-label" x-text="t('label_wifi_pwd')">Wi-Fi Password</label>
                       <input type="password" x-model="settings.network.wifi_password" placeholder="••••••••" />
                     </div>
                   </div>
@@ -1256,10 +1640,10 @@
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Addressing Mode</label>
+                  <label class="row-label" x-text="t('label_mode')">Addressing Mode</label>
                   <select x-model="settings.network.mode">
-                    <option value="dhcp">DHCP (Automatic)</option>
-                    <option value="static">Static IP Configuration</option>
+                    <option value="dhcp" x-text="t('mode_dhcp')">DHCP (Automatic)</option>
+                    <option value="static" x-text="t('mode_static')">Static IP Configuration</option>
                   </select>
                 </div>
               </div>
@@ -1268,44 +1652,45 @@
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                   <div class="setting-row">
                     <div class="row-main">
-                      <label class="row-label">IP Address</label>
+                      <label class="row-label" x-text="t('label_ip')">IP Address</label>
                       <input type="text" x-model="settings.network.static_ip" placeholder="192.168.1.100" />
                     </div>
                   </div>
                   <div class="setting-row">
                     <div class="row-main">
-                      <label class="row-label">Subnet Mask</label>
+                      <label class="row-label" x-text="t('label_subnet')">Subnet Mask</label>
                       <input type="text" x-model="settings.network.subnet" placeholder="255.255.255.0" />
                     </div>
                   </div>
                   <div class="setting-row">
                     <div class="row-main">
-                      <label class="row-label">Gateway</label>
+                      <label class="row-label" x-text="t('label_gateway')">Gateway</label>
                       <input type="text" x-model="settings.network.gateway" placeholder="192.168.1.1" />
                     </div>
                   </div>
                   <div class="setting-row">
                     <div class="row-main">
-                      <label class="row-label">DNS Server</label>
+                      <label class="row-label" x-text="t('label_dns')">DNS Server</label>
                       <input type="text" x-model="settings.network.dns" placeholder="1.1.1.1" />
                     </div>
                   </div>
                 </div>
               </template>
 
-              <div class="row-help" style="margin-top: 4px; color: var(--warning-text, #f59e0b);">
+              <div class="row-help" style="margin-top: 4px; color: var(--warning-text, #f59e0b);" x-text="t('help_network_watchdog')">
                 Note: Applying network settings triggers a 60-second rollback watchdog.
               </div>
-              <button type="button" class="btn-square btn-square-primary" style="margin-top: 6px;" @click="applyNetwork()">APPLY NETWORK SETTINGS</button>
+              <button type="button" class="btn-square btn-square-primary" style="margin-top: 6px;"
+                @click="applyNetwork()" x-text="t('btn_apply_network')">APPLY NETWORK SETTINGS</button>
             </div>
 
             <!-- 6. TIME & SYNCHRONIZATION -->
             <div class="settings-section">
-              <span class="section-label">Time & Synchronization</span>
+              <span class="section-label" x-text="t('sec_time')">Time & Synchronization</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Timezone</label>
+                  <label class="row-label" x-text="t('label_timezone')">Timezone</label>
                   <select x-model="settings.time.timezone">
                     <option value="Asia/Jakarta">Asia/Jakarta (WIB, UTC+7)</option>
                     <option value="Asia/Makassar">Asia/Makassar (WITA, UTC+8)</option>
@@ -1313,7 +1698,7 @@
                     <option value="UTC">UTC (Universal Time)</option>
                   </select>
                 </div>
-                <div class="row-help">System timezone used for attendance timestamps and local display.</div>
+                <div class="row-help" x-text="t('help_timezone')">System timezone used for attendance timestamps and local display.</div>
               </div>
 
               <div class="setting-row">
@@ -1321,59 +1706,61 @@
                   <label class="checkbox-label">
                     <input type="checkbox" x-model="settings.time.ntp_enabled" />
                     <span class="checkbox-custom"></span>
-                    <span>Synchronize network clock via NTP</span>
+                    <span x-text="t('label_ntp')">Synchronize network clock via NTP</span>
                   </label>
                 </div>
               </div>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Hardware RTC</label>
-                  <button type="button" class="btn-square" @click="syncRtc()">SYNC RTC</button>
+                  <label class="row-label" x-text="t('label_rtc')">Hardware RTC</label>
+                  <button type="button" class="btn-square" @click="syncRtc()" x-text="t('btn_sync_rtc')">SYNC RTC</button>
                 </div>
-                <div class="row-help">Synchronizes the onboard DS3231 I2C real-time clock chip.</div>
+                <div class="row-help" x-text="t('help_rtc')">Synchronizes the onboard DS3231 I2C real-time clock chip.</div>
               </div>
             </div>
 
             <!-- 7. SECURITY & AUTHENTICATION -->
             <div class="settings-section">
-              <span class="section-label">Security & Authentication</span>
+              <span class="section-label" x-text="t('sec_security')">Security & Authentication</span>
 
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Current Password</label>
+                  <label class="row-label" x-text="t('label_current_pwd')">Current Password</label>
                   <input type="password" x-model="pwdForm.current" placeholder="••••••••" />
                 </div>
               </div>
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">New Password</label>
+                  <label class="row-label" x-text="t('label_new_pwd')">New Password</label>
                   <input type="password" x-model="pwdForm.new_pwd" placeholder="Min 8 characters" />
                 </div>
               </div>
               <div class="setting-row">
                 <div class="row-main">
-                  <label class="row-label">Confirm Password</label>
+                  <label class="row-label" x-text="t('label_confirm_pwd')">Confirm Password</label>
                   <input type="password" x-model="pwdForm.confirm_pwd" placeholder="••••••••" />
                 </div>
               </div>
 
-              <button type="button" class="btn-square" style="margin-top: 6px;" @click="changePassword()">UPDATE PASSWORD</button>
+              <button type="button" class="btn-square" style="margin-top: 6px;" @click="changePassword()" x-text="t('btn_update_pwd')">UPDATE
+                PASSWORD</button>
             </div>
 
             <!-- 8. SYSTEM OPERATIONS -->
             <div class="settings-section">
-              <span class="section-label">System Operations</span>
+              <span class="section-label" x-text="t('sec_system')">System Operations</span>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button type="button" class="btn-square" @click="restartEngine()">RESTART ENGINE</button>
-                <button type="button" class="btn-square" @click="restartSync()">RESTART SYNC</button>
-                <button type="button" class="btn-square" @click="backupConfig()">BACKUP CONFIG</button>
-                <button type="button" class="btn-square" @click="$refs.restoreFileInput.click()">RESTORE CONFIG</button>
-                <button type="button" class="btn-square" @click="downloadLogs()">DOWNLOAD LOGS</button>
-                <button type="button" class="btn-square" @click="checkUpdate()">CHECK UPDATE</button>
+                <button type="button" class="btn-square" @click="restartEngine()" x-text="t('btn_restart_engine')">RESTART ENGINE</button>
+                <button type="button" class="btn-square" @click="restartSync()" x-text="t('btn_restart_sync')">RESTART SYNC</button>
+                <button type="button" class="btn-square" @click="backupConfig()" x-text="t('btn_backup_config')">BACKUP CONFIG</button>
+                <button type="button" class="btn-square" @click="$refs.restoreFileInput.click()" x-text="t('btn_restore_config')">RESTORE CONFIG</button>
+                <button type="button" class="btn-square" @click="downloadLogs()" x-text="t('btn_download_logs')">DOWNLOAD LOGS</button>
+                <button type="button" class="btn-square" @click="checkUpdate()" x-text="t('btn_check_update')">CHECK UPDATE</button>
               </div>
-              <input type="file" x-ref="restoreFileInput" accept=".json" style="display: none;" @change="handleConfigFileUpload($event)" />
+              <input type="file" x-ref="restoreFileInput" accept=".json" style="display: none;"
+                @change="handleConfigFileUpload($event)" />
             </div>
 
           </div>
@@ -1383,8 +1770,8 @@
 
       <!-- Fixed Footer -->
       <div class="modal-footer">
-        <button class="btn-square btn-square-danger" @click="confirmReboot()">REBOOT DEVICE</button>
-        <button class="btn-square btn-square-primary" @click="saveAndClose()">DONE</button>
+        <button class="btn-square btn-square-danger" @click="confirmReboot()" x-text="t('btn_reboot_device')">REBOOT DEVICE</button>
+        <button class="btn-square btn-square-primary" @click="saveAndClose()" x-text="t('btn_done')">DONE</button>
       </div>
 
     </div>
@@ -1394,32 +1781,34 @@
   <div class="modal-backdrop" x-show="showLogin" x-cloak>
     <div class="modal-dialog" style="max-width: 380px; height: auto;">
       <div class="modal-header">
-        <div class="modal-title">Admin Authentication</div>
+        <div class="modal-title" x-text="t('login_dialog_title')">Admin Authentication</div>
       </div>
       <div class="modal-body" style="padding: 20px 24px;">
         <template x-if="needsSetup">
           <div>
-            <div style="font-size: 12px; color: #f59e0b; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #f59e0b; margin-bottom: 12px;" x-text="t('setup_notice')">
               First-time setup: Enter the 6-digit verification code printed on device console or TFT screen.
             </div>
             <div class="setting-row">
-              <label class="row-label">Setup Code</label>
+              <label class="row-label" x-text="t('label_setup_code')">Setup Code</label>
               <input type="text" x-model="setupCode" placeholder="123456" />
             </div>
             <div class="setting-row">
-              <label class="row-label">New Admin Password</label>
+              <label class="row-label" x-text="t('label_admin_pwd')">New Admin Password</label>
               <input type="password" x-model="loginPassword" placeholder="Min 6 characters" />
             </div>
-            <button class="btn-square btn-square-primary" style="width: 100%; margin-top: 14px;" @click="submitSetup()">INITIALIZE PASSWORD</button>
+            <button class="btn-square btn-square-primary" style="width: 100%; margin-top: 14px;"
+              @click="submitSetup()" x-text="t('btn_init_pwd')">INITIALIZE PASSWORD</button>
           </div>
         </template>
         <template x-if="!needsSetup">
           <div>
             <div class="setting-row">
-              <label class="row-label">Password</label>
+              <label class="row-label" x-text="t('label_password')">Password</label>
               <input type="password" x-model="loginPassword" @keydown.enter="submitLogin()" placeholder="••••••••" />
             </div>
-            <button class="btn-square btn-square-primary" style="width: 100%; margin-top: 14px;" @click="submitLogin()">LOG IN</button>
+            <button class="btn-square btn-square-primary" style="width: 100%; margin-top: 14px;"
+              @click="submitLogin()" x-text="t('btn_login')">LOG IN</button>
           </div>
         </template>
       </div>
@@ -1434,4 +1823,5 @@
   </div>
 
 </body>
+
 </html>

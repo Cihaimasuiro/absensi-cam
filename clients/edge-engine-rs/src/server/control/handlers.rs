@@ -197,6 +197,17 @@ pub async fn apply_network_handler(
         }
     }
 
+    let helper_path = "/usr/local/bin/smart-absensi-syshelper";
+    if !Path::new(helper_path).exists() {
+        return (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Network helper binary '{helper_path}' not found on this system. Cannot configure network interfaces.")
+            })),
+        ).into_response();
+    }
+
     let current = load_settings(&state.config.settings_path);
     let backup_dir = state.config.settings_path.parent().unwrap_or(Path::new("."));
     let backup_path = backup_dir.join("network_backup.json");
@@ -215,12 +226,9 @@ pub async fn apply_network_handler(
         lock.staged_settings = Some(payload.clone());
     }
 
-    let helper_path = "/usr/local/bin/smart-absensi-syshelper";
-    if Path::new(helper_path).exists() {
-        let _ = std::process::Command::new(helper_path)
-            .args(["apply-network", staged_path.to_str().unwrap_or("")])
-            .spawn();
-    }
+    let _ = std::process::Command::new(helper_path)
+        .args(["apply-network", staged_path.to_str().unwrap_or("")])
+        .spawn();
 
     let state_watchdog = state.clone();
     let settings_path = state.config.settings_path.clone();
@@ -435,8 +443,8 @@ pub async fn info_handler(
         template_count: templates,
         outbox_count: outbox,
         quarantined_count: quarantined,
-        camera_device: settings.camera.source,
-        camera_resolution: settings.camera.resolution,
+        camera_device: state.config.camera_device.clone(),
+        camera_resolution: format!("{}x{}", state.config.width, state.config.height),
         is_streaming: state.app_state.frame_hub.has_viewers(),
         serial_connected: Path::new("/dev/ttyACM0").exists() || Path::new("/dev/ttyUSB0").exists(),
 

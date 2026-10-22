@@ -47,6 +47,37 @@ pub async fn run_stream(
     gpio_red_opt: Option<u32>,
     gpio_buzzer_opt: Option<u32>,
 ) -> Result<()> {
+    // 0. Muat konfigurasi edge yang tersimpan di disk (edge_settings.json)
+    let settings_path = Path::new(&db_path)
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("edge_settings.json");
+
+    let persisted_settings = server::control::load_settings(&settings_path);
+
+    // Terapkan override dari edge_settings.json jika CLI memakai nilai bawaan
+    let device = if (device == "/dev/video0" || device == "0") && !persisted_settings.camera.source.trim().is_empty() {
+        persisted_settings.camera.source.clone()
+    } else {
+        device
+    };
+
+    let (width, height) = if width == 640 && height == 480 {
+        if let Some((w_s, h_s)) = persisted_settings.camera.resolution.split_once('x') {
+            if let (Ok(w), Ok(h)) = (w_s.trim().parse::<u32>(), h_s.trim().parse::<u32>()) {
+                (w, h)
+            } else {
+                (width, height)
+            }
+        } else {
+            (width, height)
+        }
+    } else {
+        (width, height)
+    };
+
+    let fps_cap = persisted_settings.camera.fps_cap.clamp(5, 60);
+
     let cooldown_secs = cooldown_opt
         .or_else(|| {
             env::var("RECOGNITION_COOLDOWN_SEC")
@@ -211,6 +242,7 @@ pub async fn run_stream(
     };
 
     let hub = FrameHub::new();
+    hub.set_mirror(persisted_settings.camera.mirror_preview);
     let overlay_hub = OverlayHub::new();
     let overlay_hub_ai = overlay_hub.clone();
     let running = Arc::new(AtomicBool::new(true));
@@ -442,6 +474,7 @@ pub async fn run_stream(
                             let confirm_frames_ai = confirm_frames;
                             let min_face_size_ai = min_face_size;
                             let cooldown_secs_ai = cooldown_secs;
+                            let fps_cap_ai = fps_cap;
                             let ambiguity_margin_ai = env::var("AMBIGUITY_MARGIN")
                                 .ok()
                                 .and_then(|v| v.parse::<f32>().ok())
@@ -845,11 +878,16 @@ pub async fn run_stream(
 
                                         // Pacing termal: beri jeda CPU antar inferensi jaringan saraf agar tidak panas berlebih
                                         if faces.is_empty() {
-                                            // Pemindaian idle: 3 FPS sudah optimal. Memberi CPU jeda 300ms per siklus
+                                            // Pemindaian idle: 300ms jeda per siklus
                                             std::thread::sleep(Duration::from_millis(300));
                                         } else {
-                                            // Pelacakan wajah aktif: pengenalan cepat 20 FPS
-                                            std::thread::sleep(Duration::from_millis(50));
+                                            // Pelacakan wajah aktif: dikontrol oleh fps_cap yang tersimpan
+                                            let target_frame_ms: u64 = 1000u64 / (fps_cap_ai as u64);
+                                            let elapsed_ms = start_ai.elapsed().as_millis() as u64;
+                                            let sleep_ms = target_frame_ms.saturating_sub(elapsed_ms);
+                                            if sleep_ms > 0 {
+                                                std::thread::sleep(Duration::from_millis(sleep_ms));
+                                            }
                                         }
                                     }
                                 })
@@ -1275,11 +1313,6 @@ cap.release()",
     }
 
     // Jalankan Axum HTTP stream & control server
-    let settings_path = Path::new(&db_path)
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("edge_settings.json");
-
     let server_config = server::ServerConfig {
         db_path: db_path.clone(),
         camera_device: device.clone(),

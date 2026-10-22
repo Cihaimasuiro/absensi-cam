@@ -279,7 +279,7 @@ pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
     }
     let lang = settings.general.language.trim();
     if lang != "auto" && !lang.is_empty() {
-        let known = ["id", "en", "ms", "ar", "zh", "ja"];
+        let known = ["id", "en"];
         if !known.contains(&lang) {
             return Err(format!(
                 "Unsupported language '{}'. Use 'auto' or one of: {}",

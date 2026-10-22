@@ -84,7 +84,7 @@ project_gap_analysis.md
 .agents/
 
 # ========================================
-7. Rust Cargo Build Outputs & Edge Engine Local State
+# 7. Rust Cargo Build Outputs & Edge Engine Local State
 # ========================================
 target/
 clients/edge-engine-rs/dist/
@@ -95,4 +95,8 @@ clients/edge-engine-rs/edge_settings.json
 clients/edge-engine-rs/network_backup.json
 clients/edge-engine-rs/network_staged.json
 local_edge.db
+*.dll
+*.so
+*.dylib
+
 

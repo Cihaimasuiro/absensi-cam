@@ -55,6 +55,9 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
         "target\\debug\\onnxruntime.dll",
         "target\\release\\onnxruntime.dll",
         "onnxruntime.dll",
+        "..\\..\\models\\onnxruntime.dll",
+        "models\\onnxruntime.dll",
+        "..\\models\\onnxruntime.dll",
     ];
 
     #[cfg(not(target_os = "windows"))]
@@ -72,19 +75,37 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
         }
     }
 
-    // Cari di dalam virtual environment python & direktori aplikasi
-    let search_roots = [
-        "/opt/smart-absensi/edge-engine/miniforge3/envs",
-        "/opt/smart-absensi/edge-engine/venv",
-        "/opt/smart-absensi/edge-engine",
-        "/home/edge",
-        "/usr/local/lib",
-        "/usr/lib/aarch64-linux-gnu",
-    ];
+    #[cfg(target_os = "windows")]
+    {
+        let search_roots = [
+            "D:\\nospaceinstalation\\laragon\\bin\\python",
+            "C:\\Python",
+            "C:\\Program Files\\Python",
+        ];
 
-    for root in &search_roots {
-        if let Some(found) = find_file_recursive(Path::new(root), "libonnxruntime.so", 12) {
-            return Some(found);
+        for root in &search_roots {
+            if let Some(found) = find_file_recursive(Path::new(root), "onnxruntime.dll", 8) {
+                return Some(found);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Cari di dalam virtual environment python & direktori aplikasi
+        let search_roots = [
+            "/opt/smart-absensi/edge-engine/miniforge3/envs",
+            "/opt/smart-absensi/edge-engine/venv",
+            "/opt/smart-absensi/edge-engine",
+            "/home/edge",
+            "/usr/local/lib",
+            "/usr/lib/aarch64-linux-gnu",
+        ];
+
+        for root in &search_roots {
+            if let Some(found) = find_file_recursive(Path::new(root), "libonnxruntime.so", 12) {
+                return Some(found);
+            }
         }
     }
 
@@ -120,9 +141,10 @@ pub fn init_onnx_runtime(custom_path: Option<&Path>) -> Result<()> {
         }
         #[cfg(not(target_os = "linux"))]
         {
-            ort::init().commit();
-            ONNX_INITIALIZED.store(true, Ordering::SeqCst);
-            Ok(())
+            anyhow::bail!(
+                "onnxruntime.dll (versi modern >= 1.19.0) tidak ditemukan di folder lokal, models/, atau Python site-packages. \
+                 Mohon letakkan onnxruntime.dll di folder ini atau tentukan lokasi melalui argumen --ort-path atau variabel ORT_DYLIB_PATH."
+            );
         }
     }
 }

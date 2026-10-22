@@ -59,24 +59,56 @@ impl FaceDetector {
         self.tensor.fill(0.0f32);
         let channel_stride = NET_W * NET_H;
 
-        let copy_w = width.min(NET_W);
-        let copy_h = height.min(NET_H);
+        if width == 0 || height == 0 {
+            return Ok(Vec::new());
+        }
 
-        for y in 0..copy_h {
-            let row_offset = y * stride;
-            let tensor_row_offset = y * NET_W;
+        // Skala aspect-ratio preserving letterbox ke tensor 640x640
+        let scale = (NET_W as f32 / width as f32).min(NET_H as f32 / height as f32);
+        let target_w = ((width as f32 * scale).round() as usize).clamp(1, NET_W);
+        let target_h = ((height as f32 * scale).round() as usize).clamp(1, NET_H);
 
-            for x in 0..copy_w {
-                let px_offset = row_offset + x * 3;
-                if px_offset + 2 < image_rgb.len() {
-                    let r = image_rgb[px_offset] as f32;
-                    let g = image_rgb[px_offset + 1] as f32;
-                    let b = image_rgb[px_offset + 2] as f32;
+        if (scale - 1.0).abs() < 1e-4 {
+            // Jalur cepat langsung tanpa interpolasi jika dimensi masukan 640x480 / 640x640
+            for y in 0..target_h {
+                let row_offset = y * stride;
+                let tensor_row_offset = y * NET_W;
 
-                    let idx = tensor_row_offset + x;
-                    self.tensor[idx] = b; // Channel 0: Blue
-                    self.tensor[channel_stride + idx] = g; // Channel 1: Green
-                    self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                for x in 0..target_w {
+                    let px_offset = row_offset + x * 3;
+                    if px_offset + 2 < image_rgb.len() {
+                        let r = image_rgb[px_offset] as f32;
+                        let g = image_rgb[px_offset + 1] as f32;
+                        let b = image_rgb[px_offset + 2] as f32;
+
+                        let idx = tensor_row_offset + x;
+                        self.tensor[idx] = b; // Channel 0: Blue
+                        self.tensor[channel_stride + idx] = g; // Channel 1: Green
+                        self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                    }
+                }
+            }
+        } else {
+            // Letterbox downsampling untuk resolusi lebih tinggi (720p, 1080p) agar seluruh frame tercover
+            let inv_scale = 1.0 / scale;
+            for y in 0..target_h {
+                let src_y = ((y as f32 * inv_scale) as usize).min(height - 1);
+                let row_offset = src_y * stride;
+                let tensor_row_offset = y * NET_W;
+
+                for x in 0..target_w {
+                    let src_x = ((x as f32 * inv_scale) as usize).min(width - 1);
+                    let px_offset = row_offset + src_x * 3;
+                    if px_offset + 2 < image_rgb.len() {
+                        let r = image_rgb[px_offset] as f32;
+                        let g = image_rgb[px_offset + 1] as f32;
+                        let b = image_rgb[px_offset + 2] as f32;
+
+                        let idx = tensor_row_offset + x;
+                        self.tensor[idx] = b; // Channel 0: Blue
+                        self.tensor[channel_stride + idx] = g; // Channel 1: Green
+                        self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                    }
                 }
             }
         }
@@ -94,8 +126,10 @@ impl FaceDetector {
         let thresh_sq = self.conf_threshold * self.conf_threshold;
 
         for (i, &s) in strides.iter().enumerate() {
-            let cols = NET_W / s;
-            let rows = (copy_h / s + 1).min(NET_H / s);
+            let net_cols = NET_W / s;
+            let net_rows = NET_H / s;
+            let cols = (target_w / s + 1).min(net_cols);
+            let rows = (target_h / s + 1).min(net_rows);
 
             let (_, cls_slice) = outputs[i]
                 .try_extract_tensor::<f32>()
@@ -112,7 +146,7 @@ impl FaceDetector {
 
             for r in 0..rows {
                 for c in 0..cols {
-                    let idx = r * cols + c;
+                    let idx = r * net_cols + c;
 
                     let cls_score = cls_slice[idx].clamp(0.0, 1.0);
                     let obj_score = obj_slice[idx].clamp(0.0, 1.0);
@@ -123,18 +157,18 @@ impl FaceDetector {
                     }
                     let score = prod.sqrt();
 
-                    let cx = (c as f32 + bbox_slice[idx * 4]) * s as f32;
-                    let cy = (r as f32 + bbox_slice[idx * 4 + 1]) * s as f32;
-                    let w = bbox_slice[idx * 4 + 2].exp() * s as f32;
-                    let h = bbox_slice[idx * 4 + 3].exp() * s as f32;
+                    let cx = ((c as f32 + bbox_slice[idx * 4]) * s as f32) / scale;
+                    let cy = ((r as f32 + bbox_slice[idx * 4 + 1]) * s as f32) / scale;
+                    let w = (bbox_slice[idx * 4 + 2].exp() * s as f32) / scale;
+                    let h = (bbox_slice[idx * 4 + 3].exp() * s as f32) / scale;
 
                     let x1 = cx - w / 2.0;
                     let y1 = cy - h / 2.0;
 
                     let mut landmarks = [[0.0f32; 2]; 5];
                     for n in 0..5 {
-                        let lx = (kps_slice[idx * 10 + 2 * n] + c as f32) * s as f32;
-                        let ly = (kps_slice[idx * 10 + 2 * n + 1] + r as f32) * s as f32;
+                        let lx = ((kps_slice[idx * 10 + 2 * n] + c as f32) * s as f32) / scale;
+                        let ly = ((kps_slice[idx * 10 + 2 * n + 1] + r as f32) * s as f32) / scale;
                         landmarks[n] = [lx, ly];
                     }
 

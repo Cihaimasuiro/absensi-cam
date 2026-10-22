@@ -2,8 +2,8 @@
 
 > Engineering guidelines for the **Edge Engine** components of this project:
 >
-> 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular package (`src/core`, `src/vision`, `src/server`, `src/sync`, `src/hardware`, `src/main.rs`).
-> 2. **Reference / Tooling Prototype (`clients/edge-engine` & `packages/face_core`)**: Python components used for enrollment backend workers and offline benchmarking.
+> 1. **Production Edge Runtime (`clients/edge-engine-rs`)**: Native Rust modular package (`src/core`, `src/vision`, `src/server`, `src/sync`, `src/hardware`, `src/main.rs`) and server extraction CLI (`face-extract`).
+> 2. **Reference / Tooling Prototype (`clients/edge-engine` & `packages/face_core`)**: Legacy Python prototype components used for offline benchmarking. Server photo enrollment is powered by native Rust `face-extract`.
 >
 > The primary goals are:
 > - Correctness & Zero Crash Loops

@@ -1,27 +1,11 @@
+mod common;
+
+use common::find_model;
 use smart_absensi_engine::vision::{
     align_face_to_tensor_nchw, init_onnx_runtime, FaceDetector, FaceRecognizer, LivenessDetector,
 };
 use std::path::PathBuf;
 
-fn find_model(names: &[&str]) -> Option<PathBuf> {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dirs = [
-        manifest.join("../../packages/models"),
-        manifest.join("../../../packages/models"),
-        manifest.join("target/aarch64-unknown-linux-gnu/release"),
-        manifest.join("../../target/aarch64-unknown-linux-gnu/release"),
-    ];
-
-    for dir in &dirs {
-        for name in names {
-            let p = dir.join(name);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-    }
-    None
-}
 
 #[test]
 fn test_full_vision_pipeline_local() {

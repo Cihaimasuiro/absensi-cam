@@ -52,7 +52,6 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
 
     #[cfg(target_os = "windows")]
     let explicit_candidates = [
-        "D:\\nospaceinstalation\\laragon\\bin\\python\\python-3.14\\Lib\\site-packages\\onnxruntime\\capi\\onnxruntime.dll",
         "target\\debug\\onnxruntime.dll",
         "target\\release\\onnxruntime.dll",
         "onnxruntime.dll",
@@ -103,12 +102,12 @@ pub fn init_onnx_runtime(custom_path: Option<&Path>) -> Result<()> {
         .or_else(find_onnxruntime_dylib);
 
     if let Some(path) = resolved_path {
-        println!("[ONNX Runtime] Memuat dylib dari: {:?}", path);
+        eprintln!("[ONNX Runtime] Memuat dylib dari: {:?}", path);
         tracing::info!("Menginisialisasi ONNX Runtime dari: {:?}", path);
         ort::init_from(path.to_str().unwrap())
             .map_err(|e| anyhow::anyhow!("Gagal inisialisasi ONNX Runtime dari {:?}: {e}", path))?
             .commit();
-        println!("[ONNX Runtime] Berhasil diinisialisasi.");
+        eprintln!("[ONNX Runtime] Berhasil diinisialisasi.");
         ONNX_INITIALIZED.store(true, Ordering::SeqCst);
         Ok(())
     } else {

@@ -36,7 +36,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         $fakeEmbedding = base64_encode(str_repeat('a', 2048));
         
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => true,
                 'embedding_b64' => $fakeEmbedding
             ])),
@@ -75,7 +75,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         $fakeEmbedding = base64_encode(str_repeat('b', 2048));
         
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => true,
                 'embedding_b64' => $fakeEmbedding
             ])),
@@ -108,7 +108,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         file_put_contents($tmpPath, 'dummy image data');
         
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => false,
                 'error' => 'No face detected'
             ])),
@@ -121,7 +121,7 @@ class GenerateFaceEmbeddingJobTest extends TestCase
         );
         
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Python extraction error: No face detected');
+        $this->expectExceptionMessage('Face extraction error: No face detected');
         
         $job->handle();
     }

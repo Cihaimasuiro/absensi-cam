@@ -383,14 +383,7 @@ pub async fn run_stream(
     let (tx_frame, rx_frame) = std::sync::mpsc::sync_channel::<AiFrame>(1);
 
     if vision_enabled {
-        let base_dirs = vec![
-            models_dir_opt.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("models")),
-            PathBuf::from("packages/models"),
-            PathBuf::from("../../packages/models"),
-            PathBuf::from("../packages/models"),
-            PathBuf::from("/opt/smart-absensi/edge-engine/models"),
-            PathBuf::from("."),
-        ];
+        let base_dirs = utils::model_search_dirs(models_dir_opt.as_deref());
 
         let detector_path = find_model_path(&base_dirs, &["detector.onnx", "yunet_2023mar.onnx", "yunet.onnx"]);
         let recognizer_path = find_model_path(&base_dirs, &["recognizer.onnx", "sface.onnx", "arcface.onnx"]);
@@ -1183,7 +1176,7 @@ cap.release()",
                 PathBuf::from("assets/test_face.png"),
                 PathBuf::from("clients/edge-engine-rs/assets/test_face.png"),
                 PathBuf::from("clients/edge-engine-rs/test_face.png"),
-                PathBuf::from("packages/models/test_face.png"),
+                PathBuf::from("models/test_face.png"),
             ];
 
             let mut base_rgb = vec![30u8; (width * height * 3) as usize];

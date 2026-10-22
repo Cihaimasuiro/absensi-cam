@@ -129,9 +129,14 @@ return [
 
     'trusted_proxies' => env('TRUSTED_PROXIES', '127.0.0.1'),
     
-    'python_bin' => env('PYTHON_BIN', 'python'),
+    'face_extract_bin' => env('FACE_EXTRACT_BIN', base_path('clients/edge-engine-rs/target/release/face-extract' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : ''))),
+
+    'face_models_dir' => env('FACE_MODELS_DIR', base_path('models')),
+
+    'ort_dylib_path' => env('ORT_DYLIB_PATH', null),
     
     'model_version' => env('MODEL_VERSION', '3d9f1f77896fb3d1'),
+
     
     'attendance_retention_days' => (int) env('ATTENDANCE_RETENTION_DAYS', 0),
 

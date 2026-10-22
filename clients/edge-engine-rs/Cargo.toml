@@ -21,7 +21,12 @@ path = "src/bin/smart_absensi_sync.rs"
 name = "serial_bench"
 path = "src/bin/serial_bench.rs"
 
+[[bin]]
+name = "face-extract"
+path = "src/bin/face_extract.rs"
+
 [dependencies]
+
 # Async & Networking
 tokio = { version = "1.38", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }

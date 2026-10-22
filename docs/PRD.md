@@ -149,10 +149,10 @@ absensi-cam/
 ├── database/                # Laravel migrasi & seeder
 ├── firmware/
 │   └── arduino-display/     # Arduino Uno + shield: render TFT (termasuk QR); display saja (tanpa LED/buzzer/tombol/RTC)
+├── models/                  # File .onnx + checksum SHA-256 + MODEL_VERSION (YuNet, SFace, MiniFASNet)
 ├── packages/
-│   ├── face_core/           # Pustaka Python bersama (YuNet, SFace, Mini-FASNet); berjalan di server untuk enrollment job
-│   ├── protocol/            # Skema JSON serial + OpenAPI REST (sumber kebenaran tunggal)
-│   └── models/              # File .onnx + checksum SHA-256 + MODEL_VERSION (Git LFS)
+│   ├── protocol/            # Skema JSON serial + dokumentasi interop
+│   └── face_core/           # (Deprecated) Pustaka Python referensi sebelumnya
 ├── hardware/                # Skema, KiCad (V2), desain casing
 ├── docs/
 │   ├── PRD.md               # Spesifikasi teknis produk monorepo
@@ -164,15 +164,16 @@ absensi-cam/
 |---------|----------------|----------------|-------------|
 | `app/` (Laravel Root) | PHP 8.3+ (Laravel 13), MySQL/PostgreSQL, Redis | Admin, API, enrollment, kartu RFID, verifikasi QR, laporan, audit | Server pusat (PC admin/VPS) |
 | `clients/edge-engine-rs` | **Rust (Edition 2021)**, `ort`, `tokio`, `axum`, `libsql`/`rusqlite`, `rustfft`, pure libc V4L2 | **Produksi v0.2.0**: Pengenalan wajah real-time, anti-spoof temporal 3-frame + spoof veto, HTTP stream MJPEG on-demand, SSE overlay, SQLite outbox & daemon sinkronisasi batch | Orange Pi Lite 2 |
+| `clients/edge-engine-rs` (`face-extract`) | **Rust (Edition 2021)** | Ekstraksi embedding foto wajah server (CLI `face-extract`) berakurasi identik dengan edge | Server pusat (PC admin/VPS) |
 | `clients/edge-engine` | Python 3, OpenCV, ONNX Runtime, SQLite, FastAPI | Prototipe awal & perkakas evaluasi benchmark / tooling | PC Dev / Referensi |
 | `firmware/arduino-display` | C++ (Arduino) | Render TFT shield 8-bit paralel (termasuk QR); touch opsional | Arduino Uno |
-| `packages/face_core` | Python 3 | Logika model bersama agar embedding identik di server (enrollment job) | Server |
-| `packages/protocol` | JSON Schema / OpenAPI 3 | Kontrak antar-komponen | — |
-| `packages/models` | ONNX | Model + versi (YuNet, MiniFASNet, ArcFace/SFace) | Edge + server |
+| `packages/protocol` | Markdown / JSON | Kontrak & panduan enkripsi antar-komponen | — |
+| `models/` | ONNX | Model + versi (YuNet, MiniFASNet, ArcFace/SFace) | Edge + server |
 
 > **Prinsip penting — konsistensi model.** Embedding dari model/versi berbeda **tidak kompatibel**. Setiap templet menyimpan `model_version`; edge menolak templet dengan versi berbeda dan meminta re-enrollment/re-embedding. Enrollment di server menggunakan model ONNX yang sama persis dengan yang dimuat oleh engine Rust di edge.
 >
-> **Catatan Laravel.** PHP tidak dapat menjalankan inferensi ONNX/OpenCV secara praktis. Laravel memanggil `face-core` (CLI `face-embed`) lewat *queue job* untuk mengekstrak embedding dari foto enrollment; foto **dihapus segera** setelah embedding dibuat.
+> **Catatan Laravel.** PHP tidak dapat menjalankan inferensi ONNX/OpenCV secara praktis. Laravel memanggil binari Rust `face-extract` lewat *queue job* untuk mengekstrak embedding dari foto enrollment; foto **dihapus segera** setelah embedding dibuat.
+
 
 ### Alur Komunikasi Antar Package
 
@@ -982,7 +983,7 @@ Respons `201`: `{ "status": "created", "attendance_id": "...", "device": "Gerban
 
 ### 12.2 Privasi & Persetujuan
 
-Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP) mengategorikan data biometrik sebagai **data pribadi yang bersifat spesifik**. Konsekuensi untuk produk ini (konfirmasikan dengan penasihat hukum sebelum peluncuran):
+Data wajah adalah **data biometrik**. Di Indonesia, UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi  mengategorikan data biometrik sebagai **data pribadi yang bersifat spesifik**. Konsekuensi untuk produk ini (konfirmasikan dengan penasihat hukum sebelum peluncuran):
 
 - Persetujuan eksplisit dan terdokumentasi sebelum enrollment; **wali/orang tua** untuk siswa di bawah 18 tahun.
 - Pemberitahuan tujuan pemrosesan (absensi saja) dan papan informasi di lokasi terminal.

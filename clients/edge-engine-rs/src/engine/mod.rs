@@ -2,16 +2,18 @@ use anyhow::Result;
 use clap::Parser;
 
 pub mod args;
+pub mod extract;
 pub mod stream;
 pub mod sync_runner;
 pub mod tracker;
 pub mod utils;
 
 pub use args::{Cli, Commands};
+pub use extract::{extract_embedding, run_extract};
 pub use stream::run_stream;
 pub use sync_runner::run_sync;
 pub use tracker::TrackedStudent;
-pub use utils::{find_model_path, wait_for_shutdown_signal};
+pub use utils::{find_model_path, model_search_dirs, wait_for_shutdown_signal};
 
 /// Central entrypoint for `engine-cli` and `smart-absensi-sync` binaries.
 pub async fn run_cli() -> Result<()> {
@@ -20,8 +22,8 @@ pub async fn run_cli() -> Result<()> {
     dotenvy::from_path("/data/config/.env").ok();
     dotenvy::from_path("/opt/smart-absensi/edge-engine/.env").ok();
 
-    // 2. Inisialisasi logging
-    tracing_subscriber::fmt::init();
+    // 2. Inisialisasi logging ke stderr agar stdout tetap bersih untuk output JSON CLI
+    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
     let cli = Cli::parse();
 
     match cli.command {
@@ -98,6 +100,14 @@ pub async fn run_cli() -> Result<()> {
             dry_run,
         }) => {
             crate::core::harden_storage(&data_mount, partition.as_deref(), &fs_type, dry_run)?;
+        }
+        Some(Commands::Extract {
+            image,
+            models_dir,
+            ort_path,
+        }) => {
+            let code = extract::run_extract(&image, models_dir.as_deref(), ort_path.as_deref());
+            std::process::exit(code);
         }
         None => {
             // Default: run sync using top-level flags (for backward-compatible systemd service)

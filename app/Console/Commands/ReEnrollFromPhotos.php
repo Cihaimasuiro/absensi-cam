@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Enrollment\Models\FaceTemplate;
 use App\Domain\Enrollment\Services\BiometricDuplicateDetector;
 use App\Domain\Enrollment\Services\FaceEncryptionService;
+use App\Domain\Enrollment\Services\FaceExtractor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,8 @@ class ReEnrollFromPhotos extends Command
 
     public function handle(
         FaceEncryptionService $encryptionService,
-        BiometricDuplicateDetector $duplicateDetector
+        BiometricDuplicateDetector $duplicateDetector,
+        FaceExtractor $faceExtractor
     ): int {
         if (!$this->option('force') && !$this->option('dry-run')) {
             if (!$this->confirm('This is a biometric recovery tool that will re-extract embeddings from stored photos. Continue?', false)) {
@@ -34,11 +36,6 @@ class ReEnrollFromPhotos extends Command
 
         $templates = FaceTemplate::withTrashed()->get();
         $this->info("Found {$templates->count()} face templates in database.");
-
-        $pythonBin = config('app.python_bin', 'python');
-        $script = base_path('packages/face_core/extract.py');
-        $detectorModel = base_path('packages/models/detector.onnx');
-        $recognizerModel = base_path('packages/models/recognizer.onnx');
 
         $maxCursor = (int) DB::table('face_templates')->max('version_cursor');
         $success = 0;
@@ -74,33 +71,10 @@ class ReEnrollFromPhotos extends Command
 
             $fullPhotoPath = Storage::disk('local')->path($photoPath);
 
-            $result = Process::path(base_path())
-                ->timeout(120)
-                ->env(['PYTHONPATH' => base_path('packages')])
-                ->run([
-                    $pythonBin,
-                    $script,
-                    $detectorModel,
-                    $recognizerModel,
-                    $fullPhotoPath,
-                ]);
-
-            if (!$result->successful()) {
-                $this->error("Python extraction failed for template ID {$template->id}: " . $result->errorOutput());
-                $failed++;
-                continue;
-            }
-
-            $output = json_decode($result->output(), true);
-            if (!$output || !isset($output['success']) || !$output['success'] || !isset($output['embedding_b64'])) {
-                $this->error("Invalid extractor output for template ID {$template->id}");
-                $failed++;
-                continue;
-            }
-
-            $rawEmbedding = base64_decode($output['embedding_b64']);
-            if (strlen($rawEmbedding) !== 2048) {
-                $this->error("Raw embedding for template ID {$template->id} is not 2048 bytes.");
+            try {
+                $rawEmbedding = $faceExtractor->extract($fullPhotoPath);
+            } catch (\Throwable $e) {
+                $this->error("Extraction failed for template ID {$template->id}: " . $e->getMessage());
                 $failed++;
                 continue;
             }

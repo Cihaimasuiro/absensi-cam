@@ -57,7 +57,7 @@ class BiometricDuplicateDetectionTest extends TestCase
         file_put_contents($tmpPath, 'dummy image data');
 
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => true,
                 'embedding_b64' => base64_encode($rawVector),
             ])),
@@ -106,7 +106,7 @@ class BiometricDuplicateDetectionTest extends TestCase
         file_put_contents($tmpPath, 'dummy image data');
 
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => true,
                 'embedding_b64' => base64_encode($rawVector),
             ])),
@@ -153,7 +153,7 @@ class BiometricDuplicateDetectionTest extends TestCase
         file_put_contents($tmpPath, 'dummy image data');
 
         Process::fake([
-            '*extract.py*' => Process::result(json_encode([
+            '*extract*--image*' => Process::result(json_encode([
                 'success' => true,
                 'embedding_b64' => base64_encode($rawVector),
             ])),

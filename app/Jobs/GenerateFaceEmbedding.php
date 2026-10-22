@@ -52,42 +52,10 @@ class GenerateFaceEmbedding implements ShouldQueue
         }
 
         try {
-            $pythonBin = config('app.python_bin');
-            $script = base_path('packages/face_core/extract.py');
-            $detectorModel = base_path('packages/models/detector.onnx');
-            $recognizerModel = base_path('packages/models/recognizer.onnx');
-            
-
-
-
-            $result = Process::path(base_path())
-                ->timeout(120)
-                ->env(['PYTHONPATH' => base_path('packages')])
-                ->run([
-                    $pythonBin,
-                    $script,
-                    $detectorModel,
-                    $recognizerModel,
-                    $this->tmpPath
-                ]);
-            
-            if (!$result->successful()) {
-                throw new \RuntimeException("Python extraction failed: " . $result->errorOutput());
-            }
-
-            $output = json_decode($result->output(), true);
-            if (!$output || !isset($output['success']) || !$output['success']) {
-                $err = $output['error'] ?? 'Unknown error';
-                throw new \RuntimeException("Python extraction error: $err");
-            }
-            
-            $stdout = base64_decode($output['embedding_b64']);
-
-            if (strlen($stdout) !== 2048) {
-                throw new \RuntimeException("Invalid embedding size. Expected 2048 bytes (512d), got " . strlen($stdout));
-            }
+            $stdout = app(\App\Domain\Enrollment\Services\FaceExtractor::class)->extract($this->tmpPath);
 
             // Guard 1:N deduplikasi cloud sebelum enkripsi & penyimpanan
+
             if (!$this->allowDuplicate) {
                 $detector = app(\App\Domain\Enrollment\Services\BiometricDuplicateDetector::class);
                 $dup = $detector->detect($stdout, $this->studentId);

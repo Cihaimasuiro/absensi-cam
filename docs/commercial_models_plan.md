@@ -25,7 +25,8 @@ To deploy Smart Absensi commercially, we must replace these models with permissi
   - **MobileNetV3 Custom Model**: Train a lightweight binary classifier for liveness using the CelebA-Spoof dataset (verify dataset commercial terms).
 
 ## Next Steps
-1. Remove all current `.onnx` files from the repository's tracked history or `packages/models` if their provenance is unknown.
+1. Remove all current `.onnx` files from the repository's tracked history or `models/` (migrated from legacy `packages/models/`) if their provenance is unknown.
 2. Integrate **YuNet** (MIT) for detection and **GhostFaceNets** (MIT) for recognition.
+
 3. Re-export the **Silent-Face-Anti-Spoofing** (MIT) model to ONNX for liveness detection.
 4. Update `THIRD_PARTY_LICENSES.md` to reflect the new permissive models.

@@ -53,15 +53,16 @@ The server turns those records into daily time records (DTR), CSV exports, and P
 | `app/` | Laravel application |
 | `resources/` | Blade views, CSS, JavaScript |
 | `routes/` | Web and API route definitions |
-| `clients/edge-engine-rs/` | **Production edge runtime** — Rust, axum |
+| `models/` | Tracked ONNX models (detector, recognizer, liveness) |
+| `clients/edge-engine-rs/` | **Production edge runtime & server face-extract** — Rust, axum |
 | `clients/edge-engine/` | Python reference implementation (tooling only) |
-| `packages/face_core/` | Python face pipeline used for benchmarking |
+| `packages/face_core/` | (Deprecated) Python face pipeline used for benchmarking |
 | `archive/edge-engine-py/` | Legacy — do not add features here |
 | `templates/artcraft/` | Design reference for the edge control panel |
 | `docs/` | This documentation |
 
-The Rust engine is the only edge runtime in production. The Python components exist for offline
-benchmarking and enrollment tooling.
+The Rust engine is the only runtime in production (edge device sync/streamer and server `face-extract` CLI). The Python components exist for offline benchmarking and research reference.
+
 
 ---
 

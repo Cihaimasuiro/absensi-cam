@@ -26,6 +26,7 @@ class HeartbeatRequest extends FormRequest
             'templates_count'             => ['nullable', 'integer', 'min:0'],
             'templates_hash'              => ['nullable', 'string', 'max:64'],
             'quarantined_templates_count' => ['nullable', 'integer', 'min:0'],
+            'quarantined_logs_count'      => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

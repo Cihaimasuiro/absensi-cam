@@ -238,6 +238,20 @@ impl EdgeDb {
         }
     }
 
+    /// Hitung jumlah baris outbox yang dikarantina (synced = -1)
+    pub async fn get_quarantined_outbox_count(&self) -> Result<usize> {
+        let mut rows = self
+            .conn
+            .query("SELECT COUNT(*) FROM outbox_attendance WHERE synced = -1", ())
+            .await?;
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            Ok(count as usize)
+        } else {
+            Ok(0)
+        }
+    }
+
     /// Ambil timestamp / cursor sync terakhir dari metadata atau templates
     pub async fn get_last_template_sync_time(&self) -> Result<Option<i64>> {
         let mut rows = self

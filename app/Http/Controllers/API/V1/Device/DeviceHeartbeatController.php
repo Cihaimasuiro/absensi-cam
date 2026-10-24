@@ -35,8 +35,12 @@ class DeviceHeartbeatController extends Controller
             $buildingId = $device->building_id;
 
             // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
-            if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
-                $schoolId = \App\Domain\School\Models\School::value('id');
+            if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::where('is_active', true)->count() === 1) {
+                $schoolId = \App\Domain\School\Models\School::where('is_active', true)->value('id');
+            }
+
+            if ($schoolId && !\App\Domain\School\Models\School::where('id', $schoolId)->where('is_active', true)->exists()) {
+                $schoolId = null;
             }
 
             if (!$schoolId) {

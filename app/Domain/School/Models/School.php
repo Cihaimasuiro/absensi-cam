@@ -34,5 +34,16 @@ class School extends Model
     {
         return $query->where('is_active', true);
     }
+
+    protected static function booted()
+    {
+        static::deleting(function (School $school) {
+            if (!method_exists($school, 'isForceDeleting') || !$school->isForceDeleting()) {
+                foreach ($school->students()->cursor() as $student) {
+                    $student->delete();
+                }
+            }
+        });
+    }
 }
 

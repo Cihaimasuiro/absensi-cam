@@ -2,6 +2,7 @@
 
 namespace App\Domain\Student\Imports;
 
+use App\Domain\School\Models\School;
 use App\Domain\Student\Models\Student;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Concerns\ToModel;
@@ -12,14 +13,24 @@ use Maatwebsite\Excel\Concerns\WithChunkReading;
 
 class StudentsImport implements ToModel, WithHeadingRow, WithValidation, WithBatchInserts, WithChunkReading
 {
+    private ?int $schoolId;
+
+    public function __construct(?int $schoolId = null)
+    {
+        $this->schoolId = $schoolId ?? School::where('is_active', true)->value('id');
+    }
+
     public function model(array $row)
     {
+        $schoolId = !empty($row['school_id']) ? (int) $row['school_id'] : $this->schoolId;
+
         return new Student([
-            'code'  => $row['code'] ?? $row['nis'] ?? $row['nip'],
-            'name'  => $row['name'] ?? $row['nama'],
-            'email' => $row['email'] ?? null,
-            'phone' => $row['phone'] ?? $row['telepon'] ?? null,
-            'role'  => $row['role'] ?? 'student',
+            'school_id' => $schoolId,
+            'code'      => $row['code'] ?? $row['nis'] ?? $row['nip'],
+            'name'      => $row['name'] ?? $row['nama'],
+            'email'     => $row['email'] ?? null,
+            'phone'     => $row['phone'] ?? $row['telepon'] ?? null,
+            'role'      => $row['role'] ?? 'student',
             'is_active' => true,
         ]);
     }

@@ -73,11 +73,11 @@ impl AuthManager {
         self.password_file.exists()
     }
 
-    /// Selesaikan setup pertama kali memakai kode verifikasi fisik dengan rate-limit per-IP
+    /// Selesaikan setup pertama kali memakai kode verifikasi fisik dengan rate-limit per-IP dan perbandingan constant-time
     pub fn setup_first_password(&self, ip: &str, code: &str, new_password: &str) -> Result<(), &'static str> {
         let now = Instant::now();
 
-        // Periksa status lockout percobaan setup
+        // 1. Periksa status lockout dan catat percobaan secara atomik
         {
             let mut attempts = self.setup_attempts.write().map_err(|_| "Lock error")?;
             let entry = attempts.entry(ip.to_string()).or_insert(IpAttempt {
@@ -90,6 +90,13 @@ impl AuthManager {
                     return Err("Too many failed setup attempts. Try again in 15 minutes.");
                 }
             }
+
+            // Catat percobaan terlebih dahulu untuk mencegah race condition tebakan paralel
+            entry.failed_count += 1;
+            if entry.failed_count >= 5 {
+                entry.lockout_until = Some(now + Duration::from_secs(900));
+                warn!("Physical setup lockout triggered for IP {} after 5 failed attempts.", ip);
+            }
         }
 
         let current_code = {
@@ -97,36 +104,27 @@ impl AuthManager {
             guard.clone()
         };
 
-        match current_code {
-            Some(expected) if expected == code.trim() => {
-                if new_password.trim().len() < 8 {
-                    return Err("Password must be at least 8 characters");
-                }
-                self.save_password(new_password)?;
-                let mut guard = self.setup_code.write().map_err(|_| "Lock error")?;
-                *guard = None;
-                let code_file = self.password_file.parent().unwrap_or(Path::new(".")).join("setup_code.txt");
-                let _ = std::fs::remove_file(code_file);
-                if let Ok(mut attempts) = self.setup_attempts.write() {
-                    attempts.remove(ip);
-                }
-                info!("Admin password successfully initialized via setup code from IP: {}.", ip);
-                Ok(())
+        let is_valid = match current_code {
+            Some(ref expected) => constant_time_eq_str(expected.trim(), code.trim()),
+            None => false,
+        };
+
+        if is_valid {
+            if new_password.trim().len() < 8 {
+                return Err("Password must be at least 8 characters");
             }
-            _ => {
-                if let Ok(mut attempts) = self.setup_attempts.write() {
-                    let entry = attempts.entry(ip.to_string()).or_insert(IpAttempt {
-                        failed_count: 0,
-                        lockout_until: None,
-                    });
-                    entry.failed_count += 1;
-                    if entry.failed_count >= 5 {
-                        entry.lockout_until = Some(now + Duration::from_secs(900));
-                        warn!("Physical setup lockout triggered for IP {} after 5 failed attempts.", ip);
-                    }
-                }
-                Err("Invalid or expired setup verification code")
+            self.save_password(new_password)?;
+            let mut guard = self.setup_code.write().map_err(|_| "Lock error")?;
+            *guard = None;
+            let code_file = self.password_file.parent().unwrap_or(Path::new(".")).join("setup_code.txt");
+            let _ = std::fs::remove_file(code_file);
+            if let Ok(mut attempts) = self.setup_attempts.write() {
+                attempts.remove(ip);
             }
+            info!("Admin password successfully initialized via setup code from IP: {}.", ip);
+            Ok(())
+        } else {
+            Err("Invalid or expired setup verification code")
         }
     }
 

@@ -212,8 +212,13 @@ impl SyncWorker {
                     synced_ids.push(item.id);
                 } else if item.status == "rejected" {
                     rejected_count += 1;
-                    // Jika penolakan bukan kegagalan server temporer (server_error), karantina record (synced = -1) agar tidak memblokir antrean FIFO
-                    if item.reason.as_deref() != Some("server_error") {
+                    // Hanya karantina (synced = -1) jika penolakan adalah racun permanen yang tidak mungkin pulih
+                    let is_poison = matches!(
+                        item.reason.as_deref(),
+                        Some("unknown_student") | Some("malformed_timestamp") | Some("scope_mismatch")
+                    );
+
+                    if is_poison {
                         warn!(
                             "Attendance record {} ditolak permanen oleh Laravel: reason={:?}. Mengkarantina record (synced = -1).",
                             item.id, item.reason
@@ -221,7 +226,7 @@ impl SyncWorker {
                         quarantine_ids.push(item.id);
                     } else {
                         warn!(
-                            "Attendance record {} ditolak sementara oleh Laravel: reason={:?}. Tetap disimpan di outbox untuk dicoba lagi.",
+                            "Attendance record {} ditolak (dapat dicoba lagi): reason={:?}. Tetap disimpan di outbox.",
                             item.id, item.reason
                         );
                     }
@@ -399,6 +404,7 @@ impl SyncWorker {
         };
 
         let quarantined_cnt = self.db.get_quarantined_templates_count().await.ok();
+        let quarantined_logs = self.db.get_quarantined_outbox_count().await.ok();
 
         let payload = HeartbeatPayload {
             fw_version: self.fw_version.clone(),
@@ -413,6 +419,7 @@ impl SyncWorker {
             templates_count: tmpl_count,
             templates_hash: tmpl_hash,
             quarantined_templates_count: quarantined_cnt,
+            quarantined_logs_count: quarantined_logs,
         };
 
         let url = format!("{}/api/v1/devices/heartbeat", self.api_url);

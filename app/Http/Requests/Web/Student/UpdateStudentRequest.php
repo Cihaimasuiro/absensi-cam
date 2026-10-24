@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Web\Student;
 
+use App\Domain\School\Models\School;
 use App\Domain\Student\Models\Student;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,15 @@ class UpdateStudentRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (empty($this->school_id) && School::where('is_active', true)->count() === 1) {
+            $this->merge([
+                'school_id' => School::where('is_active', true)->value('id'),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         /** @var Student|string|null $student */
@@ -20,7 +30,7 @@ class UpdateStudentRequest extends FormRequest
         $studentId = $student instanceof Student ? $student->id : $student;
 
         return [
-            'school_id'    => ['nullable', 'exists:schools,id'],
+            'school_id'    => ['required', 'integer', Rule::exists('schools', 'id')->whereNull('deleted_at')->where('is_active', true)],
             'classroom_id' => ['nullable', 'exists:classrooms,id'],
             'code'         => ['required', 'string', 'max:50', Rule::unique('students', 'code')->ignore($studentId)],
             'name'         => ['required', 'string', 'max:150'],

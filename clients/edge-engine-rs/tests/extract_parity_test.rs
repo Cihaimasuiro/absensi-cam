@@ -88,20 +88,63 @@ fn test_python_rust_extraction_parity() {
                 path.file_name().unwrap_or_default(),
                 similarity
             );
-
-            let min_threshold = if path.file_name().unwrap_or_default().to_string_lossy().contains("large") {
-                0.0 // Known downscale difference: Python tested raw 3000px whereas Rust downscales to 640px to prevent OOM
+            let file_str = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            
+            if file_str.contains("13") {
+                // Fixture 13 adalah foto fixture 08 yang di-upscale ke 3000px.
+                // Python extract.py tanpa downscaling mendeteksi false-positive artifact (-0.045 terhadap 08),
+                // sedangkan pipeline Rust dengan downscale 640px berhasil mengekstrak wajah asli siswa.
+                // Verifikasi terhadap ground-truth siswa yang sama (parity_face_08.json) dengan ambang ketat >= 0.92.
+                let p8_json = path.with_file_name("parity_face_08.json");
+                let c = fs::read_to_string(&p8_json).expect("Ground truth parity_face_08.json must exist");
+                let parsed8: serde_json::Value = serde_json::from_str(&c).expect("Valid json in 08");
+                let b64 = parsed8["embedding_b64"].as_str().expect("embedding_b64 in 08");
+                let b = base64::engine::general_purpose::STANDARD.decode(b64).expect("valid b64 in 08");
+                let mut emb8 = vec![0.0f32; 512];
+                for i in 0..512 {
+                    emb8[i] = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
+                }
+                let sim_ground_truth = FaceRecognizer::cosine_similarity(&rust_embedding, &emb8);
+                println!(
+                    "Fixture 13 (upscaled 3000px) verified against ground-truth person 08 reference: {:.4}",
+                    sim_ground_truth
+                );
+                assert!(
+                    sim_ground_truth >= 0.92,
+                    "Fixture 13 similarity {:.4} against ground-truth person is below 0.92",
+                    sim_ground_truth
+                );
             } else {
-                0.80
-            };
+                // Ambang batas ketat per-kategori foto:
+                // - High-clarity portraits (01, 02, 05, 07, 14): >= 0.99
+                // - Standard portraits & rotated shots (03, 04, 09, 10, 11, 12, 15): >= 0.97
+                // - Low-light / outdoor angle (08): >= 0.92
+                // - Heavy compression / JPEG artifact (06): >= 0.83
+                let min_threshold = if file_str.contains("06") {
+                    0.83
+                } else if file_str.contains("08") {
+                    0.92
+                } else if file_str.contains("03")
+                    || file_str.contains("04")
+                    || file_str.contains("09")
+                    || file_str.contains("10")
+                    || file_str.contains("11")
+                    || file_str.contains("12")
+                    || file_str.contains("15")
+                {
+                    0.97
+                } else {
+                    0.99
+                };
 
-            assert!(
-                similarity >= min_threshold,
-                "Cosine similarity {:.4} for {:?} is below parity threshold {:.2}",
-                similarity,
-                path,
-                min_threshold
-            );
+                assert!(
+                    similarity >= min_threshold,
+                    "Cosine similarity {:.4} for {:?} is below strict threshold {:.2}",
+                    similarity,
+                    path,
+                    min_threshold
+                );
+            }
         }
     }
 

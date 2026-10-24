@@ -32,11 +32,21 @@ class TemplateController extends Controller
         $buildingId = $device->building_id;
 
         // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
-        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
-            $schoolId = \App\Domain\School\Models\School::value('id');
+        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::where('is_active', true)->count() === 1) {
+            $schoolId = \App\Domain\School\Models\School::where('is_active', true)->value('id');
         }
 
-        // Cegah kebocoran data: Jika perangkat belum terikat ke sekolah manapun, jangan kirim template
+        // Verifikasi sekolah aktif dan tidak soft-deleted
+        if ($schoolId && !\App\Domain\School\Models\School::where('id', $schoolId)->where('is_active', true)->exists()) {
+            \Illuminate\Support\Facades\Log::warning('template_sync_school_inactive_or_deleted', [
+                'device_id'   => $device->id,
+                'device_code' => $device->device_code,
+                'school_id'   => $schoolId,
+            ]);
+            $schoolId = null;
+        }
+
+        // Cegah kebocoran data: Jika perangkat belum terikat ke sekolah manapun atau sekolah dihapus, jangan kirim template
         if (!$schoolId) {
             \Illuminate\Support\Facades\Log::warning('template_sync_missing_school_scope', [
                 'device_id'   => $device->id,
@@ -121,8 +131,12 @@ class TemplateController extends Controller
         $buildingId = $device->building_id;
 
         // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
-        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
-            $schoolId = \App\Domain\School\Models\School::value('id');
+        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::where('is_active', true)->count() === 1) {
+            $schoolId = \App\Domain\School\Models\School::where('is_active', true)->value('id');
+        }
+
+        if ($schoolId && !\App\Domain\School\Models\School::where('id', $schoolId)->where('is_active', true)->exists()) {
+            $schoolId = null;
         }
 
         if (!$schoolId) {

@@ -94,6 +94,8 @@ clients/edge-engine-rs/setup_code.txt
 clients/edge-engine-rs/edge_settings.json
 clients/edge-engine-rs/network_backup.json
 clients/edge-engine-rs/network_staged.json
+clients/edge-engine-rs/runtime/*.json
+!clients/edge-engine-rs/runtime/*.example
 local_edge.db
 *.dll
 *.so

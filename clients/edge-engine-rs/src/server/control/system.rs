@@ -474,11 +474,35 @@ pub async fn read_last_sync_at(db_path: &str) -> Option<String> {
 
 pub fn get_local_ip() -> String {
     if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
-        if sock.connect("1.1.1.1:80").is_ok() {
-            if let Ok(addr) = sock.local_addr() {
-                let ip = addr.ip().to_string();
-                if ip != "0.0.0.0" && ip != "127.0.0.1" {
-                    return ip;
+        // 1. Coba routing ke host server yang dikonfigurasi jika ada
+        if let Ok(server_url) = std::env::var("SMART_ABSENSI_URL") {
+            let clean = server_url.trim_start_matches("http://").trim_start_matches("https://");
+            if let Some(host_port) = clean.split('/').next() {
+                if !host_port.is_empty() {
+                    let target = if host_port.contains(':') {
+                        host_port.to_string()
+                    } else {
+                        format!("{}:80", host_port)
+                    };
+                    if sock.connect(&target).is_ok() {
+                        if let Ok(addr) = sock.local_addr() {
+                            let ip = addr.ip().to_string();
+                            if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                                return ip;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 2. Coba routing gateway/broadcast lokal (RFC 1918) tanpa bergantung pada internet publik
+        for probe in &["10.255.255.255:1", "192.168.255.255:1", "172.31.255.255:1", "8.8.8.8:80", "1.1.1.1:80"] {
+            if sock.connect(probe).is_ok() {
+                if let Ok(addr) = sock.local_addr() {
+                    let ip = addr.ip().to_string();
+                    if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                        return ip;
+                    }
                 }
             }
         }

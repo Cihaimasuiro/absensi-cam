@@ -40,6 +40,55 @@ pub fn register_control_routes(router: Router<ControlState>) -> Router<ControlSt
         .route("/api/control/gpio/test", post(test_gpio_handler))
 }
 
+use std::path::{Path, PathBuf};
+
+/// Cari `edge_settings.json` di beberapa lokasi kandidat.
+///
+/// Urutan prioritas:
+/// 1. `SMART_ABSENSI_SETTINGS` (override eksplisit)
+/// 2. `<db_parent>/runtime/edge_settings.json` (produksi)
+/// 3. `<db_parent>/edge_settings.json` (layout lama)
+/// 4. `runtime/edge_settings.json` relatif CWD (dev)
+/// 5. `edge_settings.json` relatif CWD (dev, layout lama)
+pub fn resolve_settings_path(db_path: &str) -> PathBuf {
+    if let Ok(p) = std::env::var("SMART_ABSENSI_SETTINGS") {
+        let trimmed = p.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    let db_parent = Path::new(db_path).parent().unwrap_or(Path::new("."));
+
+    let candidates = [
+        db_parent.join("runtime").join("edge_settings.json"),
+        db_parent.join("edge_settings.json"),
+        PathBuf::from("runtime").join("edge_settings.json"),
+        PathBuf::from("edge_settings.json"),
+        PathBuf::from("clients/edge-engine-rs/runtime/edge_settings.json"),
+        PathBuf::from("clients/edge-engine-rs/edge_settings.json"),
+    ];
+
+    for c in &candidates {
+        if c.exists() {
+            return c.clone();
+        }
+    }
+
+    // Tidak ada file yang ada (first-boot): kembalikan path target yang valid
+    if db_parent.join("runtime").is_dir() {
+        db_parent.join("runtime").join("edge_settings.json")
+    } else if db_parent.is_dir() {
+        db_parent.join("edge_settings.json")
+    } else if Path::new("runtime").is_dir() {
+        PathBuf::from("runtime").join("edge_settings.json")
+    } else if Path::new("clients/edge-engine-rs/runtime").is_dir() {
+        PathBuf::from("clients/edge-engine-rs/runtime/edge_settings.json")
+    } else {
+        db_parent.join("edge_settings.json")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,6 +97,57 @@ mod tests {
     fn test_validate_settings_success() {
         let s = FullSettings::default();
         assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_resolve_settings_path_prefers_runtime_dir() {
+        let tmp = std::env::temp_dir().join(format!("sa_settings_test_{}", uuid::Uuid::new_v4()));
+        let runtime = tmp.join("runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+        std::fs::write(runtime.join("edge_settings.json"), "{}").unwrap();
+        std::fs::write(tmp.join("edge_settings.json"), "{}").unwrap();
+
+        let db = tmp.join("absensi.db").to_string_lossy().to_string();
+        let resolved = resolve_settings_path(&db);
+
+        assert!(
+            resolved.ends_with("runtime/edge_settings.json") || resolved.ends_with("runtime\\edge_settings.json"),
+            "expected runtime/ preference, got {:?}",
+            resolved
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_generate_device_id_not_empty() {
+        let id = generate_device_id();
+        assert!(!id.trim().is_empty());
+        assert!(id.starts_with("GATE-") || !id.is_empty());
+    }
+
+    #[test]
+    fn test_ensure_first_boot_config_creates_file() {
+        let temp_dir = std::env::temp_dir().join(format!("edge_test_{}", uuid::Uuid::new_v4()));
+        let settings_path = temp_dir.join("edge_settings.json");
+
+        assert!(!settings_path.exists());
+        let created = ensure_first_boot_config(&settings_path).expect("First-boot config creation should succeed");
+        assert!(settings_path.exists());
+        assert_eq!(created.camera.resolution, "640x480");
+        assert_eq!(created.camera.fps_cap, 15);
+        assert_eq!(created.camera.dark_luma_threshold, 10.0);
+        assert_eq!(created.camera.static_variance_threshold, 4.0);
+
+        // Load ulang memastikan hasil simpan identik
+        let loaded = load_settings(&settings_path);
+        assert_eq!(loaded.camera.resolution, "640x480");
+        assert_eq!(loaded.camera.dark_luma_threshold, 10.0);
+        assert_eq!(loaded.camera.static_variance_threshold, 4.0);
+
+        // Bersihkan
+        let _ = std::fs::remove_file(&settings_path);
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]
@@ -214,6 +314,32 @@ mod tests {
 
         s.server.url = "http://192.168.1.50:8000".to_string();
         assert!(validate_settings(&s).is_ok());
+
+        // URL kosong / whitespace diizinkan saat first-boot (belum dikonfigurasi)
+        s.server.url = String::new();
+        assert!(validate_settings(&s).is_ok());
+
+        s.server.url = "   ".to_string();
+        assert!(validate_settings(&s).is_ok());
+    }
+
+    #[test]
+    fn test_validate_settings_allows_empty_server_url() {
+        let mut s = FullSettings::default();
+        s.server.url = String::new();
+        assert!(validate_settings(&s).is_ok(), "Empty server URL must be valid for unconfigured standby state");
+
+        s.server.url = "  \t\n ".to_string();
+        assert!(validate_settings(&s).is_ok(), "Whitespace-only server URL must be treated as empty and pass validation");
+
+        s.server.url = "http://192.168.1.50:8000".to_string();
+        assert!(validate_settings(&s).is_ok(), "Valid HTTP URL must pass validation");
+
+        s.server.url = "https://attendance.school.sch.id".to_string();
+        assert!(validate_settings(&s).is_ok(), "Valid HTTPS URL must pass validation");
+
+        s.server.url = "not-a-valid-url".to_string();
+        assert!(validate_settings(&s).is_err(), "Invalid URL without scheme must fail validation");
     }
 
     #[test]

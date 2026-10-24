@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Smart Absensi Team"]
 license = "MIT"
+build = "build.rs"
 
 [lib]
 name = "smart_absensi_engine"
@@ -24,6 +25,11 @@ path = "src/bin/serial_bench.rs"
 [[bin]]
 name = "face-extract"
 path = "src/bin/face_extract.rs"
+
+[[bin]]
+name = "cam_probe"
+path = "src/bin/cam_probe.rs"
+required-features = ["native-camera"]
 
 [dependencies]
 
@@ -68,6 +74,13 @@ rustfft = "6.2"
 # Hardware
 libc = "0.2"
 serialport = { version = "4.5", default-features = false }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+nokhwa = { version = "0.10", optional = true, default-features = false, features = ["input-native"] }
+
+[features]
+default = ["native-camera"]
+native-camera = ["dep:nokhwa"]
 
 [profile.release]
 opt-level = 3

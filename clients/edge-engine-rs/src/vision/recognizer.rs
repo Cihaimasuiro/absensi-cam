@@ -60,13 +60,25 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
         "..\\models\\onnxruntime.dll",
     ];
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
     let explicit_candidates = [
+        "/opt/homebrew/lib/libonnxruntime.dylib",
+        "/usr/local/lib/libonnxruntime.dylib",
+        "./libonnxruntime.dylib",
+        "models/libonnxruntime.dylib",
+        "../models/libonnxruntime.dylib",
+    ];
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let explicit_candidates = [
+        "/usr/lib/smart-absensi/libonnxruntime.so", // Bundled image path (Zero decision)
         "/usr/local/lib/libonnxruntime.so",
         "/usr/lib/libonnxruntime.so",
         "/usr/lib/aarch64-linux-gnu/libonnxruntime.so",
         "/opt/smart-absensi/edge-engine/models/libonnxruntime.so",
         "./libonnxruntime.so",
+        "models/libonnxruntime.so",
+        "../models/libonnxruntime.so",
     ];
 
     for path in &explicit_candidates {
@@ -77,20 +89,45 @@ pub fn find_onnxruntime_dylib() -> Option<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
+        let mut search_roots: Vec<PathBuf> = vec![
+            PathBuf::from("C:\\Python"),
+            PathBuf::from("C:\\Program Files\\Python"),
+        ];
+
+        if let Ok(local_app) = std::env::var("LOCALAPPDATA") {
+            search_roots.push(PathBuf::from(local_app).join("Programs").join("Python"));
+        }
+        if let Ok(user_profile) = std::env::var("USERPROFILE") {
+            let p = Path::new(&user_profile);
+            search_roots.push(p.join("miniconda3"));
+            search_roots.push(p.join("anaconda3"));
+        }
+
+        for root in &search_roots {
+            if root.exists() {
+                if let Some(found) = find_file_recursive(root, "onnxruntime.dll", 8) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
         let search_roots = [
-            "D:\\nospaceinstalation\\laragon\\bin\\python",
-            "C:\\Python",
-            "C:\\Program Files\\Python",
+            "/opt/homebrew/lib",
+            "/usr/local/lib",
+            "/opt/homebrew/Caskroom/miniforge",
         ];
 
         for root in &search_roots {
-            if let Some(found) = find_file_recursive(Path::new(root), "onnxruntime.dll", 8) {
+            if let Some(found) = find_file_recursive(Path::new(root), "libonnxruntime.dylib", 8) {
                 return Some(found);
             }
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
         // Cari di dalam virtual environment python & direktori aplikasi
         let search_roots = [

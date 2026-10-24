@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Diadaptasi dari: pola cleanup_old_data() pada Facenox lifespan.py:127
- * PRD §12.3 — device log disimpan 7 hari di server.
+ * device log disimpan 7 hari di server.
  */
 class PruneDeviceLogs extends Command
 {

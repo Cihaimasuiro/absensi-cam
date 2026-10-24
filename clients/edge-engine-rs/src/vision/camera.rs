@@ -31,17 +31,32 @@ pub mod linux {
     pub const V4L2_PIX_FMT_YUYV: u32 = 0x56595559;  // 'YUYV'
     pub const V4L2_BUF_FLAG_ERROR: u32 = 0x00000040;
 
-    // Definisi magic ioctl Linux untuk arsitektur 64-bit
+    // Definisi magic ioctl Linux:
+    // Konstanta dengan ukuran payload tetap sama pada 32-bit dan 64-bit:
     pub const VIDIOC_REQBUFS: libc::c_ulong = 0xc0145608;
-    pub const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0585609;
     pub const VIDIOC_G_FMT: libc::c_ulong = 0xc0d05604;
     pub const VIDIOC_S_FMT: libc::c_ulong = 0xc0d05605;
-    pub const VIDIOC_QBUF: libc::c_ulong = 0xc058560f;
-    pub const VIDIOC_DQBUF: libc::c_ulong = 0xc0585611;
     pub const VIDIOC_STREAMON: libc::c_ulong = 0x40045612;
     pub const VIDIOC_STREAMOFF: libc::c_ulong = 0x40045613;
 
-    // ── Layout Struct V4L2 64-bit ───────────────────────────────────────────────
+    // Konstanta yang membawa struct v4l2_buffer:
+    // 64-bit: size 88 byte (_IOC_SIZE 0x58) -> 0xc0585609 / 0xc058560f / 0xc0585611
+    // 32-bit: size 68 byte (_IOC_SIZE 0x44) -> 0xc0445609 / 0xc044560f / 0xc0445611
+    #[cfg(target_pointer_width = "64")]
+    pub const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0585609;
+    #[cfg(target_pointer_width = "64")]
+    pub const VIDIOC_QBUF: libc::c_ulong = 0xc058560f;
+    #[cfg(target_pointer_width = "64")]
+    pub const VIDIOC_DQBUF: libc::c_ulong = 0xc0585611;
+
+    #[cfg(target_pointer_width = "32")]
+    pub const VIDIOC_QUERYBUF: libc::c_ulong = 0xc0445609;
+    #[cfg(target_pointer_width = "32")]
+    pub const VIDIOC_QBUF: libc::c_ulong = 0xc044560f;
+    #[cfg(target_pointer_width = "32")]
+    pub const VIDIOC_DQBUF: libc::c_ulong = 0xc0445611;
+
+    // ── Layout Struct V4L2 (Arsitektur 64-bit & 32-bit) ───────────────────────
 
     #[repr(C)]
     #[derive(Copy, Clone, Default)]
@@ -104,10 +119,18 @@ pub mod linux {
     #[repr(C)]
     #[derive(Copy, Clone, Default)]
     pub struct V4l2Timeval {
+        #[cfg(target_pointer_width = "64")]
         pub tv_sec: i64,
+        #[cfg(target_pointer_width = "64")]
         pub tv_usec: i64,
+
+        #[cfg(target_pointer_width = "32")]
+        pub tv_sec: i32,
+        #[cfg(target_pointer_width = "32")]
+        pub tv_usec: i32,
     }
 
+    #[cfg(target_pointer_width = "64")]
     #[repr(C)]
     #[derive(Copy, Clone, Default)]
     pub struct V4l2Buffer {
@@ -128,10 +151,34 @@ pub mod linux {
         pub _pad1: u32,
     }
 
-    // ── Assertion Layout 64-bit Saat Kompilasi ──────────────────────────────────
-    const _: () = assert!(std::mem::size_of::<V4l2Requestbuffers>() == 20, "V4l2Requestbuffers must be 20 bytes on 64-bit");
-    const _: () = assert!(std::mem::size_of::<V4l2Format>() == 208, "V4l2Format must be 208 bytes on 64-bit");
+    #[cfg(target_pointer_width = "32")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Default)]
+    pub struct V4l2Buffer {
+        pub index: u32,
+        pub buf_type: u32,
+        pub bytesused: u32,
+        pub flags: u32,
+        pub field: u32,
+        pub timestamp: V4l2Timeval,
+        pub timecode: [u8; 16],
+        pub sequence: u32,
+        pub memory: u32,
+        pub m_offset: u32,
+        pub length: u32,
+        pub reserved2: u32,
+        pub request_fd: i32,
+    }
+
+    // ── Assertion Layout Saat Kompilasi ──────────────────────────────────
+    const _: () = assert!(std::mem::size_of::<V4l2Requestbuffers>() == 20, "V4l2Requestbuffers must be 20 bytes");
+    const _: () = assert!(std::mem::size_of::<V4l2Format>() == 208, "V4l2Format must be 208 bytes");
+
+    #[cfg(target_pointer_width = "64")]
     const _: () = assert!(std::mem::size_of::<V4l2Buffer>() == 88, "V4l2Buffer must be 88 bytes on 64-bit");
+
+    #[cfg(target_pointer_width = "32")]
+    const _: () = assert!(std::mem::size_of::<V4l2Buffer>() == 68, "V4l2Buffer must be 68 bytes on 32-bit");
 
     /// Helper ioctl terbungkus yang menangani retry EINTR.
     ///
@@ -427,6 +474,7 @@ pub mod linux {
         device_path: String,
         width: u32,
         height: u32,
+        fps_cap: u32,
         running: Arc<AtomicBool>,
         has_viewers: V,
         mut on_stream_frame: F,
@@ -442,7 +490,13 @@ pub mod linux {
         std::thread::Builder::new()
             .name("v4l2-capture".to_string())
             .spawn(move || {
-                info!("Starting V4L2 capture thread on {}", device_path);
+                info!("Starting V4L2 capture thread on {} (fps_cap: {})", device_path, fps_cap);
+                let base_interval_ms = (1000u64 / (fps_cap.clamp(5, 60) as u64)).clamp(16, 500);
+                let stream_interval_ms = base_interval_ms;
+                let ai_interval_ms = base_interval_ms;
+                let mut last_ai_frame = std::time::Instant::now()
+                    .checked_sub(Duration::from_millis(ai_interval_ms))
+                    .unwrap_or_else(std::time::Instant::now);
                 // SELALU utamakan MJPEG: kompresi hardware kamera berjalan 30 FPS dengan ~0% CPU
                 let mut camera = match Camera::open_with_format(&device_path, width, height, false) {
                     Ok(cam) => cam,
@@ -462,8 +516,8 @@ pub mod linux {
                 let pixel_format = camera.pixel_format;
 
                 println!(
-                    "[Camera] Terhubung ke {} (Resolusi: {}x{}, Format: {:?}, Stride: {} bytes)",
-                    device_path, w, h, pixel_format, stride
+                    "[Camera] Terhubung ke {} (Resolusi: {}x{}, Format: {:?}, Stride: {} bytes, Cap: {} FPS)",
+                    device_path, w, h, pixel_format, stride, fps_cap
                 );
 
                 let mut rgb_buf = if pixel_format == PixelFormat::Yuyv {
@@ -483,39 +537,87 @@ pub mod linux {
 
                 while running.load(Ordering::Relaxed) {
                     let capture_res = camera.capture_frame(500, |frame| {
+                        let now = std::time::Instant::now();
                         match pixel_format {
                             PixelFormat::Mjpeg => {
-                                // 1. Pass-through MJPEG hardware langsung ke stream HTTP (0% decode CPU)
-                                on_stream_frame(frame, PixelFormat::Mjpeg, w, h);
+                                frame_count = frame_count.saturating_add(1);
+                                if frame_count == 30 || (frame_count > 30 && frame_count % 150 == 0) {
+                                    if let Ok(dyn_img) = image::load_from_memory_with_format(frame, image::ImageFormat::Jpeg) {
+                                        let rgb = dyn_img.to_rgb8();
+                                        let (mean_luma, variance) = crate::vision::calculate_luma_and_variance(rgb.as_raw());
+                                        if frame_count == 30 {
+                                            info!("Baseline kamera '{}' (MJPEG Frame 30): luma={:.1}, variansi={:.1}", device_path, mean_luma, variance);
+                                        }
+                                        if mean_luma < 10.0 || variance < 4.0 {
+                                            warn!(
+                                                "Kamera '{}' (MJPEG) tidak menghasilkan gambar valid (luma rata-rata {:.1}, variansi {:.1}) setelah {} frame. \
+                                                 Kemungkinan shutter kamera tertutup atau frame statis.",
+                                                device_path, mean_luma, variance, frame_count
+                                            );
+                                        }
+                                    }
+                                }
 
-                                // 2. Teruskan byte JPEG mentah ke worker AI (tanpa decode di thread capture!)
+                                let viewers_active = has_viewers();
+                                let elapsed = now.duration_since(last_stream_encode);
+                                let should_stream = if viewers_active {
+                                    elapsed >= Duration::from_millis(stream_interval_ms)
+                                } else {
+                                    elapsed >= Duration::from_millis(2000)
+                                };
+
+                                if should_stream {
+                                    // 1. Pass-through MJPEG hardware langsung ke stream HTTP (0% decode CPU)
+                                    on_stream_frame(frame, PixelFormat::Mjpeg, w, h);
+                                    last_stream_encode = now;
+                                }
+
+                                // 2. Teruskan byte JPEG mentah ke worker AI HANYA jika memenuhi ai_interval_ms
                                 if let Some(ref mut ai_cb) = on_ai_frame {
-                                    ai_cb(frame, PixelFormat::Mjpeg, w, h);
+                                    if now.duration_since(last_ai_frame) >= Duration::from_millis(ai_interval_ms) {
+                                        ai_cb(frame, PixelFormat::Mjpeg, w, h);
+                                        last_ai_frame = now;
+                                    }
                                 }
                             }
                             PixelFormat::Yuyv => {
+                                frame_count = frame_count.saturating_add(1);
                                 if !yuyv_to_rgb_stride(frame, w as usize, h as usize, stride, &mut rgb_buf) {
                                     warn!("Truncated or malformed YUYV frame (len={}), skipping", frame.len());
                                     return;
                                 }
 
-                                // 1. Teruskan slice RGB mentah langsung ke worker AI (NOL decode JPEG di worker AI!)
-                                if let Some(ref mut ai_cb) = on_ai_frame {
-                                    ai_cb(&rgb_buf, PixelFormat::Yuyv, w, h);
+                                if frame_count == 30 || (frame_count > 30 && frame_count % 150 == 0) {
+                                    let (mean_luma, variance) = crate::vision::calculate_luma_and_variance(&rgb_buf);
+                                    if frame_count == 30 {
+                                        info!("Baseline kamera '{}' (YUYV Frame 30): luma={:.1}, variansi={:.1}", device_path, mean_luma, variance);
+                                    }
+                                    if mean_luma < 10.0 || variance < 4.0 {
+                                        warn!(
+                                            "Kamera '{}' tidak menghasilkan gambar valid (luma rata-rata {:.1}, variansi {:.1}) setelah {} frame. \
+                                             Kemungkinan kamera IR, shutter kamera tertutup, atau frame statis. Coba periksa fisik kamera atau ganti index.",
+                                            device_path, mean_luma, variance, frame_count
+                                        );
+                                    }
                                 }
 
-                                // 2. Encoding JPEG untuk stream (sesuai permintaan & dibatasi):
+                                // 1. Teruskan slice RGB mentah langsung ke worker AI (dibatasi oleh ai_interval_ms)
+                                if let Some(ref mut ai_cb) = on_ai_frame {
+                                    if now.duration_since(last_ai_frame) >= Duration::from_millis(ai_interval_ms) {
+                                        ai_cb(&rgb_buf, PixelFormat::Yuyv, w, h);
+                                        last_ai_frame = now;
+                                    }
+                                }
+
+                                // 2. Encoding JPEG untuk stream (sesuai permintaan & dibatasi oleh fps_cap):
                                 let viewers_active = has_viewers();
-                                let now = std::time::Instant::now();
                                 let elapsed_since_last_encode = now.duration_since(last_stream_encode);
 
                                 let should_encode = if viewers_active {
-                                    // Saat ada penonton aktif di /stream: batasi ~10 FPS (interval 100ms) dengan kualitas 60
-                                    // Memangkas beban CPU JPEG software ke ~20% sambil tetap memberi video tajam dan lancar
-                                    elapsed_since_last_encode >= Duration::from_millis(100)
+                                    // Dibatasi oleh fps_cap dengan kualitas 60 untuk memangkas beban CPU
+                                    elapsed_since_last_encode >= Duration::from_millis(stream_interval_ms)
                                 } else {
                                     // Saat TIDAK ada penonton di /stream: encode 1 frame tiap 2.0 detik agar /snapshot.jpg tetap segar
-                                    // Menurunkan beban CPU saat idle menjadi <2%
                                     elapsed_since_last_encode >= Duration::from_millis(2000)
                                 };
 

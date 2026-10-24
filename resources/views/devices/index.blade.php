@@ -299,7 +299,8 @@
     {{-- ───────────────────────── Device control panel ───────────────────── --}}
     <dialog x-ref="controlModal" x-show="controlDevice" x-cloak @close="closeControl()"
             @click="$event.target === $el && closeControl()"
-            class="w-[min(1180px,96vw)] h-[min(880px,92vh)] m-auto flex flex-col">
+            class="w-[min(1560px,98vw)] h-[96vh] m-auto flex flex-col transition-all duration-150"
+            :class="{ 'fixed inset-0 !w-screen !h-screen !max-w-none !max-h-none !m-0 !rounded-none !border-0 z-50': controlMaximized }">
         <div class="modal-head">
             <h2 class="modal-title">
                 <i data-lucide="monitor-cog" class="w-4 h-4 text-primary"></i>
@@ -314,6 +315,11 @@
                    class="btn btn-secondary btn-sm">
                     <i data-lucide="external-link" class="w-3 h-3"></i> Tab Baru
                 </a>
+                <button type="button" @click="toggleControlMaximize()" class="btn-icon"
+                        :title="controlMaximized ? 'Perkecil' : 'Layar Penuh'"
+                        :aria-label="controlMaximized ? 'Perkecil' : 'Layar Penuh'">
+                    <i :data-lucide="controlMaximized ? 'minimize-2' : 'maximize-2'" class="w-4 h-4"></i>
+                </button>
                 <button type="button" @click="reloadControl()" class="btn-icon" aria-label="Muat ulang"
                         title="Muat ulang panel">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
@@ -351,16 +357,6 @@
                         referrerpolicy="no-referrer"
                         allow="camera; microphone; fullscreen"></iframe>
             </div>
-        </div>
-
-        <div class="px-md py-2.5 border-t border-hairline bg-canvas-soft shrink-0">
-            <p class="text-[11.5px] text-ink-muted m-0 flex items-start gap-1.5">
-                <i data-lucide="info" class="w-3.5 h-3.5 text-primary shrink-0 mt-0.5"></i>
-                <span>
-                    Panel ini dilayani langsung oleh perangkat edge dan memiliki sesi login sendiri.
-                    Bila halaman ini kosong, pastikan perangkat menyala dan berada di jaringan yang sama.
-                </span>
-            </p>
         </div>
     </dialog>
 

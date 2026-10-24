@@ -73,6 +73,7 @@
       font-size: 13px;
       line-height: 1.5;
       overflow-x: hidden;
+      height: 100vh;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -188,16 +189,18 @@
     /* Main Live Viewport */
     main {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 12px 16px;
+      overflow: hidden;
     }
 
     .video-card {
       width: 100%;
-      max-width: 800px;
+      max-width: min(840px, calc((100vh - 120px) * 4 / 3));
       background: var(--surface);
       border: 1px solid var(--border);
       display: flex;
@@ -624,7 +627,7 @@
         help_mirror: 'Flips the preview feed horizontally for natural user alignment (hot toggle).',
         sec_server: 'Central Server',
         label_server_url: 'Laravel API URL',
-        help_server_url: 'Base URL of the central Laravel attendance server.',
+        help_server_url: 'Base URL of the central Laravel attendance server (e.g. http://192.168.1.10:8000).',
         label_status: 'Status',
         status_paired: 'PAIRED & ACTIVE',
         status_unpaired: 'UNPAIRED',
@@ -730,9 +733,11 @@
         toast_gpio_test_fail: 'GPIO test failed: ',
         toast_gpio_test_error: 'GPIO test error: ',
         label_camera_index: 'Camera',
-        camera_simulated_alert_title: 'SIMULATED CAMERA ACTIVE:',
         camera_simulated_alert_desc: 'Physical webcam was not detected or failed to read. Running with synthetic test feed.',
-        btn_configure_camera: 'CONFIGURE',
+        camera_simulated_modal_title: 'SIMULATED CAMERA ACTIVE',
+        camera_simulated_modal_hint: 'Verify that the physical webcam is plugged in and the hardware privacy shutter slider above the lens is open.',
+        btn_dismiss: 'DISMISS',
+        btn_configure_camera: 'CONFIGURE CAMERA',
         confirm_apply_network: 'Apply network configuration? You will have 60 seconds to confirm the change.',
         confirm_repair: 'Re-pairing will clear local pairing credentials. Are you sure?',
         confirm_restart_engine: 'Restart Rust AI Vision engine?',
@@ -790,7 +795,7 @@
         help_mirror: 'Membalikkan pratinjau secara horizontal untuk penyesuaian posisi alami (langsung aktif).',
         sec_server: 'Server Pusat',
         label_server_url: 'URL API Laravel',
-        help_server_url: 'Alamat URL dasar tempat backend Smart Absensi terpasang.',
+        help_server_url: 'Alamat URL dasar tempat backend Smart Absensi terpasang (contoh: http://192.168.1.10:8000).',
         label_status: 'Status',
         status_paired: 'TERHUBUNG & AKTIF',
         status_unpaired: 'BELUM TERHUBUNG',
@@ -896,8 +901,10 @@
         toast_gpio_test_fail: 'Uji GPIO gagal: ',
         toast_gpio_test_error: 'Kesalahan uji GPIO: ',
         label_camera_index: 'Kamera',
-        camera_simulated_alert_title: 'KAMERA SIMULASI AKTIF:',
         camera_simulated_alert_desc: 'Webcam fisik tidak terdeteksi atau gagal dibaca. Berjalan dengan umpan sintetis.',
+        camera_simulated_modal_title: 'KAMERA SIMULASI AKTIF',
+        camera_simulated_modal_hint: 'Pastikan webcam fisik terhubung dan penutup privasi (privacy shutter) di atas lensa dalam keadaan terbuka.',
+        btn_dismiss: 'ABAIKAN',
         btn_configure_camera: 'ATUR KAMERA',
         confirm_apply_network: 'Terapkan konfigurasi jaringan? Anda memiliki waktu 60 detik untuk konfirmasi.',
         confirm_repair: 'Menghubungkan ulang akan menghapus kredensial pairing lokal. Lanjutkan?',
@@ -911,6 +918,8 @@
       Alpine.data('edgePanel', () => ({
         showSettings: false,
         showLogin: false,
+        showSimulatedModal: false,
+        simulatedModalDismissed: false,
         needsSetup: false,
         setupCode: '',
         loginPassword: '',
@@ -1143,6 +1152,11 @@
             if (res.ok) {
               this.info = await res.json();
               this.streamConnected = true;
+              if (this.info.camera_is_simulated && !this.simulatedModalDismissed && !this.showSettings && !this.showLogin) {
+                this.showSimulatedModal = true;
+              } else if (!this.info.camera_is_simulated) {
+                this.simulatedModalDismissed = false;
+              }
             }
           } catch (e) {
             this.streamConnected = false;
@@ -1504,27 +1518,12 @@
 
   <!-- 2. Main Live Viewport -->
   <main>
-    <!-- Camera Simulated / Hardware Error Alert Banner -->
-    <template x-if="info.camera_is_simulated">
-      <div
-        style="background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; padding: 10px 16px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-        <div style="color: #ef4444; display: flex; align-items: center; gap: 8px;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <div>
-            <strong x-text="t('camera_simulated_alert_title')">SIMULATED CAMERA ACTIVE:</strong>
-            <span x-text="t('camera_simulated_alert_desc')">Physical webcam was not detected or failed to read. Running with synthetic test feed.</span>
-          </div>
-        </div>
-        <button class="btn-square" style="padding: 4px 10px; font-size: 10px; border-color: #ef4444; color: #ef4444;"
-          @click="openSettings()" x-text="t('btn_configure_camera')">CONFIGURE CAMERA</button>
-      </div>
-    </template>
-
     <div class="video-card">
+      <div x-show="info.camera_warning" x-cloak class="font-mono"
+        style="background: rgba(245, 158, 11, 0.12); border-bottom: 1px solid #f59e0b; color: #fbbf24; padding: 6px 12px; font-size: 11px; display: flex; align-items: center; justify-content: space-between;">
+        <span x-text="'[!] ' + info.camera_warning"></span>
+        <button type="button" class="btn-square" style="padding: 1px 6px; font-size: 10px; border-color: #f59e0b; color: #fbbf24;" @click="openSettings()">SETTINGS</button>
+      </div>
       <div class="video-viewport">
         <img :src="feedUrl" alt="Live Gate Preview" x-show="feedUrl && streamConnected" @error="handleStreamError()"
           @load="streamConnected = true" />
@@ -1538,11 +1537,17 @@
         </div>
       </div>
       <div class="video-overlay-bar font-mono">
-        <div>
-          <span x-text="t('overlay_device') + ': '">DEVICE: </span><span style="color: var(--text);" x-text="info.device_code || 'STANDALONE'"></span> |
+        <div style="display: flex; align-items: center;">
+          <span x-text="t('overlay_device') + ': '">DEVICE: </span><span style="color: var(--text);" x-text="info.device_code || 'STANDALONE'"></span><span style="margin: 0 4px;">|</span>
           FPS: <span style="color: var(--text);" x-text="settings.camera.fps_cap || 15"></span>
           <template x-if="info.camera_is_simulated">
-            <span style="color: #ef4444; margin-left: 6px; font-weight: bold;">[SIMULATED]</span>
+            <button type="button" class="btn-square"
+              style="padding: 2px 6px; font-size: 10px; border-color: #ef4444; color: #ef4444; margin-left: 8px; line-height: 1;"
+              @click="showSimulatedModal = true"
+              :title="t('camera_simulated_modal_title')">[SIMULATED]</button>
+          </template>
+          <template x-if="info.camera_warning">
+            <span style="color: #f59e0b; margin-left: 8px;" :title="info.camera_warning">[DARK / CLOSED]</span>
           </template>
         </div>
         <div>
@@ -1636,7 +1641,7 @@
             </div>
 
             <!-- 3. CAMERA -->
-            <div class="settings-section">
+            <div class="settings-section" id="section-camera">
               <span class="section-label" x-text="t('sec_camera')">Camera</span>
 
               <div class="setting-row">
@@ -1761,7 +1766,7 @@
               <div class="setting-row">
                 <div class="row-main">
                   <label class="row-label" x-text="t('label_server_url')">Laravel API URL</label>
-                  <input type="text" x-model="settings.server.url" placeholder="http://192.168.10.66:8000" />
+                  <input type="text" x-model="settings.server.url" placeholder="http://<ip-server-laravel>:8000" />
                 </div>
                 <div class="row-help" x-text="t('help_server_url')">Base URL of the central Laravel attendance server.</div>
               </div>
@@ -1991,6 +1996,41 @@
               @click="submitLogin()" x-text="t('btn_login')">LOG IN</button>
           </div>
         </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Simulated Camera Warning Modal Dialog -->
+  <div class="modal-backdrop" x-show="showSimulatedModal" x-cloak @click.self="showSimulatedModal = false; simulatedModalDismissed = true;">
+    <div class="modal-dialog" style="max-width: 450px; height: auto;">
+      <div class="modal-header" style="border-bottom-color: rgba(239, 68, 68, 0.3);">
+        <div style="display: flex; align-items: center; gap: 8px; color: #ef4444;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <div class="modal-title" style="color: #ef4444; font-size: 14px; letter-spacing: -0.01em;" x-text="t('camera_simulated_modal_title')">KAMERA SIMULASI AKTIF</div>
+        </div>
+        <button class="btn-square btn-icon" style="margin-left: auto;" @click="showSimulatedModal = false; simulatedModalDismissed = true;" title="Tutup">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 18px 22px;">
+        <p style="font-size: 12.5px; line-height: 1.5; color: var(--text); margin-bottom: 12px;" x-text="t('camera_simulated_alert_desc')">
+          Webcam fisik tidak terdeteksi atau gagal dibaca. Berjalan dengan umpan sintetis.
+        </p>
+        <div style="font-size: 11.5px; line-height: 1.4; color: var(--text-muted); background: var(--surface-elevated); border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 16px;">
+          <span x-text="t('camera_simulated_modal_hint')">Pastikan webcam fisik terhubung dan penutup privasi (privacy shutter) di atas lensa dalam keadaan terbuka.</span>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn-square" @click="showSimulatedModal = false; simulatedModalDismissed = true;" x-text="t('btn_dismiss')">ABAIKAN</button>
+          <button class="btn-square btn-square-primary" style="background: #ef4444; border-color: #ef4444; color: #fff;"
+            @click="showSimulatedModal = false; simulatedModalDismissed = true; openSettings(); $nextTick(() => document.getElementById('section-camera')?.scrollIntoView({ behavior: 'smooth' }));"
+            x-text="t('btn_configure_camera')">ATUR KAMERA</button>
+        </div>
       </div>
     </div>
   </div>

@@ -1,0 +1,137 @@
+#!/bin/bash
+# ==============================================================================
+# Smart Absensi Auto-Repair Tool (One-Command Fix)
+# Location: /usr/local/bin/smart-absensi-repair
+# ==============================================================================
+set -euo pipefail
+
+echo "═══════════════════════════════════════════════════════"
+echo " Smart Absensi Auto-Repair & Diagnostic Tool"
+echo "═══════════════════════════════════════════════════════"
+
+# Pastikan dijalankan sebagai root jika ingin memperbaiki sistem
+if [ "$EUID" -ne 0 ]; then
+  echo "[!] Peringatan: Harap jalankan dengan sudo untuk melakukan perbaikan sistem."
+  echo "    Contoh: sudo smart-absensi-repair"
+  exit 1
+fi
+
+ARCH=$(uname -m)
+echo "[i] Mendeteksi arsitektur perangkat: $ARCH"
+
+ORT_TARGET_DIR="/usr/lib/smart-absensi"
+ORT_TARGET_LIB="$ORT_TARGET_DIR/libonnxruntime.so"
+mkdir -p "$ORT_TARGET_DIR"
+
+AARCH64_SHA256="866109a9248d057671a039b9d725be4bd86888e3754140e6701ec621be9d4d7e"
+X64_SHA256="3a211fbea252c1e66290658f1b735b772056149f28321e71c308942cdb54b747"
+
+verify_checksum() {
+  local file="$1"
+  local expected="$2"
+  local actual
+  actual=$(sha256sum "$file" | awk '{print $1}')
+  if [ "$actual" != "$expected" ]; then
+    echo "[✗] Checksum SHA256 tidak cocok!" >&2
+    echo "    Expected: $expected" >&2
+    echo "    Actual:   $actual" >&2
+    rm -f "$file"
+    exit 1
+  fi
+  echo "[✓] Verifikasi SHA256 cocok: $expected"
+}
+
+# 1. Pengecekan & Perbaikan ONNX Runtime
+case "$ARCH" in
+  aarch64|arm64)
+    echo "[i] Arsitektur 64-bit ARM didukung penuh untuk inferensi edge."
+    if [ ! -f "$ORT_TARGET_LIB" ]; then
+      echo "[*] Mencari libonnxruntime.so di cache lokal atau direktori models..."
+      if [ -f "/opt/smart-absensi/edge-engine/models/libonnxruntime.so" ]; then
+        cp "/opt/smart-absensi/edge-engine/models/libonnxruntime.so" "$ORT_TARGET_LIB"
+      elif [ -f "/data/models/libonnxruntime.so" ]; then
+        cp "/data/models/libonnxruntime.so" "$ORT_TARGET_LIB"
+      else
+        echo "[*] Mengunduh libonnxruntime.so v1.24.4 untuk aarch64..."
+        curl -fSL "https://github.com/microsoft/onnxruntime/releases/download/v1.24.4/onnxruntime-linux-aarch64-1.24.4.tgz" -o /tmp/ort.tgz
+        verify_checksum "/tmp/ort.tgz" "$AARCH64_SHA256"
+        tar -xzf /tmp/ort.tgz -C /tmp
+        cp /tmp/onnxruntime-linux-aarch64-1.24.4/lib/libonnxruntime.so.1.24.4 "$ORT_TARGET_LIB"
+        rm -rf /tmp/ort.tgz /tmp/onnxruntime-linux-aarch64-1.24.4
+      fi
+      chmod 0755 "$ORT_TARGET_LIB"
+      ldconfig
+      echo "[✓] libonnxruntime.so berhasil dipasang di $ORT_TARGET_LIB"
+    else
+      echo "[✓] libonnxruntime.so sudah terpasang di $ORT_TARGET_LIB"
+    fi
+    ;;
+  x86_64|amd64)
+    echo "[i] Arsitektur x86_64 didukung."
+    if [ ! -f "$ORT_TARGET_LIB" ]; then
+      if [ -f "/opt/smart-absensi/edge-engine/models/libonnxruntime.so" ]; then
+        cp "/opt/smart-absensi/edge-engine/models/libonnxruntime.so" "$ORT_TARGET_LIB"
+      elif [ -f "/data/models/libonnxruntime.so" ]; then
+        cp "/data/models/libonnxruntime.so" "$ORT_TARGET_LIB"
+      else
+        echo "[*] Mengunduh libonnxruntime.so v1.24.4 untuk x86_64..."
+        curl -fSL "https://github.com/microsoft/onnxruntime/releases/download/v1.24.4/onnxruntime-linux-x64-1.24.4.tgz" -o /tmp/ort.tgz
+        verify_checksum "/tmp/ort.tgz" "$X64_SHA256"
+        tar -xzf /tmp/ort.tgz -C /tmp
+        cp /tmp/onnxruntime-linux-x64-1.24.4/lib/libonnxruntime.so.1.24.4 "$ORT_TARGET_LIB"
+        rm -rf /tmp/ort.tgz /tmp/onnxruntime-linux-x64-1.24.4
+      fi
+      chmod 0755 "$ORT_TARGET_LIB"
+      ldconfig
+      echo "[✓] libonnxruntime.so berhasil dipasang di $ORT_TARGET_LIB"
+    else
+      echo "[✓] libonnxruntime.so sudah terpasang di $ORT_TARGET_LIB"
+    fi
+    ;;
+  armv7l|armv7|armhf)
+    echo "[!] Arsitektur ARM 32-bit: ONNX Runtime tidak tersedia untuk armv7."
+    echo "    Perangkat berjalan dalam mode capture-only (--no-inference)."
+    ;;
+  *)
+    echo "[!] Arsitektur $ARCH tidak didukung."
+    ;;
+esac
+
+# 2. Pengecekan Kamera
+echo "[i] Memeriksa perangkat kamera V4L2..."
+CAM_FOUND=0
+for dev in /dev/video*; do
+  if [ -e "$dev" ]; then
+    echo "    └─ Terdeteksi: $dev"
+    CAM_FOUND=1
+  fi
+done
+if [ "$CAM_FOUND" -eq 0 ]; then
+  echo "[!] Peringatan: Tidak ada perangkat /dev/video* terdeteksi. Periksa koneksi kamera USB/CSI."
+fi
+
+# 3. Pengecekan Direktori Data & Izin
+echo "[i] Memeriksa izin direktori /data..."
+if [ -d "/data" ]; then
+  mkdir -p /data/runtime /data/models /data/config
+  if id "edge" &>/dev/null; then
+    chown -R edge:edge /data
+    chmod -R 775 /data
+    echo "[✓] Izin direktori /data disesuaikan untuk pengguna edge."
+  fi
+fi
+
+# 4. Restart Layanan jika systemd aktif
+if systemctl is-active --quiet smart-absensi.service 2>/dev/null; then
+  echo "[*] Me-restart layanan smart-absensi.service..."
+  systemctl restart smart-absensi.service
+  echo "[✓] Layanan smart-absensi berhasil di-restart."
+elif systemctl list-unit-files 2>/dev/null | grep -q smart-absensi.service; then
+  echo "[*] Mengaktifkan dan memulai layanan smart-absensi.service..."
+  systemctl enable --now smart-absensi.service
+  echo "[✓] Layanan smart-absensi aktif."
+fi
+
+echo "═══════════════════════════════════════════════════════"
+echo " Pemeriksaan & Perbaikan Selesai."
+echo "═══════════════════════════════════════════════════════"

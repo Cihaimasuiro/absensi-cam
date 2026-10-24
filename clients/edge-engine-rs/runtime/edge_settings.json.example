@@ -1,0 +1,36 @@
+{
+  "general": {
+    "language": "id",
+    "device_name": "GATE-01"
+  },
+  "camera": {
+    "source": "0",
+    "resolution": "640x480",
+    "fps_cap": 30,
+    "mirror_preview": false
+  },
+  "network": {
+    "interface": "wlan0",
+    "mode": "dhcp",
+    "wifi_ssid": "",
+    "wifi_password": null,
+    "static_ip": "",
+    "subnet": "255.255.255.0",
+    "gateway": "",
+    "dns": "1.1.1.1"
+  },
+  "time": {
+    "timezone": "Asia/Jakarta",
+    "ntp_enabled": true
+  },
+  "server": {
+    "url": "http://localhost:8000"
+  },
+  "gpio": {
+    "enabled": false,
+    "green_pin": 16,
+    "red_pin": null,
+    "buzzer_pin": null,
+    "active_high": true
+  }
+}

@@ -340,6 +340,12 @@ Alpine.data('devicesData', () => ({
     // ── Embedded edge control panel ─────────────────────────────────────
     controlDevice: null,
     controlLoading: false,
+    controlMaximized: false,
+
+    toggleControlMaximize() {
+        this.controlMaximized = !this.controlMaximized;
+        setTimeout(() => window.refreshIcons?.(), 30);
+    },
 
     openControl(param) {
         let device = null;
@@ -367,6 +373,7 @@ Alpine.data('devicesData', () => ({
     closeControl() {
         this.controlDevice = null;
         this.controlLoading = false;
+        this.controlMaximized = false;
         const frame = document.getElementById('edgeControlFrame');
         if (frame) {
             frame.src = 'about:blank';

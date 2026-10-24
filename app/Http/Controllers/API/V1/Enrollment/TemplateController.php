@@ -11,10 +11,11 @@ use Illuminate\Http\Request;
 /**
  * GET /api/v1/templates?cursor=<N>&limit=200
  *
- * Sinkronisasi delta template wajah ke edge (FR-S07, FR-E11, PRD §11.2).
+ * Sinkronisasi delta template wajah ke edge
  * Mengembalikan template dengan version_cursor > cursor yang diberikan, termasuk tombstone (op=delete).
- * Edge memfilter berdasarkan model_version dan menolak yang tidak kompatibel (AC-45).
+ * Edge memfilter berdasarkan model_version dan menolak yang tidak kompatibel.
  */
+
 class TemplateController extends Controller
 {
     public function __invoke(Request $request): JsonResponse

@@ -89,6 +89,10 @@ impl SyncWorker {
             self.model_version
         );
 
+        if self.api_url.is_empty() {
+            warn!("Server URL belum dikonfigurasi. SyncWorker standby menunggu konfigurasi server.");
+        }
+
         loop {
             tokio::select! {
                 // 1. Ping Watchdog Khusus (TIDAK BOLEH TERHALANG OUTAGE JARINGAN)
@@ -98,6 +102,9 @@ impl SyncWorker {
 
                 // 2. Kuras Outbox dengan Backoff Non-blocking (FR-E10)
                 _ = outbox_interval.tick() => {
+                    if self.api_url.is_empty() {
+                        continue;
+                    }
                     if tokio::time::Instant::now() < next_outbox_attempt {
                         // Masih dalam cooldown backoff; lewati tanpa memblokir task loop lain!
                         continue;
@@ -127,6 +134,9 @@ impl SyncWorker {
 
                 // 3. Sinkronisasi Delta Template & Config (FR-E11)
                 _ = template_interval.tick() => {
+                    if self.api_url.is_empty() {
+                        continue;
+                    }
                     if let Err(e) = self.pull_templates().await {
                         warn!("Gagal pull templates wajah: {:?}", e);
                     }
@@ -134,6 +144,9 @@ impl SyncWorker {
 
                 // 4. Telemetri Heartbeat (FR-E12)
                 _ = heartbeat_interval.tick() => {
+                    if self.api_url.is_empty() {
+                        continue;
+                    }
                     if let Err(e) = self.send_heartbeat().await {
                         warn!("Gagal mengirim heartbeat: {:?}", e);
                     }
@@ -148,6 +161,9 @@ impl SyncWorker {
     ///   pecah batch menjadi pengiriman individual agar baris yang valid tetap tersinkron
     ///   dan baris yang korup dikarantina (synced = -1).
     pub async fn push_outbox_to_laravel(&self) -> Result<(usize, usize)> {
+        if self.api_url.is_empty() {
+            return Ok((0, 0));
+        }
         let records = self.db.get_unsynced_attendance(50).await?;
         if records.is_empty() {
             return Ok((0, 0));
@@ -294,6 +310,9 @@ impl SyncWorker {
     /// Tarik template wajah terbaru dari Laravel /api/v1/templates
     /// Menolak template dengan model_version berbeda (FR-E11)
     pub async fn pull_templates(&self) -> Result<()> {
+        if self.api_url.is_empty() {
+            return Ok(());
+        }
         let last_sync = self.db.get_last_template_sync_time().await?;
         let mut url = format!("{}/api/v1/templates", self.api_url);
         if let Some(cursor) = last_sync {
@@ -354,6 +373,9 @@ impl SyncWorker {
 
     /// Kirim telemetri heartbeat ke Laravel /api/v1/devices/heartbeat
     pub async fn send_heartbeat(&self) -> Result<()> {
+        if self.api_url.is_empty() {
+            return Ok(());
+        }
         let unsynced_len = self.db.get_unsynced_count().await.unwrap_or(0);
         let (tmpl_count, tmpl_hash) = match self.db.get_templates_hash().await {
             Ok((c, h)) => (Some(c), Some(h)),
@@ -407,6 +429,9 @@ impl SyncWorker {
 
     /// Tarik snapshot template aktif dari server dan bersihkan ghost template secara aman (FR-E11 / Langkah 4)
     pub async fn reconcile_templates(&self) -> Result<()> {
+        if self.api_url.is_empty() {
+            return Ok(());
+        }
         let url = format!("{}/api/v1/templates/snapshot", self.api_url);
         let resp = self
             .client
@@ -535,24 +560,28 @@ fn read_free_disk_mb() -> i64 {
 
 fn get_local_ip_to(api_url: &str) -> String {
     let clean = api_url.trim_start_matches("http://").trim_start_matches("https://");
-    let host_port = clean.split('/').next().unwrap_or("1.1.1.1:80");
-    let host = host_port.split(':').next().unwrap_or("1.1.1.1");
-    let target = format!("{}:80", host);
+    let host_port = clean.split('/').next().unwrap_or("").trim();
+    let host = host_port.split(':').next().unwrap_or("").trim();
 
     if let Ok(sock) = std::net::UdpSocket::bind("0.0.0.0:0") {
-        if sock.connect(&target).is_ok() {
-            if let Ok(addr) = sock.local_addr() {
-                let ip = addr.ip().to_string();
-                if ip != "0.0.0.0" && ip != "127.0.0.1" {
-                    return ip;
+        if !host.is_empty() {
+            let target = format!("{}:80", host);
+            if sock.connect(&target).is_ok() {
+                if let Ok(addr) = sock.local_addr() {
+                    let ip = addr.ip().to_string();
+                    if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                        return ip;
+                    }
                 }
             }
         }
-        if sock.connect("10.255.255.255:1").is_ok() {
-            if let Ok(addr) = sock.local_addr() {
-                let ip = addr.ip().to_string();
-                if ip != "0.0.0.0" && ip != "127.0.0.1" {
-                    return ip;
+        for probe in &["10.255.255.255:1", "192.168.255.255:1", "172.31.255.255:1", "8.8.8.8:80", "1.1.1.1:80"] {
+            if sock.connect(probe).is_ok() {
+                if let Ok(addr) = sock.local_addr() {
+                    let ip = addr.ip().to_string();
+                    if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                        return ip;
+                    }
                 }
             }
         }
@@ -660,7 +689,7 @@ pub fn detect_hostname() -> String {
             return h.to_string();
         }
     }
-    "orangepilite2".to_string()
+    "smart-absensi-edge".to_string()
 }
 
 pub fn write_env_atomically(env_path: &Path, creds: &PairedCredentials) -> Result<()> {

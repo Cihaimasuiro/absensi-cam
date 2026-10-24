@@ -17,7 +17,7 @@ use crate::hardware::{
 use crate::server::{AttendanceLogItem, FaceBoxData, FrameHub, OverlayHub, OverlayState};
 use crate::vision::{FaceDetector, FaceRecognizer, LivenessDetector, VisionMetricsAggregator};
 
-use super::tracker::TrackedStudent;
+use crate::vision::TrackedStudent;
 use super::utils::{find_model_path, model_search_dirs, wait_for_shutdown_signal};
 
 #[allow(clippy::too_many_arguments)]
@@ -47,17 +47,22 @@ pub async fn run_stream(
     gpio_red_opt: Option<u32>,
     gpio_buzzer_opt: Option<u32>,
 ) -> Result<()> {
-    // 0. Muat konfigurasi edge yang tersimpan di disk (edge_settings.json)
-    let settings_path = Path::new(&db_path)
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("edge_settings.json");
+    // 0. Muat konfigurasi edge yang tersimpan di disk (edge_settings.json) atau lakukan first-boot self-config
+    let settings_path = server::control::resolve_settings_path(&db_path);
+    let persisted_settings = server::control::ensure_first_boot_config(&settings_path)
+        .unwrap_or_else(|_| server::control::load_settings(&settings_path));
+    tracing::info!("Konfigurasi edge dimuat dari: {}", settings_path.display());
 
-    let persisted_settings = server::control::load_settings(&settings_path);
-
-    // Terapkan override dari edge_settings.json jika CLI memakai nilai bawaan
-    let device = if (device == "/dev/video0" || device == "0") && !persisted_settings.camera.source.trim().is_empty() {
+    // Terapkan override dari edge_settings.json jika CLI memakai nilai bawaan / auto
+    let device = if (device == "/dev/video0" || device == "0" || device == "auto") && !persisted_settings.camera.source.trim().is_empty() {
         persisted_settings.camera.source.clone()
+    } else if device == "auto" {
+        crate::vision::auto_select_camera().unwrap_or_else(|| {
+            #[cfg(target_os = "linux")]
+            { "/dev/video0".to_string() }
+            #[cfg(not(target_os = "linux"))]
+            { "0".to_string() }
+        })
     } else {
         device
     };
@@ -253,6 +258,9 @@ pub async fn run_stream(
 
     let cam_fps_shared = Arc::new(AtomicU32::new(300)); // 30.0 * 10
     let cam_fps_shared_ai = cam_fps_shared.clone();
+
+    let camera_warning = Arc::new(std::sync::RwLock::new(None::<String>));
+    let camera_warning_ai = camera_warning.clone();
 
     // 1. Inisialisasi Database SQLite
     let embed_key_bytes = embed_key_opt
@@ -479,6 +487,9 @@ pub async fn run_stream(
                                 .ok()
                                 .and_then(|v| v.parse::<f32>().ok())
                                 .unwrap_or(0.05);
+                            let camera_warning_ai = camera_warning_ai.clone();
+                            let dark_luma_thresh = persisted_settings.camera.dark_luma_threshold;
+                            let static_var_thresh = persisted_settings.camera.static_variance_threshold;
 
                             std::thread::Builder::new()
                                 .name("ai-vision-worker".to_string())
@@ -494,6 +505,18 @@ pub async fn run_stream(
                                     let mut last_sig_check = Instant::now();
                                     let initial_sig = tokio_handle.block_on(async { db_ai.get_templates_signature().await.unwrap_or((0, 0)) });
                                     let sig_tracker = Arc::new(std::sync::Mutex::new(initial_sig));
+
+                                    // Gate deteksi gerakan berbasis frame-difference (32x24 grid = 768 titik sampel luma)
+                                    // Mengurangi latensi deteksi dari 300ms ke ~33ms sekaligus menghemat beban inferensi CPU saat idle
+                                    const MOTION_GRID_W: usize = 32;
+                                    const MOTION_GRID_H: usize = 24;
+                                    const MOTION_POINTS: usize = MOTION_GRID_W * MOTION_GRID_H;
+                                    let mut prev_luma = [0u8; MOTION_POINTS];
+                                    let mut has_prev_luma = false;
+                                    let mut empty_streak: u32 = 0;
+                                    let mut last_detect_time = Instant::now();
+                                    let mut ai_frame_count: u64 = 0;
+                                    let mut is_dark_or_static = false;
 
                                     while running_ai.load(Ordering::Relaxed) {
                                         // Polling penanda versi templates di SQLite setiap 3 detik untuk hot-reload tanpa restart proses
@@ -549,9 +572,90 @@ pub async fn run_stream(
                                              Err(_) => continue,
                                          };
 
-                                         let start_ai = Instant::now();
+                                        ai_frame_count = ai_frame_count.saturating_add(1);
+                                        if ai_frame_count == 30 || (ai_frame_count > 30 && ai_frame_count % 150 == 0) {
+                                            let (mean_luma, variance) = crate::vision::calculate_luma_and_variance(&frame_rgb);
+                                            if ai_frame_count == 30 {
+                                                info!("Baseline kualitas kamera (Frame 30): luma={:.1}, variansi={:.1}", mean_luma, variance);
+                                            }
+                                            if mean_luma < dark_luma_thresh || variance < static_var_thresh {
+                                                let msg = format!(
+                                                    "Kamera gelap / shutter tertutup (luma: {:.1} < {:.1}, variansi: {:.1} < {:.1})",
+                                                    mean_luma, dark_luma_thresh, variance, static_var_thresh
+                                                );
+                                                if !is_dark_or_static {
+                                                    warn!(
+                                                        "Kamera tidak menghasilkan gambar valid (luma rata-rata {:.1}, variansi {:.1}) setelah {} frame AI. \
+                                                         Kemungkinan kamera IR, shutter kamera tertutup, atau frame statis.",
+                                                        mean_luma, variance, ai_frame_count
+                                                    );
+                                                }
+                                                is_dark_or_static = true;
+                                                if let Ok(mut lock) = camera_warning_ai.write() {
+                                                    *lock = Some(msg);
+                                                }
+                                            } else {
+                                                if is_dark_or_static {
+                                                    info!("Kamera kembali menghasilkan gambar normal (luma rata-rata {:.1}, variansi {:.1}).", mean_luma, variance);
+                                                    if let Ok(mut lock) = camera_warning_ai.write() {
+                                                        *lock = None;
+                                                    }
+                                                }
+                                                is_dark_or_static = false;
+                                            }
+                                        }
 
-                                         let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
+                                        // Evaluasi gerakan ringan (frame-diff) sebelum menjalankan inferensi neural network
+                                        let mut curr_luma = [0u8; MOTION_POINTS];
+                                        let step_x = (w as usize / MOTION_GRID_W).max(1);
+                                        let step_y = (h as usize / MOTION_GRID_H).max(1);
+                                        let mut p = 0;
+                                        for gy in 0..MOTION_GRID_H {
+                                            let y = (gy * step_y).min(h as usize - 1);
+                                            let row_offset = y * (w as usize) * 3;
+                                            for gx in 0..MOTION_GRID_W {
+                                                let x = (gx * step_x).min(w as usize - 1);
+                                                let idx = row_offset + x * 3;
+                                                if idx + 2 < frame_rgb.len() {
+                                                    curr_luma[p] = ((frame_rgb[idx] as u16 + (frame_rgb[idx + 1] as u16 * 2) + frame_rgb[idx + 2] as u16) >> 2) as u8;
+                                                }
+                                                p += 1;
+                                            }
+                                        }
+
+                                        let mut motion_ratio = 1.0f32;
+                                        if has_prev_luma {
+                                            let mut changed_points = 0;
+                                            for i in 0..MOTION_POINTS {
+                                                if (curr_luma[i] as i16 - prev_luma[i] as i16).abs() > 12 {
+                                                    changed_points += 1;
+                                                }
+                                            }
+                                            motion_ratio = changed_points as f32 / MOTION_POINTS as f32;
+                                        }
+                                        prev_luma = curr_luma;
+                                        has_prev_luma = true;
+
+                                        let motion_detected = motion_ratio > 0.02;
+                                        // Syarat inferensi deteksi wajah:
+                                        // 1. Ada pergerakan signifikan (motion_detected), ATAU
+                                        // 2. Wajah baru saja terdeteksi sebelumnya / masa pelacakan (empty_streak < 5), ATAU
+                                        // 3. Heartbeat berkala (350ms) untuk mengeliminasi edge-case orang muncul tanpa gerakan signifikan
+                                        let heartbeat_ms = if empty_streak > 15 { 350 } else { 400 };
+                                        let should_detect = motion_detected || empty_streak < 5 || last_detect_time.elapsed() >= Duration::from_millis(heartbeat_ms);
+
+                                        if !should_detect {
+                                            vision_metrics.record_detection_skipped();
+                                            // Pemandangan statis tanpa objek wajah: lewati inferensi YuNet (~25-60ms compute)
+                                            // Tidur singkat 33ms (~30 FPS) agar tetap responsif seketika terjadi pergerakan
+                                            std::thread::sleep(Duration::from_millis(33));
+                                            continue;
+                                        }
+
+                                        last_detect_time = Instant::now();
+                                        let start_ai = Instant::now();
+
+                                        let faces = match detector.detect(&frame_rgb, w as usize, h as usize, (w * 3) as usize) {
                                              Ok(f) => f,
                                              Err(e) => {
                                                  warn!("Face detector error: {:#}", e);
@@ -559,7 +663,8 @@ pub async fn run_stream(
                                              }
                                          };
 
-                                         vision_metrics.record_frame(&frame_rgb, w as usize, h as usize, (w * 3) as usize, &faces);
+                                        vision_metrics.record_detection_run(start_ai.elapsed());
+                                        vision_metrics.record_frame(&frame_rgb, w as usize, h as usize, (w * 3) as usize, &faces);
 
                                          let mut current_boxes = Vec::new();
 
@@ -865,7 +970,11 @@ pub async fn run_stream(
                                         let mins = (uptime_sec % 3600) / 60;
                                         let secs = uptime_sec % 60;
                                         let cam_fps_val = cam_fps_shared_ai.load(Ordering::Relaxed) as f32 / 10.0;
-                                        let status = format!("Aktif: {:02}:{:02}:{:02} | Camera: {:.1} FPS | AI: {:.1} FPS", hrs, mins, secs, cam_fps_val, ai_fps);
+                                        let status = if is_dark_or_static {
+                                            format!("Aktif: {:02}:{:02}:{:02} | Camera: {:.1} FPS | AI: {:.1} FPS | [PERINGATAN: Kamera Gelap / Shutter Tertutup]", hrs, mins, secs, cam_fps_val, ai_fps)
+                                        } else {
+                                            format!("Aktif: {:02}:{:02}:{:02} | Camera: {:.1} FPS | AI: {:.1} FPS", hrs, mins, secs, cam_fps_val, ai_fps)
+                                        };
 
                                         let history_snapshot = recent_history_ai.lock().map(|h| h.clone()).unwrap_or_default();
                                         overlay_hub_ai.publish(OverlayState {
@@ -876,11 +985,13 @@ pub async fn run_stream(
                                             history: history_snapshot,
                                         });
 
-                                        // Pacing termal: beri jeda CPU antar inferensi jaringan saraf agar tidak panas berlebih
+                                        // Pacing termal & adaptif: hindari panas berlebih pada SBC tanpa mengorbankan latensi
                                         if faces.is_empty() {
-                                            // Pemindaian idle: 300ms jeda per siklus
-                                            std::thread::sleep(Duration::from_millis(300));
+                                            empty_streak = empty_streak.saturating_add(1);
+                                            // Pacing responsif 33ms (bukan lagi sleep kaku 300ms) agar frame berikutnya segera diuji
+                                            std::thread::sleep(Duration::from_millis(33));
                                         } else {
+                                            empty_streak = 0;
                                             // Pelacakan wajah aktif: dikontrol oleh fps_cap yang tersimpan
                                             let target_frame_ms: u64 = 1000u64 / (fps_cap_ai as u64);
                                             let elapsed_ms = start_ai.elapsed().as_millis() as u64;
@@ -928,6 +1039,7 @@ pub async fn run_stream(
             device.clone(),
             width,
             height,
+            fps_cap,
             running_clone,
             move || hub_viewers.has_viewers() || has_physical_display,
             move |jpeg_bytes, _format, _w, _h| {
@@ -965,6 +1077,11 @@ pub async fn run_stream(
 
                 // 1. Gambar status banner di pojok kiri atas (Uptime, Camera FPS, AI FPS)
                 if !state.status.is_empty() {
+                    let status_color = if state.status.contains("PERINGATAN") {
+                        (248, 113, 113) // Light red / alert (#f87171)
+                    } else {
+                        (56, 189, 248) // Sky blue (#38bdf8)
+                    };
                     vision::draw_text(
                         rgb,
                         w as usize,
@@ -972,7 +1089,7 @@ pub async fn run_stream(
                         10,
                         10,
                         &state.status,
-                        (56, 189, 248), // Sky blue (#38bdf8)
+                        status_color,
                         Some((0, 0, 0)),
                     );
                 }
@@ -1031,6 +1148,7 @@ pub async fn run_stream(
 
     #[cfg(not(target_os = "linux"))]
     {
+        #[cfg(not(feature = "native-camera"))]
         use std::io::Read;
 
         let tx_frame_clone = tx_frame.clone();
@@ -1046,13 +1164,19 @@ pub async fn run_stream(
             device.parse().unwrap_or(0)
         };
 
+        #[cfg(not(feature = "native-camera"))]
+        let backend_expr = crate::vision::cv2_backend_expr();
+        #[cfg(not(feature = "native-camera"))]
         let py_script = format!(
             "import cv2, sys, time\n\
-cap = cv2.VideoCapture({0}, cv2.CAP_DSHOW)\n\
+if sys.version_info < (3, 8): sys.exit(2)\n\
+backend = {backend}\n\
+cap = cv2.VideoCapture({0}, backend)\n\
 if not cap.isOpened(): cap = cv2.VideoCapture({0})\n\
 if not cap.isOpened(): sys.exit(1)\n\
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, {1})\n\
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, {2})\n\
+cap.set(cv2.CAP_PROP_FPS, {fps_cap})\n\
 ready = False\n\
 for _ in range(10):\n\
 \x20   ret, frame = cap.read()\n\
@@ -1077,25 +1201,86 @@ while True:\n\
 \x20   sys.stdout.buffer.write(rgb.tobytes())\n\
 \x20   sys.stdout.buffer.flush()\n\
 cap.release()",
-            cam_idx, width, height
+            cam_idx, width, height,
+            fps_cap = fps_cap,
+            backend = backend_expr
         );
 
-        let spawned_cam = std::process::Command::new("python")
-            .args(["-c", &py_script])
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn();
+        #[cfg(all(not(target_os = "linux"), feature = "native-camera"))]
+        let webcam_active = {
+            let (tx_ready, rx_ready) = std::sync::mpsc::channel::<bool>();
+            let tx_cam = tx_frame_clone.clone();
+            let hub_cam = hub_mock.clone();
+            let fb_display_cam = fb_display.clone();
+            let tft_streamer_cam = tft_streamer.clone();
+            let running_cam = running_mock.clone();
+            let cam_fps_cam = cam_fps_mock.clone();
 
+            let _handle = crate::vision::camera_win::spawn_capture_thread_native(
+                cam_idx,
+                width,
+                height,
+                fps_cap,
+                running_cam,
+                tx_ready,
+                move |jpeg_bytes, _w, _h| {
+                    hub_cam.publish(Bytes::copy_from_slice(jpeg_bytes));
+                    cam_fps_cam.fetch_add(1, Ordering::Relaxed);
+                },
+                Some(move |rgb_bytes: &[u8], w, h| {
+                    if let Ok(mut fb_guard) = fb_display_cam.lock() {
+                        if let Some(ref mut fb) = *fb_guard {
+                            let _ = fb.render_frame(rgb_bytes, w, h);
+                        }
+                    }
+                    if let Some(ref tft_st) = tft_streamer_cam {
+                        let rle = crate::hardware::tft_streamer::TftRleStreamer::encode_frame_rle(
+                            rgb_bytes, w, h, 0, 0, 160, 120, true,
+                        );
+                        if let Ok(mut streamer) = tft_st.lock() {
+                            let _ = streamer.send_frame(&rle);
+                        }
+                    }
+                    tx_cam.try_send(AiFrame::Rgb {
+                        data: Bytes::copy_from_slice(rgb_bytes),
+                        width: w,
+                        height: h,
+                    }).ok();
+                }),
+            );
+
+            // Wait up to 3 seconds for hardware camera initialization
+            let ready = rx_ready.recv_timeout(Duration::from_secs(3)).unwrap_or(false);
+            if ready {
+                info!("Webcam fisik (index {}) aktif terhubung via driver native nokhwa.", cam_idx);
+            } else {
+                warn!("Webcam fisik (index {}) gagal diinisialisasi secara native. Beralih ke simulated camera.", cam_idx);
+            }
+            ready
+        };
+
+        #[cfg(all(not(target_os = "linux"), not(feature = "native-camera")))]
         let mut webcam_active = false;
 
-        if let Ok(mut child) = spawned_cam {
-            if let Some(mut stdout) = child.stdout.take() {
-                let frame_len = (width * height * 3) as usize;
-                let mut initial_frame = vec![0u8; frame_len];
+        #[cfg(all(not(target_os = "linux"), not(feature = "native-camera")))]
+        let py_cmd_opt = crate::vision::resolve_python_command();
 
-                if stdout.read_exact(&mut initial_frame).is_ok() {
-                    info!("Webcam fisik Windows (index {}) aktif terhubung via DirectShow.", cam_idx);
-                    webcam_active = true;
+        #[cfg(all(not(target_os = "linux"), not(feature = "native-camera")))]
+        if let Some(ref py_cmd) = py_cmd_opt {
+            let spawned_cam = std::process::Command::new(py_cmd)
+                .args(["-c", &py_script])
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+
+            if let Ok(mut child) = spawned_cam {
+                if let Some(mut stdout) = child.stdout.take() {
+                    let frame_len = (width * height * 3) as usize;
+                    let mut initial_frame = vec![0u8; frame_len];
+
+                    if stdout.read_exact(&mut initial_frame).is_ok() {
+                        info!("Webcam fisik (index {}) aktif terhubung via Python ({}) capture.", cam_idx, py_cmd);
+                        webcam_active = true;
 
                     let tx_cam = tx_frame_clone.clone();
                     let hub_cam = hub_mock.clone();
@@ -1224,6 +1409,9 @@ cap.release()",
                 }
             }
         }
+    } else {
+        warn!("Python >= 3.8 tidak ditemukan pada PATH atau PYTHON_BIN. Webcam capture fisik tidak dapat dijalankan.");
+    }
 
         camera_simulated_tracker.store(!webcam_active, Ordering::Relaxed);
         if !webcam_active {
@@ -1280,10 +1468,11 @@ cap.release()",
             }
 
             let overlay_mock_feeder = overlay_hub_draw.clone();
+            let feeder_interval_ms = (1000u64 / (fps_cap as u64)).clamp(16, 200);
             std::thread::Builder::new()
                 .name("mock-camera-feeder".to_string())
                 .spawn(move || {
-                    info!("Simulated camera feeder thread aktif (30 FPS).");
+                    info!("Simulated camera feeder thread aktif ({} FPS, interval {}ms).", fps_cap, feeder_interval_ms);
                     let mut draw_buf = vec![0u8; (width * height * 3) as usize];
                     let mut jpeg_buf = Vec::with_capacity((width * height / 4) as usize);
                     let mut frame_count: u32 = 0;
@@ -1324,7 +1513,7 @@ cap.release()",
                             last_fps_time = Instant::now();
                         }
 
-                        std::thread::sleep(Duration::from_millis(33)); // ~30 FPS
+                        std::thread::sleep(Duration::from_millis(feeder_interval_ms));
                     }
                 })
                 .expect("Failed to spawn mock camera feeder thread");
@@ -1344,9 +1533,12 @@ cap.release()",
     };
 
     tokio::select! {
-        res = server::start_stream_server(port, hub, overlay_hub, server_config, camera_simulated) => {
+        res = server::start_stream_server(port, hub, overlay_hub, server_config, camera_simulated, camera_warning) => {
             if let Err(e) = res {
-                error!("Stream server error: {:#}", e);
+                error!("Stream server error (port {}): {:#}", port, e);
+                running.store(false, Ordering::Relaxed);
+                gpio.reset_all();
+                return Err(e);
             }
         }
         _ = wait_for_shutdown_signal() => {

@@ -2,17 +2,17 @@ use anyhow::Result;
 use clap::Parser;
 
 pub mod args;
+pub mod diagnostics;
 pub mod extract;
 pub mod stream;
 pub mod sync_runner;
-pub mod tracker;
 pub mod utils;
 
 pub use args::{Cli, Commands};
 pub use extract::{extract_embedding, run_extract};
 pub use stream::run_stream;
 pub use sync_runner::run_sync;
-pub use tracker::TrackedStudent;
+pub use crate::vision::TrackedStudent;
 pub use utils::{find_model_path, model_search_dirs, wait_for_shutdown_signal};
 
 /// Titik masuk utama untuk binary `engine-cli` dan `smart-absensi-sync`.
@@ -27,6 +27,13 @@ pub async fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Commands::Preflight { models_dir, ort_path, no_inference }) => {
+            let ok = diagnostics::run_preflight(models_dir.as_deref(), ort_path.as_deref(), !no_inference);
+            if !ok {
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
         Some(Commands::Stream {
             device,
             port,
@@ -35,7 +42,8 @@ pub async fn run_cli() -> Result<()> {
             db,
             models_dir,
             ort_path,
-            vision,
+            no_inference,
+            skip_preflight,
             liveness,
             embed_key,
             model_version,
@@ -53,6 +61,15 @@ pub async fn run_cli() -> Result<()> {
             gpio_red,
             gpio_buzzer,
         }) => {
+            let vision = !no_inference;
+
+            // Fail-fast preflight check: Cegah silent failure & loop zombie jika dependensi kritis hilang
+            if !skip_preflight {
+                if !diagnostics::run_preflight(models_dir.as_deref(), ort_path.as_deref(), vision) {
+                    eprintln!("Preflight gagal. Harap penuhi dependensi di atas atau jalankan dengan --skip-preflight untuk memaksa.");
+                    std::process::exit(1);
+                }
+            }
             run_stream(
                 device,
                 port,

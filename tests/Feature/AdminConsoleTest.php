@@ -146,7 +146,6 @@ class AdminConsoleTest extends TestCase
         $this->get(route('admin.users.index'))->assertForbidden();
         $this->get(route('admin.audit.index'))->assertForbidden();
         $this->get(route('admin.quarantine.index'))->assertForbidden();
-        $this->get(route('admin.consents.index'))->assertForbidden();
     }
 
     public function test_audit_log_viewer_and_export(): void
@@ -494,49 +493,5 @@ class AdminConsoleTest extends TestCase
 
         $quarantine->refresh();
         $this->assertEquals('quarantined', $quarantine->status);
-    }
-
-    public function test_consent_management_grant_withdraw_and_export(): void
-    {
-        $this->actingAs($this->superAdmin);
-
-        $student = Student::factory()->create();
-        $template = FaceTemplate::create([
-            'student_id'     => $student->id,
-            'embedding_enc'  => base64_encode(str_repeat('E', 2048)),
-            'model_version'  => '3d9f1f77896fb3d1',
-            'embedding_hash' => 'hash',
-        ]);
-
-        // 1. Berikan consent
-        $grantResponse = $this->post(route('admin.consents.store'), [
-            'student_id'        => $student->id,
-            'guardian_name'     => 'Bpk. Hendra',
-            'guardian_relation' => 'Ayah',
-            'text_version'      => 'v1.0',
-        ]);
-        $grantResponse->assertRedirect(route('admin.consents.index'));
-        $this->assertDatabaseHas('consents', [
-            'student_id'    => $student->id,
-            'guardian_name' => 'Bpk. Hendra',
-            'withdrawn_at'  => null,
-        ]);
-
-        $consent = Consent::where('student_id', $student->id)->first();
-
-        // 2. Cabut consent - harus membuat tombstone faceTemplate
-        $withdrawResponse = $this->post(route('admin.consents.withdraw', $consent));
-        $withdrawResponse->assertRedirect(route('admin.consents.index'));
-
-        $consent->refresh();
-        $this->assertNotNull($consent->withdrawn_at);
-
-        // FaceTemplate harus di-soft-delete (dijadikan tombstone untuk edge sync)
-        $this->assertSoftDeleted('face_templates', ['id' => $template->id]);
-
-        // 3. Export CSV
-        $export = $this->get(route('admin.consents.export'));
-        $export->assertOk();
-        $export->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 }

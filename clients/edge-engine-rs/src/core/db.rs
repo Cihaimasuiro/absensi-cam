@@ -18,8 +18,14 @@ pub struct EdgeDb {
 impl EdgeDb {
     /// Buka database SQLite lokal dalam WAL mode
     pub async fn init(db_path: impl AsRef<Path>) -> Result<Self> {
-        info!("Menginisialisasi database SQLite lokal: {:?}", db_path.as_ref());
-        let db = Builder::new_local(db_path.as_ref()).build().await?;
+        let path = db_path.as_ref();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+        info!("Menginisialisasi database SQLite lokal: {:?}", path);
+        let db = Builder::new_local(path).build().await?;
         let conn = db.connect()?;
 
         // Aktifkan WAL mode dan synchronous normal untuk concurrency aman

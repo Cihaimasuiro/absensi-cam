@@ -32,10 +32,12 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         let db_path = env::var("SMART_ABSENSI_DB").unwrap_or_else(|_| "/data/absensi.db".to_string());
-        let settings_path = Path::new(&db_path)
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join("edge_settings.json");
+        if let Some(parent) = Path::new(&db_path).parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+        let settings_path = super::resolve_settings_path(&db_path);
 
         Self {
             db_path,
@@ -72,6 +74,18 @@ pub struct CameraSettings {
     pub resolution: String,
     pub fps_cap: u32,
     pub mirror_preview: bool,
+    #[serde(default = "default_dark_luma_threshold")]
+    pub dark_luma_threshold: f64,
+    #[serde(default = "default_static_variance_threshold")]
+    pub static_variance_threshold: f64,
+}
+
+fn default_dark_luma_threshold() -> f64 {
+    10.0
+}
+
+fn default_static_variance_threshold() -> f64 {
+    4.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +195,8 @@ impl Default for FullSettings {
                 resolution: "640x480".to_string(),
                 fps_cap: 15,
                 mirror_preview: false,
+                dark_luma_threshold: 10.0,
+                static_variance_threshold: 4.0,
             },
             network: NetworkSettings {
                 interface: "eth0".to_string(),
@@ -190,14 +206,19 @@ impl Default for FullSettings {
                 static_ip: String::new(),
                 subnet: "255.255.255.0".to_string(),
                 gateway: String::new(),
-                dns: "1.1.1.1".to_string(),
+                dns: String::new(),
             },
             time: TimeSettings {
-                timezone: "Asia/Jakarta".to_string(),
+                timezone: std::fs::read_link("/etc/localtime")
+                    .ok()
+                    .and_then(|p| p.to_string_lossy().split("zoneinfo/").nth(1).map(|s| s.to_string()))
+                    .or_else(|| std::fs::read_to_string("/etc/timezone").ok().map(|s| s.trim().to_string()))
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "Asia/Jakarta".to_string()),
                 ntp_enabled: true,
             },
             server: ServerSettings {
-                url: env::var("SMART_ABSENSI_URL").unwrap_or_else(|_| "http://192.168.10.66:8000".to_string()),
+                url: env::var("SMART_ABSENSI_URL").unwrap_or_default(),
             },
             gpio: GpioSettings::default(),
         }
@@ -276,6 +297,7 @@ pub struct ControlInfoResponse {
     pub camera_is_simulated: bool,
     pub is_streaming: bool,
     pub serial_connected: bool,
+    pub camera_warning: Option<String>,
     // ── Telemetri tambahan ───────────────────────────────────────────────
     pub cpu_usage_pct: f64,
     pub cpu_cores: usize,
@@ -322,7 +344,53 @@ pub fn load_settings(path: &Path) -> FullSettings {
     FullSettings::default()
 }
 
-pub fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Result<()> {
+/// Hasilkan ID perangkat otomatis dari MAC address, machine-id, atau hostname sistem
+pub fn generate_device_id() -> String {
+    if let Ok(id) = std::env::var("SMART_ABSENSI_DEVICE_ID") {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for iface in &["eth0", "end0", "enp1s0", "wlan0"] {
+            let addr_path = format!("/sys/class/net/{}/address", iface);
+            if let Ok(mac) = std::fs::read_to_string(&addr_path) {
+                let clean: String = mac.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+                if clean.len() >= 6 {
+                    let suffix = &clean[clean.len() - 6..];
+                    return format!("GATE-{}", suffix.to_uppercase());
+                }
+            }
+        }
+
+        if let Ok(machine_id) = std::fs::read_to_string("/etc/machine-id") {
+            let clean = machine_id.trim();
+            if clean.len() >= 6 {
+                return format!("GATE-{}", clean[..6].to_uppercase());
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(comp) = std::env::var("COMPUTERNAME") {
+            let clean: String = comp.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+            if !clean.is_empty() {
+                let len = clean.len().min(8);
+                return format!("GATE-{}", clean[..len].to_uppercase());
+            }
+        }
+    }
+
+    "GATE-01".to_string()
+}
+
+/// Simpan pengaturan ke disk secara atomik menggunakan file temporer dan rename.
+/// Menjaga integritas file bila terjadi pemadaman listrik tiba-tiba.
+pub fn save_settings_atomic(path: &Path, settings: &FullSettings) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -337,8 +405,50 @@ pub fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Re
         }
     }
     let json = serde_json::to_string_pretty(&to_save)?;
-    std::fs::write(path, json)?;
+    let tmp_path = path.with_extension(format!("tmp.{}", std::process::id()));
+    std::fs::write(&tmp_path, json.as_bytes())?;
+    std::fs::rename(&tmp_path, path)?;
     Ok(())
+}
+
+pub fn save_settings_to_file(path: &Path, settings: &FullSettings) -> anyhow::Result<()> {
+    save_settings_atomic(path, settings)
+}
+
+/// Konfigurasi mandiri saat boot pertama (first-boot self-configuration).
+/// Jika file edge_settings.json belum ada:
+/// - Otomatis pilih kamera terbaik (resolusi & fps tertinggi, tolak kamera virtual)
+/// - Hasilkan Device ID unik dari MAC address perangkat
+/// - Pasang parameter default aman (fps_cap 15, resolusi 640x480)
+/// - Simpan secara atomik ke disk sehingga pengguna tidak perlu mengedit JSON manual.
+pub fn ensure_first_boot_config(settings_path: &Path) -> anyhow::Result<FullSettings> {
+    if settings_path.exists() {
+        return Ok(load_settings(settings_path));
+    }
+
+    let mut settings = FullSettings::default();
+
+    // 1. Auto-select camera
+    if let Some(cam) = crate::vision::auto_select_camera() {
+        settings.camera.source = cam;
+    }
+
+    // 2. Generate device code dari MAC address / machine-id
+    let dev_id = generate_device_id();
+    settings.general.device_name = dev_id;
+
+    // 3. Default SBC aman
+    settings.camera.resolution = "640x480".to_string();
+    settings.camera.fps_cap = 15;
+
+    // 4. Tulis atomik ke disk
+    save_settings_atomic(settings_path, &settings)?;
+    tracing::info!(
+        "Konfigurasi awal (first-boot) berhasil dibuat otomatis di: {}",
+        settings_path.display()
+    );
+
+    Ok(settings)
 }
 
 pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
@@ -399,7 +509,7 @@ pub fn validate_settings(settings: &FullSettings) -> Result<(), String> {
     }
 
     let url = settings.server.url.trim();
-    if !url.starts_with("http://") && !url.starts_with("https://") {
+    if !url.is_empty() && !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("Server URL must begin with http:// or https://".to_string());
     }
 

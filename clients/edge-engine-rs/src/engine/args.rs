@@ -48,6 +48,19 @@ pub enum Commands {
         model_version: Option<String>,
     },
 
+    /// Jalankan diagnosis pra-terbang perangkat & lingkungan (kamera, Python, ONNX, model AI, GPIO)
+    Preflight {
+        #[arg(long)]
+        models_dir: Option<String>,
+
+        #[arg(long)]
+        ort_path: Option<String>,
+
+        /// Nonaktifkan pengecekan dependensi AI vision (mode capture-only)
+        #[arg(long, default_value_t = false)]
+        no_inference: bool,
+    },
+
     /// Jalankan capture kamera MJPEG V4L2 libc murni, server stream HTTP, dan AI Vision native
     Stream {
         #[arg(short, long, default_value = "/dev/video0")]
@@ -71,10 +84,15 @@ pub enum Commands {
         #[arg(long)]
         ort_path: Option<String>,
 
-        #[arg(long, default_value_t = true)]
-        vision: bool,
+        /// Nonaktifkan AI vision inference (mode capture-only untuk SBC 32-bit / armv7)
+        #[arg(long, default_value_t = false)]
+        no_inference: bool,
 
-        #[arg(long, default_value_t = true)]
+        /// Lewati pengecekan preflight diagnostik saat startup stream
+        #[arg(long, default_value_t = false)]
+        skip_preflight: bool,
+
+        #[arg(long, num_args = 0..=1, default_value_t = true, default_missing_value = "true", action = clap::ArgAction::Set)]
         liveness: bool,
 
         #[arg(long)]

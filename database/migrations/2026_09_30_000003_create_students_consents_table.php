@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Students — skema server PRD §11.1, FR-S02, FR-S04
+        // Students — skema server
         Schema::create('students', function (Blueprint $table) {
             $table->uuid('id')->primary()->comment('UUID dari server; digunakan di edge sebagai student_id');
             $table->foreignId('school_id')->nullable()->constrained('schools')->nullOnDelete();

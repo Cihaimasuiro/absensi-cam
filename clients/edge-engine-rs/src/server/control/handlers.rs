@@ -167,22 +167,52 @@ pub async fn get_camera_devices_handler(
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(not(target_os = "linux"), feature = "native-camera"))]
     {
-        let output = std::process::Command::new("python")
-            .args(["-c", "import cv2; print(','.join(str(i) for i in range(4) if cv2.VideoCapture(i, cv2.CAP_DSHOW).isOpened()))"])
-            .output();
+        let native_devs = crate::vision::camera_win::query_native_camera_devices();
+        if !native_devs.is_empty() {
+            devices = native_devs;
+        } else {
+            devices.push("0: Default Native Camera".to_string());
+        }
+    }
 
-        if let Ok(out) = output {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !s.is_empty() {
-                for part in s.split(',') {
-                    let trimmed = part.trim();
-                    if !trimmed.is_empty() {
-                        devices.push(trimmed.to_string());
+    #[cfg(all(not(target_os = "linux"), not(feature = "native-camera")))]
+    {
+        if let Some(py_cmd) = crate::vision::resolve_python_command() {
+            let backend_expr = crate::vision::cv2_backend_expr();
+            let py_probe_script = format!(
+                "import cv2, sys\n\
+if sys.version_info < (3, 8): sys.exit(2)\n\
+backend = {backend}\n\
+devs = []\n\
+for i in range(4):\n\
+    cap = cv2.VideoCapture(i, backend)\n\
+    if not cap.isOpened(): cap = cv2.VideoCapture(i)\n\
+    if cap.isOpened():\n\
+        devs.append(str(i))\n\
+        cap.release()\n\
+print(','.join(devs))",
+                backend = backend_expr
+            );
+
+            let output = std::process::Command::new(&py_cmd)
+                .args(["-c", &py_probe_script])
+                .output();
+
+            if let Ok(out) = output {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !s.is_empty() {
+                    for part in s.split(',') {
+                        let trimmed = part.trim();
+                        if !trimmed.is_empty() {
+                            devices.push(trimmed.to_string());
+                        }
                     }
                 }
             }
+        } else {
+            tracing::warn!("Python >= 3.8 tidak ditemukan saat memindai perangkat kamera.");
         }
         if devices.is_empty() {
             devices.push("0".to_string());
@@ -472,6 +502,7 @@ pub async fn info_handler(
         camera_is_simulated: state.app_state.camera_simulated.load(std::sync::atomic::Ordering::Relaxed),
         is_streaming: state.app_state.frame_hub.has_viewers(),
         serial_connected: Path::new("/dev/ttyACM0").exists() || Path::new("/dev/ttyUSB0").exists(),
+        camera_warning: state.app_state.camera_warning.read().ok().and_then(|g| g.clone()),
 
         cpu_usage_pct: read_cpu_usage_pct(),
         cpu_cores: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),

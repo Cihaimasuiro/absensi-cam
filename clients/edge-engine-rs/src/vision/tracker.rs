@@ -1,3 +1,5 @@
+//! Tracking state for recognized faces / students across stream frames.
+
 use std::time::Instant;
 
 #[derive(Debug, Clone)]

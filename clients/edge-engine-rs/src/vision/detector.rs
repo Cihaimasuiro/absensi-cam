@@ -16,7 +16,7 @@ pub struct FaceDetection {
 
 pub struct FaceDetector {
     session: Session,
-    tensor: Vec<f32>,
+    input_tensor: ort::value::Tensor<f32>,
     pub conf_threshold: f32,
     pub nms_threshold: f32,
     pub top_k: usize,
@@ -33,11 +33,12 @@ impl FaceDetector {
             .commit_from_file(model_path)
             .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-        let tensor = vec![0.0f32; 3 * 640 * 640];
+        let input_tensor = Value::from_array(([1usize, 3, 640, 640], vec![0.0f32; 3 * 640 * 640]))
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
 
         Ok(Self {
             session,
-            tensor,
+            input_tensor,
             conf_threshold: 0.6,
             nms_threshold: 0.3,
             top_k: 5000,
@@ -56,12 +57,17 @@ impl FaceDetector {
         const NET_W: usize = 640;
         const NET_H: usize = 640;
 
-        self.tensor.fill(0.0f32);
-        let channel_stride = NET_W * NET_H;
-
         if width == 0 || height == 0 {
             return Ok(Vec::new());
         }
+
+        let (_, tensor_slice) = self
+            .input_tensor
+            .try_extract_tensor_mut::<f32>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        tensor_slice.fill(0.0f32);
+        let channel_stride = NET_W * NET_H;
 
         // Skala aspect-ratio preserving letterbox ke tensor 640x640
         let scale = (NET_W as f32 / width as f32).min(NET_H as f32 / height as f32);
@@ -82,9 +88,9 @@ impl FaceDetector {
                         let b = image_rgb[px_offset + 2] as f32;
 
                         let idx = tensor_row_offset + x;
-                        self.tensor[idx] = b; // Channel 0: Blue
-                        self.tensor[channel_stride + idx] = g; // Channel 1: Green
-                        self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                        tensor_slice[idx] = b; // Channel 0: Blue
+                        tensor_slice[channel_stride + idx] = g; // Channel 1: Green
+                        tensor_slice[2 * channel_stride + idx] = r; // Channel 2: Red
                     }
                 }
             }
@@ -105,20 +111,17 @@ impl FaceDetector {
                         let b = image_rgb[px_offset + 2] as f32;
 
                         let idx = tensor_row_offset + x;
-                        self.tensor[idx] = b; // Channel 0: Blue
-                        self.tensor[channel_stride + idx] = g; // Channel 1: Green
-                        self.tensor[2 * channel_stride + idx] = r; // Channel 2: Red
+                        tensor_slice[idx] = b; // Channel 0: Blue
+                        tensor_slice[channel_stride + idx] = g; // Channel 1: Green
+                        tensor_slice[2 * channel_stride + idx] = r; // Channel 2: Red
                     }
                 }
             }
         }
 
-        let input_value = Value::from_array(([1usize, 3, NET_H, NET_W], self.tensor.clone()))
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
-
         let outputs = self
             .session
-            .run(ort::inputs![input_value])
+            .run(ort::inputs![&self.input_tensor])
             .map_err(|e| anyhow::anyhow!("{e}"))?;
 
         let strides = [8usize, 16, 32];

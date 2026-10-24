@@ -123,15 +123,6 @@
                     </li>
                 @endcan
 
-                @can('consent.manage')
-                    <li>
-                        <a href="{{ route('admin.consents.index') }}" title="Persetujuan UU PDP"
-                           class="nav-item {{ request()->routeIs('admin.consents.*') ? 'is-active' : '' }}">
-                            <i data-lucide="file-check" class="w-4 h-4"></i>
-                            <span class="transition-opacity duration-200 [.sidebar-collapsed_&]:md:opacity-0">Persetujuan</span>
-                        </a>
-                    </li>
-                @endcan
             @endcanany
         </ul>
     </nav>

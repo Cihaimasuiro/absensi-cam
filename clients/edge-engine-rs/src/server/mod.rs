@@ -148,6 +148,7 @@ pub struct AppState {
     pub frame_hub: FrameHub,
     pub overlay_hub: OverlayHub,
     pub camera_simulated: Arc<std::sync::atomic::AtomicBool>,
+    pub camera_warning: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -322,11 +323,13 @@ pub async fn start_stream_server(
     overlay_hub: OverlayHub,
     config: ServerConfig,
     camera_simulated: Arc<std::sync::atomic::AtomicBool>,
+    camera_warning: Arc<std::sync::RwLock<Option<String>>>,
 ) -> anyhow::Result<()> {
     let state = AppState {
         frame_hub: hub,
         overlay_hub,
         camera_simulated,
+        camera_warning,
     };
 
     let stream_secret = std::env::var("SMART_ABSENSI_TOKEN")

@@ -14,3 +14,5 @@ pub mod server;
 pub mod sync;
 pub mod vision;
 
+pub use engine::diagnostics;
+

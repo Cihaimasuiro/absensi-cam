@@ -1,13 +1,27 @@
 #![allow(unknown_lints)]
 #![allow(clippy::chunks_exact_to_as_chunks)]
 
+#[cfg(not(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "arm",
+    target_arch = "x86",
+)))]
+compile_error!(
+    "Arsitektur ini belum didukung. ONNX Runtime dan vision pipeline hanya tersedia untuk \
+     x86_64, aarch64, arm (armv7/armhf), dan x86 (i686). Lihat docs/SUPPORT.md."
+);
+
 pub mod camera;
+#[cfg(all(not(target_os = "linux"), feature = "native-camera"))]
+pub mod camera_win;
 pub mod recognizer;
 pub mod alignment;
 pub mod detector;
 pub mod liveness;
 pub mod overlay;
 pub mod metrics;
+pub mod tracker;
 
 pub use alignment::align_face_to_tensor_nchw;
 pub use detector::{FaceDetection, FaceDetector};
@@ -15,7 +29,8 @@ pub use liveness::{LivenessDetector, LivenessResult, DEFAULT_PASS_MARGIN};
 pub use recognizer::{init_onnx_runtime, FaceRecognizer, REFERENCE_POINTS};
 pub use overlay::{draw_rect, draw_text, parse_hex_color};
 pub use camera::PixelFormat;
-pub use metrics::{VisionMetricsAggregator, calculate_central_roi_luma};
+pub use metrics::{VisionMetricsAggregator, calculate_central_roi_luma, calculate_luma_and_variance};
+pub use tracker::TrackedStudent;
 
 /// Konversi satu triplet YUV (BT.601) menjadi RGB8
 #[inline(always)]
@@ -168,6 +183,255 @@ pub fn encode_rgb_to_jpeg(
     Ok(out)
 }
 
+#[cfg(not(feature = "native-camera"))]
+/// Validate whether a candidate command name or path can execute Python >= 3.8.
+pub fn is_valid_python(cmd: &str) -> bool {
+    std::process::Command::new(cmd)
+        .args(["-c", "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 2)"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "native-camera"))]
+/// Check whether the specified Python executable has OpenCV (`cv2`) installed and importable.
+pub fn has_opencv(cmd: &str) -> bool {
+    std::process::Command::new(cmd)
+        .args(["-c", "import cv2"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "native-camera"))]
+/// Query `uv` for an installed Python interpreter (preferring versions <= 3.13 for OpenCV wheel compatibility).
+fn find_uv_python() -> Option<String> {
+    // 1. Direct filesystem check on Windows (%APPDATA%\uv\python\...)
+    // Zero subprocess overhead, instant stat, and immune to CLI cache ACL issues.
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let uv_dir = std::path::Path::new(&appdata).join("uv").join("python");
+            if uv_dir.exists() {
+                let candidates = [
+                    "cpython-3.11-windows-x86_64-none",
+                    "cpython-3.12-windows-x86_64-none",
+                    "cpython-3.10-windows-x86_64-none",
+                ];
+                for c in &candidates {
+                    let exe = uv_dir.join(c).join("python.exe");
+                    if exe.exists() {
+                        return Some(exe.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Query uv CLI if available (fast early exit if uv is missing)
+    let is_uv_installed = std::process::Command::new("uv")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    if !is_uv_installed {
+        return None;
+    }
+
+    for q in &["<=3.13", ""] {
+        let mut cmd = std::process::Command::new("uv");
+        cmd.arg("python").arg("find");
+        if !q.is_empty() {
+            cmd.arg(q);
+        }
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() && std::path::Path::new(&path).exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(feature = "native-camera"))]
+/// Resolve the Python binary executable for cross-platform compatibility.
+/// Prioritizes:
+/// 1. `PYTHON_BIN` environment variable (if specified and valid)
+/// 2. `uv` managed Python runtime (`uv python find` / `%APPDATA%\uv\python`)
+/// 3. Project virtual environments (`.venv`)
+/// 4. System `python3` / `python`
+///
+/// On non-Linux (Windows/macOS), camera capture strictly requires OpenCV (`cv2`).
+/// Interpreters without OpenCV are rejected to prevent masking the capture failure.
+pub fn resolve_python_command() -> Option<String> {
+    static CACHE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            if let Ok(custom) = std::env::var("PYTHON_BIN") {
+                let trimmed = custom.trim();
+                #[cfg(not(target_os = "linux"))]
+                {
+                    if !trimmed.is_empty() && is_valid_python(trimmed) && has_opencv(trimmed) {
+                        return Some(trimmed.to_string());
+                    }
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    if !trimmed.is_empty() && is_valid_python(trimmed) {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+
+            let mut candidates: Vec<String> = Vec::new();
+
+            // 1. Check if uv provides a Python interpreter
+            if let Some(uv_py) = find_uv_python() {
+                candidates.push(uv_py);
+            }
+
+            // 2. Check local and parent virtual environments
+            let venv_relative_paths = [
+                ".venv/Scripts/python.exe",
+                ".venv/bin/python",
+                "../.venv/Scripts/python.exe",
+                "../.venv/bin/python",
+                "../../.venv/Scripts/python.exe",
+                "../../.venv/bin/python",
+            ];
+            for venv_path in &venv_relative_paths {
+                let p = std::path::Path::new(venv_path);
+                if p.exists() {
+                    candidates.push(venv_path.to_string());
+                }
+            }
+
+            // 3. System PATH candidates
+            #[cfg(not(target_os = "windows"))]
+            {
+                candidates.push("python3".to_string());
+                candidates.push("python".to_string());
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                candidates.push("python".to_string());
+                candidates.push("python3".to_string());
+            }
+
+            // Non-Linux: camera capture strictly requires OpenCV (cv2).
+            // Reject any interpreter without cv2 so errors are accurate and not masked.
+            #[cfg(not(target_os = "linux"))]
+            {
+                for candidate in &candidates {
+                    if is_valid_python(candidate) && has_opencv(candidate) {
+                        return Some(candidate.clone());
+                    }
+                }
+                None
+            }
+
+            // Linux: native V4L2 kernel capture is used, so cv2 is not required.
+            #[cfg(target_os = "linux")]
+            {
+                for candidate in &candidates {
+                    if is_valid_python(candidate) {
+                        return Some(candidate.clone());
+                    }
+                }
+                None
+            }
+        })
+        .clone()
+}
+
+#[cfg(not(feature = "native-camera"))]
+/// Return the Python expression string that selects the OpenCV VideoCapture backend for current OS.
+pub fn cv2_backend_expr() -> &'static str {
+    "cv2.CAP_DSHOW if sys.platform == 'win32' else (cv2.CAP_AVFOUNDATION if sys.platform == 'darwin' else cv2.CAP_V4L2)"
+}
+
+/// Pilih kamera terbaik secara otomatis:
+/// - Windows / macOS: enumerasi via nokhwa, tolak virtual/OBS/DroidCam/IR, pilih kamera RGB fisik pertama.
+/// - Linux: enumerasi /dev/video0..9, verifikasi device capture V4L2 fungsional via Camera::open.
+/// - Fallback: "0" (non-Linux) atau "/dev/video0" (Linux).
+pub fn auto_select_camera() -> Option<String> {
+    #[cfg(all(not(target_os = "linux"), feature = "native-camera"))]
+    {
+        if let Ok(list) = nokhwa::query(nokhwa::utils::ApiBackend::Auto) {
+            if !list.is_empty() {
+                if list.len() == 1 {
+                    return Some("0".to_string());
+                }
+
+                let candidates: Vec<(usize, &nokhwa::utils::CameraInfo)> = list
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, d)| {
+                        let name = d.human_name().to_lowercase();
+                        let desc = d.description().to_lowercase();
+                        !name.contains("virtual")
+                            && !name.contains("obs")
+                            && !name.contains("droidcam")
+                            && !name.contains("iriun")
+                            && !desc.contains("virtual")
+                            && !desc.contains("obs")
+                            && !desc.contains("droidcam")
+                            && !desc.contains("iriun")
+                    })
+                    .collect();
+
+                if !candidates.is_empty() {
+                    if let Some(&(idx, _)) = candidates.iter().find(|(_, d)| {
+                        let name = d.human_name().to_lowercase();
+                        !name.contains("ir ") && !name.contains("ir camera") && !name.contains("windows hello")
+                    }) {
+                        return Some(idx.to_string());
+                    }
+                    return Some(candidates[0].0.to_string());
+                }
+                return Some("0".to_string());
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for i in 0..10 {
+            let path = format!("/dev/video{}", i);
+            if std::path::Path::new(&path).exists() {
+                if let Ok(cam) = camera::linux::Camera::open(&path, 640, 480) {
+                    drop(cam);
+                    return Some(path);
+                }
+            }
+        }
+        if std::path::Path::new("/dev/video0").exists() {
+            return Some("/dev/video0".to_string());
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        Some("0".to_string())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Some("/dev/video0".to_string())
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +476,13 @@ mod tests {
         assert!(jpeg.len() > 4);
         assert_eq!(&jpeg[..2], &[0xFF, 0xD8]);
         assert_eq!(&jpeg[jpeg.len() - 2..], &[0xFF, 0xD9]);
+    }
+
+    #[test]
+    #[cfg(not(feature = "native-camera"))]
+    fn test_resolve_python_command_works_when_available() {
+        if let Some(py) = resolve_python_command() {
+            assert!(is_valid_python(&py), "Resolved Python command must be valid: {}", py);
+        }
     }
 }

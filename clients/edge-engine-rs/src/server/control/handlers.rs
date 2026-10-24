@@ -1,10 +1,10 @@
 use axum::{
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Json, Response},
 };
 use std::env;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tracing::{info, warn};
@@ -26,9 +26,11 @@ pub async fn ui_page_handler() -> Html<String> {
 
 pub async fn setup_handler(
     State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     Json(payload): Json<SetupRequest>,
 ) -> impl IntoResponse {
-    match state.auth.setup_first_password(&payload.code, &payload.password) {
+    let ip = peer_addr.ip().to_string();
+    match state.auth.setup_first_password(&ip, &payload.code, &payload.password) {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({ "success": true, "message": "Password initialized" })),
@@ -42,15 +44,10 @@ pub async fn setup_handler(
 
 pub async fn login_handler(
     State(state): State<ControlState>,
-    headers: HeaderMap,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     Json(payload): Json<LoginRequest>,
 ) -> Response {
-    let ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "127.0.0.1".to_string());
+    let ip = peer_addr.ip().to_string();
 
     match state.auth.verify_login(&ip, &payload.password) {
         Ok(token) => {
@@ -425,6 +422,7 @@ pub async fn network_rollback_status_handler(
 
 pub async fn change_password_handler(
     State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Json(payload): Json<PasswordChangeRequest>,
 ) -> Response {
@@ -439,9 +437,9 @@ pub async fn change_password_handler(
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "success": false, "message": "New password must be at least 8 characters" }))).into_response();
     }
 
-    // Verifikasi password saat ini terlebih dahulu
-    let ip = "127.0.0.1";
-    if state.auth.verify_login(ip, &payload.current).is_err() {
+    // Verifikasi password saat ini pada bucket terisolasi (tidak membakar bucket login 127.0.0.1)
+    let ip = format!("pwd_change:{}", peer_addr.ip());
+    if state.auth.verify_login(&ip, &payload.current).is_err() {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "success": false, "message": "Current password incorrect" }))).into_response();
     }
 

@@ -25,6 +25,9 @@ class ReportController extends Controller
         $dateExpr = $driver === 'sqlite'
             ? "DATE(datetime(captured_at, '{$offsetSql} hours'))"
             : "DATE(DATE_ADD(captured_at, INTERVAL {$offset} HOUR))";
+        $dateExprAl2 = $driver === 'sqlite'
+            ? "DATE(datetime(al2.captured_at, '{$offsetSql} hours'))"
+            : "DATE(DATE_ADD(al2.captured_at, INTERVAL {$offset} HOUR))";
 
         $logs = AttendanceLog::with(['student:id,name,code,classroom_id', 'student.group:id,name', 'device:id,name'])
             ->whereBetween('captured_at', [$startUtc, $endUtc])
@@ -40,7 +43,7 @@ class ReportController extends Controller
                 COUNT(id) as total_logs,
                 MAX(is_corrected) as is_corrected,
                 MAX(id) as id,
-                (SELECT al2.id FROM attendance_logs al2 WHERE al2.student_id = attendance_logs.student_id ORDER BY al2.captured_at ASC LIMIT 1) as first_log_id
+                (SELECT al2.id FROM attendance_logs al2 WHERE al2.student_id = attendance_logs.student_id AND {$dateExprAl2} = {$dateExpr} ORDER BY al2.captured_at ASC LIMIT 1) as first_log_id
             ")
             ->groupBy('student_id', 'log_date')
             ->orderBy('log_date', 'desc')

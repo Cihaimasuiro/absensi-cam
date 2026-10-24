@@ -26,10 +26,14 @@ class AttendanceSyncTest extends TestCase
     {
         parent::setUp();
 
-        $this->device = Device::factory()->create(['status' => 'online']);
+        $school = School::factory()->create();
+        $building = \App\Domain\School\Models\Building::factory()->create(['school_id' => $school->id]);
+        $this->device = Device::factory()->create([
+            'status'      => 'online',
+            'building_id' => $building->id,
+        ]);
         Sanctum::actingAs($this->device, ['device']);
 
-        $school = School::factory()->create();
         $this->student = Student::factory()->create(['school_id' => $school->id]);
     }
 

@@ -4,6 +4,9 @@ namespace App\Domain\Attendance\Actions;
 
 use App\Domain\Attendance\Models\AttendanceLog;
 use App\Domain\Device\Models\Device;
+use App\Domain\Student\Models\Student;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -23,45 +26,106 @@ class SyncAttendanceBatch
     {
         $results = [];
 
-        // Proses setiap record dalam transaksi kecil tersendiri agar benar-benar idempoten:
-        // jika seluruh batch dibungkus satu TX lalu gagal di tengah, edge akan mengulang
-        // dan kita mendapat duplikat. Dengan TX per record, hanya yang gagal perlu diulang.
         foreach ($records as $record) {
-            try {
-                $inserted = DB::transaction(function () use ($device, $record): bool {
-                    // UUID dari edge adalah PK — insertOrIgnore menangani kasus duplikat
-                    $affected = AttendanceLog::insertOrIgnore([[
-                        'id'             => $record['id'],
-                        'student_id'      => $record['student_id'],
-                        'device_id'      => $device->id,
-                        'captured_at'    => \Illuminate\Support\Carbon::parse($record['captured_at'])
-                                                ->setTimezone('UTC')
-                                                ->format('Y-m-d H:i:s'),
-                        'direction'      => $record['direction'],
-                        'score'          => $record['score'],
-                        'liveness_score' => $record['liveness_score'] ?? null,
-                        'time_source'    => $record['time_source'],
-                        'received_at'    => now(),
-                        'created_at'     => now(),
-                        'updated_at'     => now(),
-                    ]]);
+            $recordId = $record['id'];
 
-                    return $affected > 0;
+            // 1. Cek duplikat awal berdasarkan ID unik edge
+            if (AttendanceLog::where('id', $recordId)->exists()) {
+                $results[] = [
+                    'id'     => $recordId,
+                    'status' => 'duplicate',
+                ];
+                continue;
+            }
+
+            // 2. Validasi keberadaan dan scope siswa
+            $student = Student::withTrashed()->find($record['student_id']);
+            if (!$student) {
+                Log::warning('attendance_sync_unknown_student', [
+                    'record_id'  => $recordId,
+                    'student_id' => $record['student_id'],
+                    'device'     => $device->device_code,
+                ]);
+
+                $results[] = [
+                    'id'     => $recordId,
+                    'status' => 'rejected',
+                    'reason' => 'unknown_student',
+                ];
+                continue;
+            }
+
+            $schoolId = $device->school_id ?? $device->building?->school_id;
+            if ($schoolId && $student->school_id && $student->school_id !== $schoolId) {
+                Log::warning('attendance_sync_student_scope_mismatch', [
+                    'record_id'      => $recordId,
+                    'student_id'     => $record['student_id'],
+                    'student_school' => $student->school_id,
+                    'device_school'  => $schoolId,
+                ]);
+
+                $results[] = [
+                    'id'     => $recordId,
+                    'status' => 'rejected',
+                    'reason' => 'scope_mismatch',
+                ];
+                continue;
+            }
+
+            // 3. Validasi kewajaran waktu absensi
+            try {
+                $capturedAt = Carbon::parse($record['captured_at'])->setTimezone('UTC');
+                if ($capturedAt->isAfter(now()->addDay()) || $capturedAt->year < 2020) {
+                    $results[] = [
+                        'id'     => $recordId,
+                        'status' => 'rejected',
+                        'reason' => 'invalid_timestamp',
+                    ];
+                    continue;
+                }
+            } catch (\Throwable) {
+                $results[] = [
+                    'id'     => $recordId,
+                    'status' => 'rejected',
+                    'reason' => 'malformed_timestamp',
+                ];
+                continue;
+            }
+
+            // 4. Penyisipan transaksi per-record dengan penanganan unique race
+            try {
+                DB::transaction(function () use ($device, $record, $capturedAt) {
+                    AttendanceLog::create([
+                        'id'             => $record['id'],
+                        'student_id'     => $record['student_id'],
+                        'device_id'      => $device->id,
+                        'captured_at'    => $capturedAt->format('Y-m-d H:i:s'),
+                        'direction'      => in_array($record['direction'] ?? 'in', ['in', 'out']) ? $record['direction'] : 'in',
+                        'score'          => $record['score'] ?? 0.5,
+                        'liveness_score' => $record['liveness_score'] ?? null,
+                        'time_source'    => $record['time_source'] ?? 'ntp',
+                        'received_at'    => now(),
+                    ]);
                 });
 
                 $results[] = [
-                    'id'     => $record['id'],
-                    'status' => $inserted ? 'created' : 'duplicate',
+                    'id'     => $recordId,
+                    'status' => 'created',
+                ];
+            } catch (UniqueConstraintViolationException) {
+                $results[] = [
+                    'id'     => $recordId,
+                    'status' => 'duplicate',
                 ];
             } catch (\Throwable $e) {
                 Log::warning('attendance_batch_record_failed', [
-                    'record_id' => $record['id'],
+                    'record_id' => $recordId,
                     'device'    => $device->device_code,
                     'error'     => $e->getMessage(),
                 ]);
 
                 $results[] = [
-                    'id'     => $record['id'],
+                    'id'     => $recordId,
                     'status' => 'rejected',
                     'reason' => 'server_error',
                 ];

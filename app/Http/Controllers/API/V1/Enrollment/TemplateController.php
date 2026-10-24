@@ -31,6 +31,25 @@ class TemplateController extends Controller
         $schoolId = $device->school_id ?? $device->building?->school_id;
         $buildingId = $device->building_id;
 
+        // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
+        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
+            $schoolId = \App\Domain\School\Models\School::value('id');
+        }
+
+        // Cegah kebocoran data: Jika perangkat belum terikat ke sekolah manapun, jangan kirim template
+        if (!$schoolId) {
+            \Illuminate\Support\Facades\Log::warning('template_sync_missing_school_scope', [
+                'device_id'   => $device->id,
+                'device_code' => $device->device_code,
+            ]);
+
+            return response()->json([
+                'model_version' => $device->model_version,
+                'items'         => [],
+                'next_cursor'   => $cursor,
+            ]);
+        }
+
         // Jika perangkat punya gedung, periksa apakah gedung itu memiliki kelas.
         // Jika punya kelas, hanya template siswa di kelas tersebut yang dianggap 'in-scope'.
         // Jika TIDAK punya kelas (perangkat gerbang) atau TIDAK punya gedung, SEMUA template sekolah 'in-scope'.
@@ -42,10 +61,7 @@ class TemplateController extends Controller
         $templates = FaceTemplate::withTrashed()
             ->with('student:id,name,school_id,classroom_id')
             ->whereHas('student', function ($query) use ($schoolId) {
-                $query->withTrashed();
-                if ($schoolId) {
-                    $query->where('school_id', $schoolId);
-                }
+                $query->withTrashed()->where('school_id', $schoolId);
             })
             ->where('version_cursor', '>', $cursor)
             ->orderBy('version_cursor')
@@ -104,6 +120,18 @@ class TemplateController extends Controller
         $schoolId = $device->school_id ?? $device->building?->school_id;
         $buildingId = $device->building_id;
 
+        // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
+        if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
+            $schoolId = \App\Domain\School\Models\School::value('id');
+        }
+
+        if (!$schoolId) {
+            return response()->json([
+                'count'             => 0,
+                'valid_student_ids' => [],
+            ]);
+        }
+
         $buildingHasClassrooms = false;
         if ($buildingId) {
             $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
@@ -112,10 +140,7 @@ class TemplateController extends Controller
         $templates = FaceTemplate::whereNull('deleted_at')
             ->with('student:id,name,school_id,classroom_id')
             ->whereHas('student', function ($query) use ($schoolId) {
-                $query->whereNull('deleted_at');
-                if ($schoolId) {
-                    $query->where('school_id', $schoolId);
-                }
+                $query->whereNull('deleted_at')->where('school_id', $schoolId);
             })
             ->get(['id', 'student_id']);
 

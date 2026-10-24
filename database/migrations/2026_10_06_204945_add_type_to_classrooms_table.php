@@ -22,8 +22,8 @@ return new class extends Migration
                     $staffNames[] = $classroom->name;
                 }
 
-                // late_threshold_enabled=false berarti keterlambatan tidak dipedulikan. Kita map ke 0.
-                $tolerance = $classroom->late_threshold_enabled ? $classroom->late_threshold_minutes : 0;
+                // late_threshold_enabled=false berarti keterlambatan tidak dipedulikan. Kita map ke null.
+                $tolerance = $classroom->late_threshold_enabled ? $classroom->late_threshold_minutes : null;
 
                 DB::table('classrooms')->where('id', $classroom->id)->update([
                     'type' => $newType,

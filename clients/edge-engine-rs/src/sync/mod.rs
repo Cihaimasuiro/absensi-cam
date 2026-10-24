@@ -204,6 +204,7 @@ impl SyncWorker {
                 .context("Failed to parse batch response json from Laravel")?;
 
             let mut synced_ids = Vec::new();
+            let mut quarantine_ids = Vec::new();
             let mut rejected_count = 0usize;
 
             for item in batch_resp.results {
@@ -211,15 +212,27 @@ impl SyncWorker {
                     synced_ids.push(item.id);
                 } else if item.status == "rejected" {
                     rejected_count += 1;
-                    warn!(
-                        "Attendance record {} ditolak oleh Laravel: reason={:?}. Tetap disimpan di outbox.",
-                        item.id, item.reason
-                    );
+                    // Jika penolakan bukan kegagalan server temporer (server_error), karantina record (synced = -1) agar tidak memblokir antrean FIFO
+                    if item.reason.as_deref() != Some("server_error") {
+                        warn!(
+                            "Attendance record {} ditolak permanen oleh Laravel: reason={:?}. Mengkarantina record (synced = -1).",
+                            item.id, item.reason
+                        );
+                        quarantine_ids.push(item.id);
+                    } else {
+                        warn!(
+                            "Attendance record {} ditolak sementara oleh Laravel: reason={:?}. Tetap disimpan di outbox untuk dicoba lagi.",
+                            item.id, item.reason
+                        );
+                    }
                 }
             }
 
             if !synced_ids.is_empty() {
                 self.db.mark_as_synced(&synced_ids).await?;
+            }
+            if !quarantine_ids.is_empty() {
+                self.db.quarantine_records(&quarantine_ids).await?;
             }
 
             Ok((synced_ids.len(), rejected_count))
@@ -989,6 +1002,55 @@ mod tests {
         let unsynced = worker.db.get_unsynced_attendance(50).await.unwrap();
         assert_eq!(unsynced.len(), 1, "Hanya record rejected yang tersisa di outbox");
         assert_eq!(unsynced[0].id, "att-rej-3");
+    }
+
+    #[tokio::test]
+    async fn test_push_outbox_quarantines_permanently_rejected_records() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let api_url = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 4096];
+                let _ = socket.read(&mut buf).await.unwrap_or(0);
+
+                let body = "{\"results\":[{\"id\":\"att-perm-rej\",\"status\":\"rejected\",\"reason\":\"unknown_student\"}]}";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let db = EdgeDb::init(":memory:").await.unwrap();
+        db.conn
+            .execute(
+                "INSERT INTO outbox_attendance (id, student_id, captured_at, direction, score, liveness_score, time_source, synced) \
+                 VALUES ('att-perm-rej', 'bad-student-uuid', '2026-10-12 10:00:00', 'in', 0.95, 0.98, 'rtc', 0)",
+                (),
+            )
+            .await
+            .unwrap();
+
+        let worker = SyncWorker::new(
+            db,
+            api_url,
+            "test-token-123".to_string(),
+            None,
+            "v1.0-yunet".to_string(),
+        )
+        .unwrap();
+
+        let (synced, rejected) = worker.push_outbox_to_laravel().await.unwrap();
+        assert_eq!(synced, 0);
+        assert_eq!(rejected, 1);
+
+        // Record yang ditolak permanen HARUS dikarantina (synced = -1), sehingga antrean unsynced (synced = 0) KOSONG
+        let unsynced = worker.db.get_unsynced_attendance(50).await.unwrap();
+        assert_eq!(unsynced.len(), 0, "Record yang ditolak permanen tidak boleh memblokir antrean unsynced");
     }
 
     #[tokio::test]

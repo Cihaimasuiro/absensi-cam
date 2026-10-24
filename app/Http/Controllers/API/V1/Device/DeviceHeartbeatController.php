@@ -34,6 +34,19 @@ class DeviceHeartbeatController extends Controller
             $schoolId = $device->school_id ?? $device->building?->school_id;
             $buildingId = $device->building_id;
 
+            // Fallback untuk perangkat gerbang/global tanpa building_id jika hanya ada 1 sekolah aktif
+            if (!$schoolId && !$buildingId && \App\Domain\School\Models\School::count() === 1) {
+                $schoolId = \App\Domain\School\Models\School::value('id');
+            }
+
+            if (!$schoolId) {
+                return response()->json([
+                    'ok'          => true,
+                    'action'      => 'none',
+                    'server_hash' => '',
+                ]);
+            }
+
             $buildingHasClassrooms = false;
             if ($buildingId) {
                 $buildingHasClassrooms = \App\Domain\School\Models\Classroom::where('building_id', $buildingId)->exists();
@@ -43,11 +56,8 @@ class DeviceHeartbeatController extends Controller
             $scopeQuery = \Illuminate\Support\Facades\DB::table('face_templates')
                 ->join('students', 'students.id', '=', 'face_templates.student_id')
                 ->whereNull('face_templates.deleted_at')
-                ->whereNull('students.deleted_at');
-
-            if ($schoolId) {
-                $scopeQuery->where('students.school_id', $schoolId);
-            }
+                ->whereNull('students.deleted_at')
+                ->where('students.school_id', $schoolId);
 
             if ($buildingId && $buildingHasClassrooms) {
                 $scopeQuery->join('classrooms', 'classrooms.id', '=', 'students.classroom_id')

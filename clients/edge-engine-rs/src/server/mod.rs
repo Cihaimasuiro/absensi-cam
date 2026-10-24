@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -162,6 +162,7 @@ fn is_stream_authorized(
     headers: &HeaderMap,
     query: &StreamAuthQuery,
     device_code: &str,
+    peer_addr: Option<&SocketAddr>,
 ) -> bool {
     let is_paired = std::env::var("SMART_ABSENSI_TOKEN")
         .map(|t| !t.trim().is_empty())
@@ -172,14 +173,9 @@ fn is_stream_authorized(
         return true;
     }
 
-    // Izinkan request yang berasal dari atau ditujukan ke localhost / loopback
-    if let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) {
-        if host.starts_with("127.0.0.1") || host.starts_with("localhost") {
-            return true;
-        }
-    }
-    if let Some(referer) = headers.get(header::REFERER).and_then(|r| r.to_str().ok()) {
-        if referer.contains("://127.0.0.1") || referer.contains("://localhost") {
+    // Hanya izinkan akses lokal tanpa token jika terhubung langsung dari socket loopback kernel
+    if let Some(addr) = peer_addr {
+        if addr.ip().is_loopback() {
             return true;
         }
     }
@@ -191,16 +187,14 @@ fn is_stream_authorized(
 
 async fn snapshot_handler(
     State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code, Some(&peer_addr)) {
         return (
             StatusCode::UNAUTHORIZED,
-            [
-                (header::CONTENT_TYPE, "text/plain"),
-                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
-            ],
+            [(header::CONTENT_TYPE, "text/plain")],
             "Unauthorized: Stream token or active session required",
         )
             .into_response();
@@ -211,7 +205,6 @@ async fn snapshot_handler(
             [
                 (header::CONTENT_TYPE, "image/jpeg"),
                 (header::CACHE_CONTROL, "no-cache, no-store, must-revalidate"),
-                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
             ],
             frame,
         )
@@ -219,7 +212,6 @@ async fn snapshot_handler(
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
-            [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
             "No camera frame available yet",
         )
             .into_response()
@@ -228,16 +220,14 @@ async fn snapshot_handler(
 
 async fn stream_handler(
     State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code, Some(&peer_addr)) {
         return (
             StatusCode::UNAUTHORIZED,
-            [
-                (header::CONTENT_TYPE, "text/plain"),
-                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
-            ],
+            [(header::CONTENT_TYPE, "text/plain")],
             "Unauthorized: Stream token or active session required",
         )
             .into_response();
@@ -266,39 +256,56 @@ async fn stream_handler(
                 "multipart/x-mixed-replace; boundary=frame",
             ),
             (header::CACHE_CONTROL, "no-cache, private"),
-            (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
         ],
         body,
     )
         .into_response()
 }
 
-async fn status_handler(State(state): State<ControlState>) -> impl IntoResponse {
-    (
-        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Json(state.app_state.overlay_hub.latest()),
-    )
+async fn status_handler(
+    State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Query(query): Query<StreamAuthQuery>,
+) -> Response {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code, Some(&peer_addr)) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [(header::CONTENT_TYPE, "text/plain")],
+            "Unauthorized: Stream token or active session required",
+        )
+            .into_response();
+    }
+    Json(state.app_state.overlay_hub.latest()).into_response()
 }
 
-async fn history_handler(State(state): State<ControlState>) -> impl IntoResponse {
-    (
-        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Json(state.app_state.overlay_hub.latest().history),
-    )
+async fn history_handler(
+    State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Query(query): Query<StreamAuthQuery>,
+) -> Response {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code, Some(&peer_addr)) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            [(header::CONTENT_TYPE, "text/plain")],
+            "Unauthorized: Stream token or active session required",
+        )
+            .into_response();
+    }
+    Json(state.app_state.overlay_hub.latest().history).into_response()
 }
 
 async fn events_handler(
     State(state): State<ControlState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Query(query): Query<StreamAuthQuery>,
 ) -> Response {
-    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code) {
+    if !is_stream_authorized(&state.auth, &headers, &query, &state.config.device_code, Some(&peer_addr)) {
         return (
             StatusCode::UNAUTHORIZED,
-            [
-                (header::CONTENT_TYPE, "text/plain"),
-                (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
-            ],
+            [(header::CONTENT_TYPE, "text/plain")],
             "Unauthorized: Stream token or active session required",
         )
             .into_response();
@@ -310,11 +317,7 @@ async fn events_handler(
         Ok(Event::default().data(json_str))
     });
 
-    (
-        [(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Sse::new(stream).keep_alive(KeepAlive::default()),
-    )
-        .into_response()
+    Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
 
 pub async fn start_stream_server(
@@ -333,7 +336,10 @@ pub async fn start_stream_server(
     };
 
     let stream_secret = std::env::var("SMART_ABSENSI_TOKEN")
-        .unwrap_or_else(|_| "dev_stream_secret_key_123".to_string());
+        .or_else(|_| std::env::var("STREAM_SECRET"))
+        .unwrap_or_else(|_| {
+            format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple())
+        });
     let db_dir = std::path::Path::new(&config.db_path)
         .parent()
         .unwrap_or(std::path::Path::new("."));
@@ -359,6 +365,6 @@ pub async fn start_stream_server(
     info!("MJPEG Stream & Control server aktif di http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }

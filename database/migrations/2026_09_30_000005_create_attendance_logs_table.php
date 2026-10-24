@@ -14,7 +14,7 @@ return new class extends Migration
             $table->uuid('id')->primary()->comment('UUID dari edge (UUIDv7); idempotensi kunci');
             $table->uuid('student_id')->nullable()->comment('Null jika anggota dihapus');
             $table->foreign('student_id')->references('id')->on('students')->nullOnDelete();
-            $table->foreignId('device_id')->constrained('devices')->cascadeOnDelete();
+            $table->foreignId('device_id')->nullable()->constrained('devices')->nullOnDelete();
             $table->timestamp('captured_at')->comment('Waktu absen dari edge (UTC)');
             $table->enum('direction', ['in', 'out'])->default('in');
             $table->float('score')->comment('Cosine similarity SFace (0–1)');

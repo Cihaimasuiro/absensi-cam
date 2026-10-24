@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('code', 50)->unique()->nullable()->comment('Kode singkat org');
             $table->text('description')->nullable();
             $table->boolean('is_active')->default(true)->index();
+            $table->softDeletes();
             $table->timestamps();
         });
 

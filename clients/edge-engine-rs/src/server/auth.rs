@@ -21,6 +21,7 @@ const SESSION_TTL: Duration = Duration::from_secs(3600); // 1 hour sliding TTL
 pub struct AuthManager {
     sessions: Arc<RwLock<HashMap<String, Instant>>>, // token -> expires_at
     ip_attempts: Arc<RwLock<HashMap<String, IpAttempt>>>,
+    setup_attempts: Arc<RwLock<HashMap<String, IpAttempt>>>,
     password_file: PathBuf,
     setup_code: Arc<RwLock<Option<String>>>,
     stream_secret: String,
@@ -60,6 +61,7 @@ impl AuthManager {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             ip_attempts: Arc::new(RwLock::new(HashMap::new())),
+            setup_attempts: Arc::new(RwLock::new(HashMap::new())),
             password_file,
             setup_code: Arc::new(RwLock::new(setup_code)),
             stream_secret,
@@ -71,8 +73,25 @@ impl AuthManager {
         self.password_file.exists()
     }
 
-    /// Selesaikan setup pertama kali memakai kode verifikasi fisik
-    pub fn setup_first_password(&self, code: &str, new_password: &str) -> Result<(), &'static str> {
+    /// Selesaikan setup pertama kali memakai kode verifikasi fisik dengan rate-limit per-IP
+    pub fn setup_first_password(&self, ip: &str, code: &str, new_password: &str) -> Result<(), &'static str> {
+        let now = Instant::now();
+
+        // Periksa status lockout percobaan setup
+        {
+            let mut attempts = self.setup_attempts.write().map_err(|_| "Lock error")?;
+            let entry = attempts.entry(ip.to_string()).or_insert(IpAttempt {
+                failed_count: 0,
+                lockout_until: None,
+            });
+
+            if let Some(lockout) = entry.lockout_until {
+                if now < lockout {
+                    return Err("Too many failed setup attempts. Try again in 15 minutes.");
+                }
+            }
+        }
+
         let current_code = {
             let guard = self.setup_code.read().map_err(|_| "Lock error")?;
             guard.clone()
@@ -80,18 +99,34 @@ impl AuthManager {
 
         match current_code {
             Some(expected) if expected == code.trim() => {
-                if new_password.trim().len() < 6 {
-                    return Err("Password must be at least 6 characters");
+                if new_password.trim().len() < 8 {
+                    return Err("Password must be at least 8 characters");
                 }
                 self.save_password(new_password)?;
                 let mut guard = self.setup_code.write().map_err(|_| "Lock error")?;
                 *guard = None;
                 let code_file = self.password_file.parent().unwrap_or(Path::new(".")).join("setup_code.txt");
                 let _ = std::fs::remove_file(code_file);
-                info!("Admin password successfully initialized via setup code.");
+                if let Ok(mut attempts) = self.setup_attempts.write() {
+                    attempts.remove(ip);
+                }
+                info!("Admin password successfully initialized via setup code from IP: {}.", ip);
                 Ok(())
             }
-            _ => Err("Invalid or expired setup verification code"),
+            _ => {
+                if let Ok(mut attempts) = self.setup_attempts.write() {
+                    let entry = attempts.entry(ip.to_string()).or_insert(IpAttempt {
+                        failed_count: 0,
+                        lockout_until: None,
+                    });
+                    entry.failed_count += 1;
+                    if entry.failed_count >= 5 {
+                        entry.lockout_until = Some(now + Duration::from_secs(900));
+                        warn!("Physical setup lockout triggered for IP {} after 5 failed attempts.", ip);
+                    }
+                }
+                Err("Invalid or expired setup verification code")
+            }
         }
     }
 
@@ -123,21 +158,37 @@ impl AuthManager {
     pub fn verify_login(&self, ip: &str, password: &str) -> Result<String, (StatusCode, String)> {
         let now = Instant::now();
 
-        // 1. Periksa status lockout IP
+        // 1. Periksa status lockout IP dan catat percobaan secara atomik
         {
-            let attempts = self.ip_attempts.read().map_err(|_| {
+            let mut attempts = self.ip_attempts.write().map_err(|_| {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Lock error".to_string())
             })?;
-            if let Some(attempt) = attempts.get(ip) {
-                if let Some(lockout) = attempt.lockout_until {
-                    if now < lockout {
-                        let remaining = (lockout - now).as_secs();
-                        return Err((
-                            StatusCode::TOO_MANY_REQUESTS,
-                            format!("Too many failed attempts. Try again in {} seconds.", remaining),
-                        ));
-                    }
+            let entry = attempts.entry(ip.to_string()).or_insert(IpAttempt {
+                failed_count: 0,
+                lockout_until: None,
+            });
+
+            if let Some(lockout) = entry.lockout_until {
+                if now < lockout {
+                    let remaining = (lockout - now).as_secs();
+                    return Err((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        format!("Too many failed attempts. Try again in {} seconds.", remaining),
+                    ));
                 }
+            }
+
+            // Catat percobaan awal secara atomik untuk mencegah parallel guessing race
+            entry.failed_count += 1;
+            let delay_secs = match entry.failed_count {
+                1 | 2 => 0,
+                3 => 2,
+                4 => 5,
+                5 => 30,
+                _ => 300, // 5 minutes lockout after 6+ failures
+            };
+            if delay_secs > 0 {
+                entry.lockout_until = Some(now + Duration::from_secs(delay_secs));
             }
         }
 
@@ -166,7 +217,7 @@ impl AuthManager {
         let argon2 = Argon2::default();
         let valid = argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok();
 
-        // 4. Perbarui pelacak percobaan per IP
+        // 4. Perbarui status percobaan
         let mut attempts = self.ip_attempts.write().map_err(|_| {
             (StatusCode::INTERNAL_SERVER_ERROR, "Lock error".to_string())
         })?;
@@ -187,23 +238,10 @@ impl AuthManager {
             info!("Admin control session authenticated successfully from IP: {}", ip);
             Ok(token)
         } else {
-            entry.failed_count += 1;
-            let delay_secs = match entry.failed_count {
-                1 | 2 => 0,
-                3 => 2,
-                4 => 5,
-                5 => 30,
-                _ => 300, // 5 minutes lockout after 6+ failures
-            };
-
-            if delay_secs > 0 {
-                entry.lockout_until = Some(now + Duration::from_secs(delay_secs));
-                warn!(
-                    "Failed login from {}. Count: {}. Delay/Lockout: {}s",
-                    ip, entry.failed_count, delay_secs
-                );
-            }
-
+            warn!(
+                "Failed login from {}. Count: {}.",
+                ip, entry.failed_count
+            );
             Err((
                 StatusCode::UNAUTHORIZED,
                 "Invalid password".to_string(),
@@ -373,11 +411,11 @@ mod tests {
         let code = auth.setup_code.read().unwrap().clone().expect("Setup code should exist");
 
         // Kode yang salah seharusnya gagal
-        assert!(auth.setup_first_password("999999", &test_pwd).is_err());
+        assert!(auth.setup_first_password("192.168.1.50", "999999", &test_pwd).is_err());
         assert!(!auth.is_initialized());
 
         // Kode yang benar menginisialisasi password
-        assert!(auth.setup_first_password(&code, &test_pwd).is_ok());
+        assert!(auth.setup_first_password("192.168.1.50", &code, &test_pwd).is_ok());
         assert!(auth.is_initialized());
 
         // Login dengan password yang benar
@@ -387,6 +425,30 @@ mod tests {
         // Login dengan password yang salah
         let err = auth.verify_login("192.168.1.50", &wrong_pwd);
         assert!(err.is_err());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_setup_code_lockout() {
+        let temp_dir = std::env::temp_dir().join(format!("setup_lockout_test_{}", Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let auth = AuthManager::new(&temp_dir, "test_secret_123".to_string());
+        let ip = "10.0.0.5";
+        let pwd = "StrongPassword123";
+
+        // 4 percobaan gagal belum memicu lockout
+        for _ in 0..4 {
+            assert!(auth.setup_first_password(ip, "111111", pwd).is_err());
+        }
+
+        // Percobaan ke-5 gagal memicu lockout
+        assert!(auth.setup_first_password(ip, "111111", pwd).is_err());
+
+        // Percobaan ke-6 harus ditolak karena lockout
+        let err = auth.setup_first_password(ip, "111111", pwd);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Too many failed setup attempts"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

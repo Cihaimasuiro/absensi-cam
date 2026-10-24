@@ -394,10 +394,12 @@ impl EdgeDb {
                 .decode(embedding_raw)
                 .unwrap_or_default();
 
-            let version = t
-                .get("version_cursor")
-                .and_then(|v| v.as_str())
-                .unwrap_or("1");
+            let version_str = match t.get("version_cursor") {
+                Some(serde_json::Value::Number(n)) => n.to_string(),
+                Some(serde_json::Value::String(s)) => s.clone(),
+                _ => "1".to_string(),
+            };
+            let version = version_str.as_str();
 
             match embedding_bytes.len() {
                 2076 => {} // Valid AES-256-GCM ciphertext dari Laravel
@@ -729,19 +731,24 @@ mod tests {
 
         let enc_b64 = base64::engine::general_purpose::STANDARD.encode(&encrypted_blob);
 
-        // Simulasi respon JSON persis dari Laravel TemplateController.php:73
+        // Simulasi respon JSON persis dari Laravel TemplateController (numeric version_cursor)
         let laravel_response_item = serde_json::json!({
             "student_id": student_id,
             "name": "Siti Rahma",
             "embedding_b64": enc_b64,
             "model_version": model_version,
-            "version_cursor": "1001",
+            "version_cursor": 1001,
             "op": "upsert",
             "updated_at": "2026-10-21T12:00:00Z"
         });
 
         let sync_payload = vec![laravel_response_item];
         db.save_templates(&sync_payload, Some(1001)).await.expect("Sinkronisasi harus berhasil menerima embedding_b64 dari Laravel");
+
+        // Verifikasi get_templates_signature membaca version_cursor numerik (1001) bukan fallback default (1)
+        let (count, max_v) = db.get_templates_signature().await.expect("get_templates_signature harus berhasil");
+        assert_eq!(count, 1);
+        assert_eq!(max_v, 1001, "max_version harus bernilai 1001 dari JSON integer version_cursor");
 
         // Verifikasi load_templates berhasil memuat dan mendekripsi
         let loaded = db.load_templates(Some(&key), model_version).await.expect("load_templates harus berhasil");

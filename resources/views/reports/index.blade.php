@@ -83,12 +83,12 @@
                             <td class="font-mono">{{ $log->student->code ?? '—' }}</td>
                             <td>{{ $log->student->school->name ?? '—' }}</td>
                             <td class="whitespace-nowrap">
-                                <span class="font-semibold text-ink tabular-nums">{{ \Carbon\Carbon::parse($log->first_in)->format('H:i:s') }}</span>
-                                <span class="block text-[10.5px] text-ink-muted">{{ \Carbon\Carbon::parse($log->first_in)->format('d M Y') }}</span>
+                                <span class="font-semibold text-ink tabular-nums">{{ \Carbon\Carbon::parse($log->first_in, 'UTC')->timezone(config('app.timezone'))->format('H:i:s') }}</span>
+                                <span class="block text-[10.5px] text-ink-muted">{{ \Carbon\Carbon::parse($log->first_in, 'UTC')->timezone(config('app.timezone'))->format('d M Y') }}</span>
                             </td>
                             <td class="text-ink-muted tabular-nums whitespace-nowrap">
                                 @if($log->last_out && $log->last_out !== $log->first_in)
-                                    {{ \Carbon\Carbon::parse($log->last_out)->format('H:i:s') }}
+                                    {{ \Carbon\Carbon::parse($log->last_out, 'UTC')->timezone(config('app.timezone'))->format('H:i:s') }}
                                 @else
                                     —
                                 @endif
@@ -98,7 +98,7 @@
                                 <td class="text-right whitespace-nowrap">
                                     <div class="flex items-center justify-end gap-1.5">
                                         <button type="button" class="btn btn-secondary btn-sm"
-                                                data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in)->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}"
+                                                data-log="{{ json_encode(['id' => $log->first_log_id, 'captured_at' => \Carbon\Carbon::parse($log->first_in, 'UTC')->timezone(config('app.timezone'))->format('Y-m-d\TH:i'), 'direction' => 'in']) }}"
                                                 @click="openCorrectionModal">
                                             <i data-lucide="edit-2" class="w-3 h-3"></i> Koreksi
                                         </button>
